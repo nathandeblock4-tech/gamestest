@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hog Wild 3000 · Game Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Bungee+Shade&family=Rubik:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1020;
+    --panel: #1a1c35;
+    --panel-2: #24274a;
+    --text: #f2f3ff;
+    --muted: #9aa0c7;
+    --accent: #ffcc33;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Rubik', system-ui, sans-serif; min-height: 100vh; padding: 16px 12px 32px; }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; }
+  .btn { background: var(--accent); color: #1a1300; border: none; border-radius: 10px; padding: 10px 18px; font: 700 15px 'Rubik', system-ui, sans-serif; cursor: pointer; text-decoration: none; display: inline-block; }
+  .btn.ghost { background: var(--panel-2); color: var(--text); }
+  .btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  #game { position: relative; width: 100%; aspect-ratio: 16 / 10; max-height: 78vh; border-radius: 16px; overflow: hidden; border: 4px solid #ff4fa3; box-shadow: 0 0 0 4px #ffd23f, 0 10px 40px rgba(255,79,163,.35); background: #8fd3ff; touch-action: none; user-select: none; -webkit-user-select: none; }
+  @media (max-width: 640px) { #game { aspect-ratio: 3 / 4; } }
+  #game canvas { display: block; width: 100%; height: 100%; }
+
+  .hud { position: absolute; inset: 0; pointer-events: none; font-family: 'Bungee', 'Rubik', sans-serif; }
+  .score { position: absolute; top: 12px; left: 14px; font-size: clamp(18px, 3.4vw, 30px); color: #fff; -webkit-text-stroke: 2px #2b0a3d; paint-order: stroke fill; text-shadow: 3px 3px 0 #ff4fa3; line-height: 1.15; }
+  .score small { display: block; font-size: .6em; color: #ffd23f; }
+  .mute { position: absolute; top: 10px; right: 12px; pointer-events: auto; background: rgba(43,10,61,.7); color: #fff; border: 2px solid #ffd23f; border-radius: 10px; font: 700 14px 'Rubik', sans-serif; padding: 6px 10px; cursor: pointer; }
+
+  .shout { position: absolute; left: 50%; top: 30%; transform: translate(-50%, -50%); font-family: 'Bungee Shade', 'Bungee', sans-serif; font-size: clamp(26px, 6vw, 64px); color: #ffd23f; -webkit-text-stroke: 2px #2b0a3d; text-shadow: 4px 4px 0 #ff4fa3, 8px 8px 0 #2b0a3d; white-space: nowrap; animation: pop 1.3s ease-out forwards; }
+  @keyframes pop {
+    0% { transform: translate(-50%, -50%) scale(.2) rotate(-20deg); opacity: 0; }
+    15% { transform: translate(-50%, -50%) scale(1.25) rotate(6deg); opacity: 1; }
+    30% { transform: translate(-50%, -50%) scale(1) rotate(-3deg); }
+    80% { opacity: 1; }
+    100% { transform: translate(-50%, -80%) scale(1.05) rotate(-3deg); opacity: 0; }
+  }
+
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; padding: 20px; background: radial-gradient(circle at 50% 40%, rgba(255,79,163,.55), rgba(43,10,61,.85)); pointer-events: auto; }
+  .logo { font-family: 'Bungee Shade', 'Bungee', sans-serif; font-size: clamp(34px, 9vw, 92px); line-height: .95; color: #ffd23f; text-shadow: 5px 5px 0 #ff4fa3, 10px 10px 0 #2b0a3d; transform: rotate(-4deg); animation: wobble 2.2s ease-in-out infinite; }
+  .logo span { display: block; font-size: .55em; color: #7cf7ff; }
+  @keyframes wobble { 0%,100% { transform: rotate(-4deg) scale(1); } 50% { transform: rotate(3deg) scale(1.06); } }
+  .tag { font-family: 'Bungee', sans-serif; color: #fff; font-size: clamp(12px, 2.2vw, 18px); letter-spacing: 1px; }
+  .tag em { display: block; font-family: 'Rubik', sans-serif; font-style: normal; font-size: .7em; color: #ffd6ec; margin-top: 4px; letter-spacing: 0; }
+  .go { font-family: 'Bungee', sans-serif; font-size: clamp(18px, 3vw, 26px); background: #ffd23f; color: #2b0a3d; border: 4px solid #2b0a3d; border-radius: 14px; padding: 12px 28px; cursor: pointer; box-shadow: 5px 5px 0 #2b0a3d; animation: pulse 1s ease-in-out infinite; }
+  .go:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 #2b0a3d; }
+  @keyframes pulse { 50% { transform: scale(1.07); } }
+  .keys { color: #ffe9f5; font-size: clamp(12px, 1.8vw, 15px); max-width: 520px; }
+  .big { font-family: 'Bungee', sans-serif; font-size: clamp(16px, 3vw, 26px); color: #fff; }
+  .big b { color: #ffd23f; }
+  .quip { font-family: 'Bungee', sans-serif; color: #7cf7ff; font-size: clamp(14px, 2.4vw, 20px); }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { .logo, .go { animation: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <a class="btn ghost" href="index.html">← Back</a>
+    <span style="color:var(--muted);font-size:14px">Arrows / WASD or swipe</span>
+  </div>
+
+  <div id="game">
+    <div class="hud">
+      <div class="score"><span id="meters">0 m</span><small id="appleCount">🍎 0</small></div>
+      <button class="mute" id="mute">🔊 Sound</button>
+      <div id="shouts"></div>
+    </div>
+
+    <div class="screen" id="title">
+      <div class="logo">HOG WILD<span>3000</span></div>
+      <div class="tag">THE MOST REALISTIC PIG GAME EVER MADE*<em>*this is not true</em></div>
+      <button class="go" id="start">PRESS START</button>
+      <div class="keys">← → change lanes · ↑ or Space to jump (with a flip) · ↓ to belly-slide<br>On a phone: swipe left, right, up or down</div>
+    </div>
+
+    <div class="screen" id="over" hidden>
+      <div class="logo" style="font-size:clamp(28px,7vw,70px)">OINK OVER</div>
+      <div class="quip" id="quip"></div>
+      <div class="big">SCORE <b id="finalScore">0</b> · BEST <b id="bestScore">0</b></div>
+      <button class="go" id="again">OINK AGAIN</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  const host = document.getElementById('game');
+  const $ = id => document.getElementById(id);
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  let best = parseInt(load('hogBest') || '0', 10);
+
+  // ================= AUDIO (all synthesized, no files) =================
+  let ac = null, master = null, muted = load('hogMute') === '1';
+  function audio() {
+    if (!ac) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ac = new AC(); master = ac.createGain(); master.gain.value = muted ? 0 : 0.6; master.connect(ac.destination);
+    }
+    if (ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function setMute(m) { muted = m; save('hogMute', m ? '1' : '0'); if (master) master.gain.value = m ? 0 : 0.6; $('mute').textContent = m ? '🔇 Muted' : '🔊 Sound'; }
+  setMute(muted);
+  $('mute').addEventListener('click', e => { e.stopPropagation(); audio(); setMute(!muted); });
+
+  function grunt(t, f0, f1, dur, vol) {
+    const o = ac.createOscillator(), g = ac.createGain(), bp = ac.createBiquadFilter(), lp = ac.createBiquadFilter();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    bp.type = 'bandpass'; bp.frequency.value = 850; bp.Q.value = 3;
+    lp.type = 'lowpass'; lp.frequency.value = 2200;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    // wobble for a snorty texture
+    const lfo = ac.createOscillator(), lg = ac.createGain();
+    lfo.frequency.value = 38; lg.gain.value = 40; lfo.connect(lg); lg.connect(o.frequency);
+    o.connect(bp); bp.connect(lp); lp.connect(g); g.connect(master);
+    o.start(t); lfo.start(t); o.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
+  }
+  function oink() { if (!audio()) return; const t = ac.currentTime; grunt(t, 240, 150, 0.13, 0.5); grunt(t + 0.16, 260, 140, 0.16, 0.55); }
+  function squeal() { if (!audio()) return; const t = ac.currentTime; grunt(t, 500, 900, 0.25, 0.5); grunt(t + 0.25, 900, 380, 0.6, 0.5); }
+  function ding(n) {
+    if (!audio()) return; const t = ac.currentTime;
+    [880, 1320].forEach((f, i) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.value = f * (1 + Math.min(n, 10) * 0.03); g.gain.setValueAtTime(0.12, t + i * 0.07); g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.07 + 0.12); o.connect(g); g.connect(master); o.start(t + i * 0.07); o.stop(t + i * 0.07 + 0.15); });
+  }
+  function thud() {
+    if (!audio()) return; const t = ac.currentTime;
+    const len = ac.sampleRate * 0.4, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    const s = ac.createBufferSource(), g = ac.createGain(), lp = ac.createBiquadFilter();
+    s.buffer = buf; lp.type = 'lowpass'; lp.frequency.value = 600; g.gain.value = 0.9;
+    s.connect(lp); lp.connect(g); g.connect(master); s.start(t);
+  }
+  // cheesy game-show music loop
+  let musicTimer = null, nextNote = 0, step = 0;
+  const bassLine = [110, 110, 165, 110, 147, 110, 165, 196];
+  const lead = [440, 0, 554, 659, 0, 554, 440, 0, 494, 0, 587, 740, 0, 587, 494, 0];
+  function note(f, t, type, vol, dur) { const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02); }
+  function startMusic() {
+    if (!audio() || musicTimer) return;
+    nextNote = ac.currentTime + 0.05; step = 0;
+    musicTimer = setInterval(() => {
+      while (nextNote < ac.currentTime + 0.15) {
+        note(bassLine[step % 8], nextNote, 'triangle', 0.18, 0.18);
+        const l = lead[step % 16]; if (l) note(l, nextNote, 'square', 0.04, 0.12);
+        nextNote += 0.15; step++;
+      }
+    }, 40);
+  }
+  function stopMusic() { clearInterval(musicTimer); musicTimer = null; }
+
+  // ================= THREE.JS SETUP =================
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  host.insertBefore(renderer.domElement, host.firstChild);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x8fd3ff);
+  scene.fog = new THREE.Fog(0xbfe6ff, 40, 95);
+  const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 200);
+  const camBase = new THREE.Vector3(0, 3.6, 7.2);
+  camera.position.copy(camBase);
+
+  scene.add(new THREE.HemisphereLight(0xdff3ff, 0x6b8a3a, 0.75));
+  const sun = new THREE.DirectionalLight(0xfff1d6, 1.15);
+  sun.position.set(6, 12, 4); sun.target.position.set(0, 0, -4);
+  sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+  Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 40 });
+  scene.add(sun, sun.target);
+
+  function resize() {
+    const w = host.clientWidth, h = host.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.fov = w / h < 1 ? 78 : 62;
+    camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(host);
+  resize();
+
+  // ---------- canvas textures ----------
+  function canvasTex(size, draw, repX, repY) {
+    const c = document.createElement('canvas'); c.width = c.height = size;
+    draw(c.getContext('2d'), size);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(repX || 1, repY || 1);
+    t.encoding = THREE.sRGBEncoding;
+    t.anisotropy = 4;
+    return t;
+  }
+  function speckle(g, s, n, colors, rmax) { for (let i = 0; i < n; i++) { g.fillStyle = colors[i % colors.length]; g.beginPath(); g.arc(Math.random() * s, Math.random() * s, Math.random() * rmax + 0.5, 0, Math.PI * 2); g.fill(); } }
+
+  const dirtTex = canvasTex(256, (g, s) => {
+    g.fillStyle = '#9b7146'; g.fillRect(0, 0, s, s);
+    speckle(g, s, 900, ['rgba(70,45,25,.45)', 'rgba(190,150,105,.45)', 'rgba(120,85,50,.5)'], 2.2);
+    g.fillStyle = 'rgba(70,45,25,.18)';
+    [s * 0.17, s * 0.5, s * 0.83].forEach(x => g.fillRect(x - 8, 0, 16, s)); // worn wheel ruts per lane
+  }, 1, 40);
+  const grassTex = canvasTex(256, (g, s) => {
+    g.fillStyle = '#5fae3c'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 1600; i++) { g.strokeStyle = ['#4f9a30', '#74c24c', '#3f8726', '#86d35a'][i % 4]; g.lineWidth = 1.2; const x = Math.random() * s, y = Math.random() * s; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.random() * 3 - 1.5, y - 4 - Math.random() * 5); g.stroke(); }
+  }, 8, 40);
+  const hayTex = canvasTex(128, (g, s) => {
+    g.fillStyle = '#e2bb5c'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 500; i++) { g.strokeStyle = ['#c99a3a', '#f3d580', '#b98a2e'][i % 3]; g.lineWidth = 1; const x = Math.random() * s, y = Math.random() * s; g.beginPath(); g.moveTo(x, y); g.lineTo(x + 10 + Math.random() * 10, y + Math.random() * 4 - 2); g.stroke(); }
+    g.fillStyle = '#8a4b26'; g.fillRect(s * 0.28, 0, 5, s); g.fillRect(s * 0.68, 0, 5, s);
+  });
+  // pig skin: pale pink, subtle blotches, grey patches, fine bristles
+  const skinTex = canvasTex(512, (g, s) => {
+    g.fillStyle = '#f2c4b8'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 60; i++) { const r = 20 + Math.random() * 60; const gr = g.createRadialGradient(0, 0, 0, 0, 0, r); gr.addColorStop(0, 'rgba(230,160,150,.25)'); gr.addColorStop(1, 'rgba(230,160,150,0)'); g.save(); g.translate(Math.random() * s, Math.random() * s); g.fillStyle = gr; g.fillRect(-r, -r, r * 2, r * 2); g.restore(); }
+    [[0.18, 0.35, 70], [0.3, 0.55, 45], [0.72, 0.4, 55]].forEach(([x, y, r]) => { const gr = g.createRadialGradient(x * s, y * s, r * 0.3, x * s, y * s, r); gr.addColorStop(0, 'rgba(105,110,125,.6)'); gr.addColorStop(1, 'rgba(105,110,125,0)'); g.fillStyle = gr; g.beginPath(); g.arc(x * s, y * s, r, 0, Math.PI * 2); g.fill(); });
+    for (let i = 0; i < 2500; i++) { g.strokeStyle = 'rgba(255,240,230,.35)'; g.lineWidth = 0.6; const x = Math.random() * s, y = Math.random() * s; g.beginPath(); g.moveTo(x, y); g.lineTo(x + 2, y + 4); g.stroke(); }
+    speckle(g, s, 180, ['rgba(120,85,55,.25)'], 3); // a bit of mud
+  });
+  const bumpTex = canvasTex(256, (g, s) => {
+    g.fillStyle = '#808080'; g.fillRect(0, 0, s, s);
+    speckle(g, s, 3000, ['#6a6a6a', '#9a9a9a'], 1.4);
+  });
+  bumpTex.encoding = THREE.LinearEncoding;
+
+  // ---------- ground ----------
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(7, 200), new THREE.MeshStandardMaterial({ map: dirtTex, roughness: 1 }));
+  road.rotation.x = -Math.PI / 2; road.position.z = -90; road.receiveShadow = true; scene.add(road);
+  const grass = new THREE.Mesh(new THREE.PlaneGeometry(80, 200), new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1 }));
+  grass.rotation.x = -Math.PI / 2; grass.position.set(0, -0.02, -90); grass.receiveShadow = true; scene.add(grass);
+
+  // far hills + smiling sun (it's that kind of game)
+  const hillMat = new THREE.MeshStandardMaterial({ color: 0x6fbf4a, roughness: 1, flatShading: true });
+  [[-30, -90, 16], [-10, -110, 20], [18, -100, 18], [40, -85, 14], [0, -130, 26]].forEach(([x, z, r]) => { const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), hillMat); m.position.set(x, -r * 0.55, z); scene.add(m); });
+  const sunTex = canvasTex(256, (g, s) => {
+    g.fillStyle = '#ffd23f'; g.beginPath(); g.arc(s / 2, s / 2, s * 0.42, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#ffb000'; g.lineWidth = 8; g.stroke();
+    g.fillStyle = '#2b0a3d'; g.beginPath(); g.arc(s * 0.38, s * 0.42, 12, 0, Math.PI * 2); g.arc(s * 0.62, s * 0.42, 12, 0, Math.PI * 2); g.fill();
+    g.lineWidth = 9; g.strokeStyle = '#2b0a3d'; g.beginPath(); g.arc(s / 2, s * 0.52, s * 0.16, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
+    g.fillStyle = 'rgba(255,90,140,.55)'; g.beginPath(); g.arc(s * 0.3, s * 0.56, 16, 0, Math.PI * 2); g.arc(s * 0.7, s * 0.56, 16, 0, Math.PI * 2); g.fill();
+  });
+  const sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunTex, fog: false }));
+  sunSprite.scale.set(16, 16, 1); sunSprite.position.set(22, 26, -120); scene.add(sunSprite);
+
+  // fence rails (static) along both sides
+  const woodMat = new THREE.MeshStandardMaterial({ color: 0xa47a4f, roughness: 0.9 });
+  [-4, 4].forEach(x => { [0.55, 1.0].forEach(y => { const r = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 200), woodMat); r.position.set(x, y, -90); scene.add(r); }); });
+
+  // ---------- recycled scenery ----------
+  const decor = [];
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 1 });
+  const leafMats = [0x3f9a34, 0x4fae3c, 0x2f8a2a].map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, flatShading: true }));
+  function tree() {
+    const g = new THREE.Group();
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 2, 8), trunkMat); t.position.y = 1; t.castShadow = true; g.add(t);
+    const l = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4, 1), leafMats[Math.floor(Math.random() * 3)]); l.position.y = 2.8; l.castShadow = true; g.add(l);
+    g.scale.setScalar(0.9 + Math.random() * 0.7);
+    return g;
+  }
+  function barn() {
+    const g = new THREE.Group();
+    const b = new THREE.Mesh(new THREE.BoxGeometry(5, 3.4, 4), new THREE.MeshStandardMaterial({ color: 0xb8322a, roughness: 0.8 })); b.position.y = 1.7; g.add(b);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(3.8, 2, 4), new THREE.MeshStandardMaterial({ color: 0x7a1f1a, roughness: 0.8 })); roof.position.y = 4.4; roof.rotation.y = Math.PI / 4; roof.scale.set(1, 1, 0.78); g.add(roof);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.2, 0.05), new THREE.MeshStandardMaterial({ color: 0xf3ead8 })); door.position.set(0, 1.1, 2.03); g.add(door);
+    g.rotation.y = Math.PI / 2;
+    return g;
+  }
+  function post() { const p = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.3, 0.18), woodMat); p.position.y = 0.65; return p; }
+  for (let i = 0; i < 30; i++) { const p = post(); p.position.set(-4, 0.65, -i * 4); scene.add(p); decor.push({ o: p, span: 120 }); const q = post(); q.position.set(4, 0.65, -i * 4); scene.add(q); decor.push({ o: q, span: 120 }); }
+  for (let i = 0; i < 18; i++) { const t = tree(); const side = i % 2 ? 1 : -1; t.position.set(side * (7 + Math.random() * 14), 0, -i * 7 - Math.random() * 4); scene.add(t); decor.push({ o: t, span: 126 }); }
+  [[-11, -40], [12, -95]].forEach(([x, z]) => { const b = barn(); b.position.set(x, 0, z); scene.add(b); decor.push({ o: b, span: 126 }); });
+
+  // ================= THE PIG =================
+  const skinMat = new THREE.MeshStandardMaterial({ map: skinTex, bumpMap: bumpTex, bumpScale: 0.015, roughness: 0.55, metalness: 0 });
+  const snoutMat = new THREE.MeshStandardMaterial({ color: 0xe99a8c, roughness: 0.45, bumpMap: bumpTex, bumpScale: 0.01 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x241414, roughness: 0.4 });
+  const hoofMat = new THREE.MeshStandardMaterial({ color: 0x3a2a22, roughness: 0.6 });
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.15 });
+  const earMat = new THREE.MeshStandardMaterial({ color: 0xeab0a3, roughness: 0.6, side: THREE.DoubleSide });
+  const mudMat = new THREE.MeshStandardMaterial({ color: 0x6e4b2e, roughness: 1 });
+
+  const pig = new THREE.Group();     // moves around (lanes, jumps)
+  const pigBody = new THREE.Group(); // spins (flips, ragdoll)
+  pig.add(pigBody);
+  pigBody.position.y = 1.0;          // pivot at body center
+  scene.add(pig);
+  function shadowy(m) { m.castShadow = true; return m; }
+
+  const torso = shadowy(new THREE.Mesh(new THREE.SphereGeometry(1, 40, 28), skinMat));
+  torso.scale.set(0.78, 0.72, 1.2); pigBody.add(torso);
+  const belly = shadowy(new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), skinMat));
+  belly.scale.set(0.7, 0.5, 0.95); belly.position.set(0, -0.28, 0.05); pigBody.add(belly);
+  const butt = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.62, 24, 16), skinMat));
+  butt.position.set(0, 0.02, 0.85); pigBody.add(butt);
+
+  const head = new THREE.Group(); head.position.set(0, 0.28, -1.15); pigBody.add(head);
+  const skull = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.58, 32, 24), skinMat)); skull.scale.set(1, 0.95, 1.05); head.add(skull);
+  const jowls = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.45, 24, 16), skinMat)); jowls.position.set(0, -0.2, -0.22); jowls.scale.set(1.15, 0.8, 1); head.add(jowls);
+  const snout = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.31, 0.32, 28), snoutMat));
+  snout.rotation.x = Math.PI / 2; snout.position.set(0, -0.08, -0.62); head.add(snout);
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(0.27, 28), snoutMat); disc.position.set(0, -0.08, -0.785); disc.rotation.y = Math.PI; head.add(disc);
+  [-0.09, 0.09].forEach(x => { const n = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 8), darkMat); n.scale.set(0.8, 1.3, 0.4); n.position.set(x, -0.08, -0.79); head.add(n); });
+  // goofy googly eyes
+  const pupils = [];
+  [-0.24, 0.24].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.14, 20, 14), eyeMat); e.position.set(x, 0.16, -0.45); head.add(e);
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.075, 14, 10), darkMat); p.position.set(x, 0.16, -0.575); head.add(p); pupils.push({ m: p, bx: x, by: 0.16, vx: 0, vy: 0, ox: 0, oy: 0 });
+  });
+  // grey patch around one eye like the photo
+  const patch = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 12), new THREE.MeshStandardMaterial({ color: 0x8a8d99, roughness: 0.6, transparent: true, opacity: 0.55 }));
+  patch.scale.set(1, 0.9, 0.35); patch.position.set(0.3, 0.18, -0.4); patch.rotation.y = -0.6; head.add(patch);
+  // floppy ears
+  const ears = [];
+  [-1, 1].forEach(sx => {
+    const pivot = new THREE.Group(); pivot.position.set(sx * 0.32, 0.45, -0.05); head.add(pivot);
+    const ear = shadowy(new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.55, 18, 1, true), earMat));
+    ear.scale.set(1, 1, 0.3); ear.position.set(sx * 0.08, 0.22, -0.05); ear.rotation.z = -sx * 0.5;
+    pivot.add(ear); pivot.rotation.x = -0.9; ears.push({ p: pivot, sx });
+  });
+  // legs
+  const legs = [];
+  [[-0.42, -0.62], [0.42, -0.62], [-0.42, 0.62], [0.42, 0.62]].forEach(([x, z], i) => {
+    const hip = new THREE.Group(); hip.position.set(x, -0.35, z); pigBody.add(hip);
+    const thigh = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.26, 16, 12), skinMat)); thigh.scale.set(0.9, 1.2, 1); hip.add(thigh);
+    const shin = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.5, 14), skinMat)); shin.position.y = -0.38; hip.add(shin);
+    const sock = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.12, 0.14, 14), mudMat)); sock.position.y = -0.6; hip.add(sock);
+    const hoof = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.13, 0.1, 14), hoofMat)); hoof.position.y = -0.7; hip.add(hoof);
+    legs.push({ hip, ph: (i === 0 || i === 3) ? 0 : Math.PI });
+  });
+  // curly tail
+  const tailCurve = new THREE.CatmullRomCurve3(Array.from({ length: 24 }, (_, i) => { const a = i / 23 * Math.PI * 4; const r = 0.12 - i * 0.003; return new THREE.Vector3(Math.cos(a) * r, Math.sin(a) * r + i * 0.006, i * 0.018); }));
+  const tailPivot = new THREE.Group(); tailPivot.position.set(0, 0.2, 1.42); pigBody.add(tailPivot);
+  tailPivot.add(shadowy(new THREE.Mesh(new THREE.TubeGeometry(tailCurve, 60, 0.035, 8, false), skinMat)));
+
+  // ================= GAME OBJECTS =================
+  const LANES = [-2, 0, 2];
+  const hayMat = new THREE.MeshStandardMaterial({ map: hayTex, roughness: 1 });
+  const tireMat = new THREE.MeshStandardMaterial({ color: 0x1d1d1d, roughness: 0.8 });
+  const tractorMat = new THREE.MeshStandardMaterial({ color: 0x2f9d3a, roughness: 0.5, metalness: 0.2 });
+  const yellowMat = new THREE.MeshStandardMaterial({ color: 0xffd23f, roughness: 0.5 });
+  const appleMat = new THREE.MeshStandardMaterial({ color: 0xd8261c, roughness: 0.25, metalness: 0.05 });
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x3f9a34, roughness: 0.6 });
+  const signTex = canvasTex(512, (g, s) => {
+    g.fillStyle = '#ffd23f'; g.fillRect(0, 0, s, s);
+    g.fillStyle = '#2b0a3d'; g.font = 'bold 120px Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('DUCK!', s / 2, s * 0.32); g.font = 'bold 66px Impact, sans-serif'; g.fillText('(or slide)', s / 2, s * 0.68);
+  });
+
+  let objs = [];
+  function makeHay() {
+    const g = new THREE.Group();
+    const m = shadowy(new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.2, 1.2), hayMat)); m.position.y = 0.6; m.receiveShadow = true; g.add(m);
+    return { g, hw: 0.75, hd: 0.6, y0: 0, y1: 1.2 };
+  }
+  function makeFence() {
+    const g = new THREE.Group();
+    [-0.75, 0.75].forEach(x => { const p = shadowy(new THREE.Mesh(new THREE.BoxGeometry(0.16, 1, 0.16), woodMat)); p.position.set(x, 0.5, 0); g.add(p); });
+    [0.35, 0.75].forEach(y => { const r = shadowy(new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.16, 0.1), woodMat)); r.position.y = y; g.add(r); });
+    return { g, hw: 0.85, hd: 0.15, y0: 0, y1: 0.9 };
+  }
+  function makeTires() {
+    const g = new THREE.Group();
+    [0, 0.42].forEach((y, i) => { const t = shadowy(new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.22, 12, 24), tireMat)); t.rotation.x = Math.PI / 2; t.position.y = 0.22 + y; t.rotation.z = i * 0.4; g.add(t); });
+    return { g, hw: 0.7, hd: 0.7, y0: 0, y1: 0.9 };
+  }
+  function makeTractor() {
+    const g = new THREE.Group();
+    const body = shadowy(new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.2, 2.6), tractorMat)); body.position.set(0, 1.2, 0); g.add(body);
+    const cab = shadowy(new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.1, 1.2), tractorMat)); cab.position.set(0, 2.35, 0.5); g.add(cab);
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.7, 0.05), new THREE.MeshStandardMaterial({ color: 0x9fdcff, roughness: 0.1, metalness: 0.5 })); glass.position.set(0, 2.45, -0.11); g.add(glass);
+    const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.9, 10), darkMat); stack.position.set(0.45, 2.1, -0.9); g.add(stack);
+    [[-0.85, 0.75, 0.6, 0.75], [0.85, 0.75, 0.6, 0.75], [-0.8, 0.45, -0.95, 0.45], [0.8, 0.45, -0.95, 0.45]].forEach(([x, y, z, r]) => {
+      const w = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.4, 20), tireMat)); w.rotation.z = Math.PI / 2; w.position.set(x, y, z); g.add(w);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.45, r * 0.45, 0.42, 16), yellowMat); hub.rotation.z = Math.PI / 2; hub.position.set(x, y, z); g.add(hub);
+    });
+    return { g, hw: 0.9, hd: 1.4, y0: 0, y1: 2.8 };
+  }
+  function makeBridge() {
+    const g = new THREE.Group();
+    [-3.4, 3.4].forEach(x => { const p = shadowy(new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.6, 0.3), woodMat)); p.position.set(x, 1.3, 0); g.add(p); });
+    const beam = shadowy(new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.5, 0.35), woodMat)); beam.position.y = 1.6; g.add(beam);
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.6), new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.7 }));
+    sign.position.set(0, 2.45, 0.19); sign.rotation.y = Math.PI; g.add(sign);
+    const sign2 = sign.clone(); sign2.rotation.y = 0; sign2.position.z = 0.19; g.add(sign2);
+    return { g, hw: 4, hd: 0.25, y0: 1.15, y1: 3, all: true };
+  }
+  function makeApple(x, y, z) {
+    const g = new THREE.Group();
+    const a = new THREE.Mesh(new THREE.SphereGeometry(0.28, 20, 14), appleMat); a.scale.set(1, 0.9, 1); a.castShadow = true; g.add(a);
+    const st = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 0.15, 6), trunkMat); st.position.y = 0.3; g.add(st);
+    const lf = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), leafMat); lf.scale.set(1.6, 0.4, 0.8); lf.position.set(0.1, 0.33, 0); g.add(lf);
+    g.position.set(x, y, z); scene.add(g);
+    objs.push({ g, apple: true, x, z, y });
+  }
+  function addObstacle(maker, lane, z) {
+    const o = maker(); o.x = o.all ? 0 : LANES[lane]; o.z = z;
+    o.g.position.set(o.x, 0, z); scene.add(o.g); objs.push(o);
+    return o;
+  }
+
+  // ================= STATE =================
+  let state = 'title', dist = 0, speed = 14, apples = 0, streak = 0, lane = 1, px = 0;
+  let py = 0, vy = 0, flipT = -1, slideT = -1, nextSpawn = 30, lastBridge = 0, runT = 0;
+  let crash = null, slowmo = 1, shake = 0, nextShout = 250;
+  const confetti = [];
+  const confettiGeo = new THREE.PlaneGeometry(0.12, 0.2);
+  const confettiMats = [0xff4fa3, 0xffd23f, 0x7cf7ff, 0x8cff6a, 0xffffff].map(c => new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide }));
+
+  function clearWorld() { objs.forEach(o => scene.remove(o.g)); objs = []; confetti.forEach(c => scene.remove(c.m)); confetti.length = 0; }
+  function resetPig() {
+    pig.position.set(0, 0, 0); pig.rotation.set(0, 0, 0);
+    pigBody.position.set(0, 1, 0); pigBody.rotation.set(0, 0, 0); pigBody.scale.set(1, 1, 1);
+  }
+  function start() {
+    audio(); clearWorld(); resetPig();
+    state = 'run'; dist = 0; speed = 14; apples = 0; streak = 0; lane = 1; px = 0; py = 0; vy = 0; flipT = -1; slideT = -1;
+    nextSpawn = 30; lastBridge = 0; runT = 0; crash = null; slowmo = 1; shake = 0; nextShout = 250;
+    $('title').hidden = true; $('over').hidden = true;
+    updateHud(); startMusic(); oink();
+    shout('GO GO GO!');
+  }
+  $('start').addEventListener('click', e => { e.stopPropagation(); start(); });
+  $('again').addEventListener('click', e => { e.stopPropagation(); start(); });
+
+  function shout(text) {
+    const d = document.createElement('div'); d.className = 'shout'; d.textContent = text;
+    $('shouts').appendChild(d); setTimeout(() => d.remove(), 1300);
+  }
+  const puns = ['HAM-AZING!', 'PORK-TACULAR!', 'HOG HEAVEN!', 'SWINE-TASTIC!', 'OINKREDIBLE!', 'SNOUT OF THIS WORLD!', 'HOGWILD!!!', 'TOTALLY TROTTERED!'];
+  const quips = ['The pig has fallen and it cannot get up', 'Hay is for horses, not for faces', 'That tractor came out of NOWHERE', 'Ten out of ten. Would oink again.', 'Doctors say the pig is fine. Mostly.', 'You call that a jump? The pig does.', 'Somewhere, a farmer is very confused'];
+
+  // ---------- input ----------
+  function act(a) {
+    if (state === 'title' || state === 'over') { if (a === 'jump') start(); return; }
+    if (state !== 'run') return;
+    if (a === 'left' && lane > 0) { lane--; }
+    if (a === 'right' && lane < 2) { lane++; }
+    if (a === 'jump' && py <= 0.001) { vy = 11.5; flipT = 0; slideT = -1; oink(); }
+    if (a === 'slide') { if (py > 0.001) vy = -18; slideT = 0; flipT = -1; }
+  }
+  document.addEventListener('keydown', e => {
+    const map = { ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right', ArrowUp: 'jump', w: 'jump', W: 'jump', ' ': 'jump', ArrowDown: 'slide', s: 'slide', S: 'slide' };
+    const a = map[e.key];
+    if (!a) return;
+    if (state === 'run' || e.key === ' ') e.preventDefault();
+    if (!e.repeat) act(a);
+  });
+  let sx = 0, sy = 0, swiping = false;
+  host.addEventListener('pointerdown', e => { if (e.target.closest('button')) return; sx = e.clientX; sy = e.clientY; swiping = true; });
+  host.addEventListener('pointerup', e => {
+    if (!swiping) return; swiping = false;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) { act('jump'); return; }
+    if (Math.abs(dx) > Math.abs(dy)) act(dx > 0 ? 'right' : 'left'); else act(dy < 0 ? 'jump' : 'slide');
+  });
+
+  // ---------- spawning ----------
+  function spawnRow(z) {
+    const r = Math.random();
+    const m = dist / 1;
+    if (m > 150 && m - lastBridge > 180 && r < 0.14) {
+      addObstacle(makeBridge, 1, z); lastBridge = m;
+      return;
+    }
+    const makers = [makeHay, makeFence, makeTires, makeTractor];
+    const count = Math.random() < Math.min(0.55, 0.15 + m / 2000) ? 2 : 1;
+    const lanes = [0, 1, 2].sort(() => Math.random() - 0.5);
+    const blocked = lanes.slice(0, count);
+    blocked.forEach(l => addObstacle(makers[Math.floor(Math.random() * makers.length)], l, z));
+    // apples: a trail in a free lane, or arching over a low obstacle
+    if (Math.random() < 0.6) {
+      const free = lanes[count];
+      for (let i = 0; i < 5; i++) makeApple(LANES[free], 0.7, z + 4 + i * 2.2);
+    } else if (Math.random() < 0.5) {
+      const o = objs.find(ob => !ob.apple && ob.z === z && ob.y1 < 1.3);
+      if (o) for (let i = 0; i < 5; i++) makeApple(o.x, 0.9 + Math.sin(i / 4 * Math.PI) * 1.6, z + (i - 2) * 1.6);
+    }
+  }
+
+  // ---------- crash & ragdoll ----------
+  function startCrash() {
+    state = 'crash'; stopMusic(); squeal(); thud();
+    crash = { t: 0, vx: (Math.random() - 0.5) * 6, vy: 10, vz: 7, sx: 6 + Math.random() * 6, sy: (Math.random() - 0.5) * 10, sz: 4 + Math.random() * 6, bounces: 0 };
+    slowmo = 0.22; shake = 1;
+    shout('OINK!!!');
+    for (let i = 0; i < 120; i++) {
+      const m = new THREE.Mesh(confettiGeo, confettiMats[i % confettiMats.length]);
+      m.position.set(pig.position.x, 1.5, -1); scene.add(m);
+      confetti.push({ m, v: new THREE.Vector3((Math.random() - 0.5) * 12, 6 + Math.random() * 10, (Math.random() - 0.5) * 12), r: new THREE.Vector3(Math.random() * 10, Math.random() * 10, 0) });
+    }
+  }
+  function endGame() {
+    state = 'over';
+    const s = score();
+    if (s > best) { best = s; save('hogBest', best); }
+    $('finalScore').textContent = s; $('bestScore').textContent = best;
+    $('quip').textContent = quips[Math.floor(Math.random() * quips.length)];
+    $('over').hidden = false;
+  }
+  function score() { return Math.floor(dist) + apples * 10; }
+  function updateHud() { $('meters').textContent = Math.floor(dist) + ' m'; $('appleCount').textContent = '🍎 ' + apples; }
+
+  // ---------- main loop ----------
+  const clock = new THREE.Clock();
+  function animate() {
+    requestAnimationFrame(animate);
+    const rawDt = Math.min(clock.getDelta(), 0.05);
+    const dt = rawDt * slowmo;
+    runT += dt;
+
+    if (state === 'run') {
+      speed = Math.min(34, speed + 0.28 * dt);
+      const dz = speed * dt;
+      dist += dz;
+      dirtTex.offset.y += dz / 5; grassTex.offset.y += dz / 5;
+
+      // lanes
+      const tx = LANES[lane];
+      px += (tx - px) * Math.min(1, dt * 14);
+      pig.position.x = px;
+      pig.rotation.z = (px - tx) * 0.25;
+
+      // jump + flip
+      if (py > 0 || vy > 0) {
+        vy -= 32 * dt; py += vy * dt;
+        if (py <= 0) { py = 0; vy = 0; flipT = -1; pigBody.rotation.x = 0; shake = Math.max(shake, 0.15); }
+      }
+      if (flipT >= 0) { flipT += dt; pigBody.rotation.x = -Math.min(1, flipT / 0.72) * Math.PI * 2; }
+      // belly slide
+      if (slideT >= 0) {
+        slideT += dt;
+        const k = slideT < 0.75 ? 1 : Math.max(0, 1 - (slideT - 0.75) / 0.12);
+        pigBody.scale.set(1 + 0.25 * k, 1 - 0.45 * k, 1 + 0.1 * k);
+        pigBody.position.y = 1 - 0.45 * k;
+        if (slideT > 0.87) { slideT = -1; pigBody.scale.set(1, 1, 1); pigBody.position.y = 1; }
+      }
+      pig.position.y = py;
+
+      // running animation
+      const cyc = runT * speed * 0.9;
+      const grounded = py <= 0.001 && slideT < 0;
+      legs.forEach(l => { l.hip.rotation.x = grounded ? Math.sin(cyc + l.ph) * 0.8 : (slideT >= 0 ? (l.ph ? 1.4 : -1.4) : -0.9); });
+      if (grounded && flipT < 0) { pigBody.position.y = 1 + Math.abs(Math.sin(cyc)) * 0.12; pigBody.rotation.z = Math.sin(cyc) * 0.05; }
+      ears.forEach(e => { e.p.rotation.x = -0.9 + Math.sin(cyc * 2 + e.sx) * 0.35; });
+      tailPivot.rotation.z += dt * speed * 0.8; // propeller tail
+      head.rotation.x = Math.sin(cyc * 2) * 0.05;
+
+      // move objects + collisions
+      const pTop = py + (slideT >= 0 ? 0.95 : 1.85);
+      for (const o of objs) {
+        o.z += dz; o.g.position.z = o.z;
+        if (o.apple) {
+          o.g.rotation.y += dt * 4;
+          if (!o.got && Math.abs(o.x - px) < 0.8 && o.z > -1.9 && o.z < 1.2 && o.y > py - 0.3 && o.y < pTop + 0.3) {
+            o.got = true; scene.remove(o.g); apples++; streak++; ding(streak);
+            if (streak % 10 === 0) shout(streak + ' APPLE COMBO!');
+          }
+          continue;
+        }
+        if (o.hit) continue;
+        const xHit = o.all || Math.abs(o.x - px) < o.hw + 0.4;
+        const zHit = o.z + o.hd > -1.6 && o.z - o.hd < 1.1;
+        const yHit = pTop > o.y0 + 0.05 && py < o.y1 - 0.05;
+        if (xHit && zHit && yHit) { o.hit = true; startCrash(); break; }
+      }
+      // missed apples reset the combo
+      objs = objs.filter(o => { if (o.z > 12) { scene.remove(o.g); if (o.apple && !o.got) streak = 0; return false; } return !o.got; });
+
+      nextSpawn -= dz;
+      if (nextSpawn <= 0) { spawnRow(-85); nextSpawn = Math.max(13, 24 - dist / 120) + Math.random() * 6; }
+      if (dist >= nextShout) { shout(puns[Math.floor(Math.random() * puns.length)]); oink(); nextShout += 250; }
+      updateHud();
+    } else if (state === 'crash') {
+      crash.t += rawDt;
+      if (crash.t > 0.9) slowmo = Math.min(1, slowmo + rawDt * 1.5);
+      // ragdoll flight
+      crash.vy -= 22 * dt;
+      pig.position.x += crash.vx * dt; pig.position.y += crash.vy * dt; pig.position.z += crash.vz * dt;
+      pigBody.rotation.x += crash.sx * dt; pigBody.rotation.y += crash.sy * dt; pigBody.rotation.z += crash.sz * dt;
+      if (pig.position.y < 0) {
+        pig.position.y = 0;
+        if (crash.bounces < 3) { crash.vy = Math.abs(crash.vy) * 0.45; crash.vx *= 0.6; crash.vz *= 0.5; crash.sx *= 0.6; crash.sy *= 0.6; crash.sz *= 0.6; crash.bounces++; thud(); shake = Math.max(shake, 0.4); }
+        else { crash.vy = 0; crash.vx *= 0.9; crash.vz *= 0.9; crash.sx *= 0.9; crash.sy *= 0.9; crash.sz *= 0.9; }
+      }
+      legs.forEach((l, i) => { l.hip.rotation.x = Math.sin(crash.t * 30 + i) * 1.2; l.hip.rotation.z = Math.cos(crash.t * 25 + i) * 0.6; }); // flailing
+      ears.forEach(e => { e.p.rotation.x = -0.4 + Math.sin(crash.t * 40) * 0.8; });
+      if (crash.t > 2.4) endGame();
+    } else {
+      // idle on title / game-over: pig breathes and the tail spins
+      pigBody.position.y = state === 'title' ? 1 + Math.sin(runT * 3) * 0.03 : pigBody.position.y;
+      tailPivot.rotation.z += rawDt * 6;
+      if (state === 'title') { pig.rotation.y = Math.sin(runT * 0.8) * 0.6 + Math.PI; }
+    }
+
+    // googly eyes: springy pupils
+    pupils.forEach(p => {
+      const jitter = state === 'crash' ? 0.8 : 0.08;
+      p.vx += (-p.ox * 60 + (Math.random() - 0.5) * jitter * 60) * rawDt;
+      p.vy += (-p.oy * 60 + (Math.random() - 0.5) * jitter * 60 - (vy > 0 ? 0.6 : 0)) * rawDt;
+      p.vx *= 0.9; p.vy *= 0.9; p.ox += p.vx * rawDt; p.oy += p.vy * rawDt;
+      p.ox = Math.max(-0.06, Math.min(0.06, p.ox)); p.oy = Math.max(-0.06, Math.min(0.06, p.oy));
+      p.m.position.x = p.bx + p.ox; p.m.position.y = p.by + p.oy;
+    });
+
+    // confetti
+    confetti.forEach(c => { c.v.y -= 9 * dt; c.m.position.addScaledVector(c.v, dt); c.m.rotation.x += c.r.x * dt; c.m.rotation.y += c.r.y * dt; if (c.m.position.y < 0.02) { c.m.position.y = 0.02; c.v.set(0, 0, 0); } });
+
+    // scenery scroll
+    if (state === 'run') decor.forEach(d => { d.o.position.z += speed * dt; if (d.o.position.z > 10) d.o.position.z -= d.span; });
+
+    // camera: follow pig a bit, shake on impacts
+    shake = Math.max(0, shake - rawDt * 1.8);
+    const followX = state === 'crash' ? pig.position.x * 0.5 : px * 0.55;
+    camera.position.set(camBase.x + followX + (Math.random() - 0.5) * shake * 0.6, camBase.y + (Math.random() - 0.5) * shake * 0.6, camBase.z + (state === 'crash' ? Math.min(3, crash.t * 2) : 0));
+    camera.lookAt(followX * 0.6, 1.1, state === 'crash' ? pig.position.z - 4 : -5);
+
+    renderer.render(scene, camera);
+  }
+  // title pose
+  pig.rotation.y = Math.PI;
+  animate();
+})();
+</script>
+</body>
+</html>
