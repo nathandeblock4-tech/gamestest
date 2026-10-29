@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demetrius Says · Game Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1020; color: #f2f3ff; font-family: 'Rubik', system-ui, sans-serif; min-height: 100vh; padding: 16px 12px 32px; }
+  .wrap { max-width: 520px; margin: 0 auto; text-align: center; }
+  .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  a.back { color: #f2f3ff; background: #24274a; padding: 8px 14px; border-radius: 10px; text-decoration: none; font-weight: 700; }
+  h1 { font-family: 'Press Start 2P', monospace; font-size: 14px; color: #ffcc33; }
+  .stats { display: flex; justify-content: center; gap: 18px; margin-bottom: 14px; font-weight: 700; color: #9aa0c7; }
+  .stats b { color: #ffcc33; }
+  .board { position: relative; width: min(440px, 92vw); aspect-ratio: 1; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; background: #1a1c35; border-radius: 50%; }
+  .pad { border: none; cursor: pointer; opacity: .45; transition: opacity .1s, transform .1s, filter .1s; }
+  .pad.lit { opacity: 1; transform: scale(1.03); filter: brightness(1.3) drop-shadow(0 0 20px currentColor); }
+  .p0 { background: #4ade80; color: #4ade80; border-radius: 100% 0 0 0; }
+  .p1 { background: #ff5a5a; color: #ff5a5a; border-radius: 0 100% 0 0; }
+  .p2 { background: #ffcc33; color: #ffcc33; border-radius: 0 0 0 100%; }
+  .p3 { background: #60a5fa; color: #60a5fa; border-radius: 0 0 100% 0; }
+  .center { position: absolute; left: 50%; top: 50%; width: 38%; height: 38%; transform: translate(-50%, -50%); border-radius: 50%; background: #0f1020 center/cover; border: 8px solid #1a1c35; display: flex; align-items: center; justify-content: center; cursor: pointer; font: 800 16px Rubik; color: #fff; text-shadow: 2px 2px 0 #000; }
+  .msg { min-height: 28px; font-weight: 800; font-size: 20px; margin-top: 16px; }
+  .help { color: #9aa0c7; font-size: 14px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar"><a class="back" href="index.html">← Back</a><h1>DEMETRIUS SAYS</h1><span></span></div>
+  <div class="stats"><span>Round <b id="round">0</b></span><span>Best <b id="best">0</b></span></div>
+  <div class="board">
+    <button class="pad p0" data-i="0" aria-label="Green"></button><button class="pad p1" data-i="1" aria-label="Red"></button>
+    <button class="pad p2" data-i="2" aria-label="Yellow"></button><button class="pad p3" data-i="3" aria-label="Blue"></button>
+    <div class="center" id="center">START</div>
+  </div>
+  <div class="msg" id="msg">Watch the colors, then repeat them.</div>
+  <p class="help">Keys: 1 2 3 4 (or Q W A S). It gets longer every round. One mistake and he's VERY shocked.</p>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  let best = parseInt(load('simonBest') || '0', 10); $('best').textContent = best;
+  const pads = [...document.querySelectorAll('.pad')], center = $('center');
+  const img = new Image(); img.onload = () => { center.style.backgroundImage = 'url(' + img.src + ')'; }; img.src = 'demetrius.jpg';
+  const FREQ = [392, 330, 262, 196];
+  let seq = [], idx = 0, playing = false, accepting = false;
+  let ac = null;
+  function tone(f, d, type) { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.2, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.05); } catch (e) {} }
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  async function flash(i, ms) { pads[i].classList.add('lit'); tone(FREQ[i], ms / 1000); await sleep(ms); pads[i].classList.remove('lit'); }
+  async function playSeq() {
+    accepting = false; $('msg').textContent = 'Watch...'; await sleep(600);
+    const speed = Math.max(220, 520 - seq.length * 18);
+    for (const i of seq) { await flash(i, speed); await sleep(speed * 0.35); }
+    accepting = true; idx = 0; $('msg').textContent = 'Your turn!';
+  }
+  function next() { seq.push(Math.floor(Math.random() * 4)); $('round').textContent = seq.length; playSeq(); }
+  function start() { seq = []; playing = true; center.textContent = ''; next(); }
+  async function press(i) {
+    if (!accepting) return;
+    flash(i, 220);
+    if (i !== seq[idx]) {
+      accepting = false; playing = false; tone(110, 0.8, 'sawtooth');
+      const score = seq.length - 1;
+      if (score > best) { best = score; save('simonBest', best); $('best').textContent = best; }
+      $('msg').textContent = 'WRONG! You made it to round ' + seq.length + '. Click the face to retry.';
+      center.textContent = 'RETRY'; center.animate([{ transform: 'translate(-50%,-50%) scale(1.4)' }, { transform: 'translate(-50%,-50%) scale(1)' }], 400);
+      return;
+    }
+    idx++;
+    if (idx === seq.length) { accepting = false; $('msg').textContent = ['Nice!', 'Shocking!', 'Keep going!', 'Wow!'][seq.length % 4]; await sleep(700); next(); }
+  }
+  pads.forEach(p => p.addEventListener('pointerdown', e => { e.preventDefault(); press(+p.dataset.i); }));
+  center.addEventListener('click', () => { if (!playing) start(); });
+  document.addEventListener('keydown', e => { const m = { '1': 0, '2': 1, '3': 2, '4': 3, q: 0, w: 1, a: 2, s: 3 }[e.key.toLowerCase()]; if (m !== undefined) press(m); if ((e.key === ' ' || e.key === 'Enter') && !playing) { e.preventDefault(); start(); } });
+})();
+</script>
+</body>
+</html>
