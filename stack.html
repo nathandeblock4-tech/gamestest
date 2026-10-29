@@ -37,7 +37,7 @@
   }
   function spawn() {
     const top = stack[stack.length - 1], fromLeft = stack.length % 2 === 0;
-    cur = { x: fromLeft ? -top.w : W, w: top.w, dir: fromLeft ? 1 : -1, sp: Math.min(9, 3.2 + stack.length * 0.12) };
+    cur = { x: fromLeft ? -top.w * 0.4 : W - top.w * 0.6, w: top.w, dir: fromLeft ? 1 : -1, sp: Math.min(10, 4.2 + stack.length * 0.13) };
   }
   function drop() {
     if (state === 'ready') { state = 'play'; return; }
