@@ -120,24 +120,38 @@
   const users = {};
   let log = {}; try { log = JSON.parse(load('gr_admin_log') || '{}'); } catch (e) { log = {}; }
   let peer = null;
+  function grIce() {
+    var exp = Math.floor(Date.now() / 1000) + 86400, user = exp + ':gameroom';
+    var fallback = [{ urls: 'stun:stun.l.google.com:19302' }];
+    try {
+      return crypto.subtle.importKey('raw', new TextEncoder().encode('openrelayprojectsecret'), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign'])
+        .then(function (k) { return crypto.subtle.sign('HMAC', k, new TextEncoder().encode(user)); })
+        .then(function (sig) {
+          var cred = btoa(String.fromCharCode.apply(null, new Uint8Array(sig)));
+          return { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:staticauth.openrelay.metered.ca:80' },
+            { urls: ['turn:staticauth.openrelay.metered.ca:80', 'turn:staticauth.openrelay.metered.ca:443', 'turn:staticauth.openrelay.metered.ca:80?transport=tcp', 'turn:staticauth.openrelay.metered.ca:443?transport=tcp', 'turns:staticauth.openrelay.metered.ca:443?transport=tcp'], username: user, credential: cred }] } };
+        })
+        .catch(function () { return { config: { iceServers: fallback } }; });
+    } catch (e) { return Promise.resolve({ config: { iceServers: fallback } }); }
+  }
   function setStatus(cls, text) { $('dot').className = 'dot ' + cls; $('statusText').textContent = text; }
   function loadPeer(cb) { if (window.Peer) return cb(); const s = document.createElement('script'); s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'; s.onload = cb; s.onerror = () => setStatus('off', 'Could not load the connection library'); document.head.appendChild(s); }
   function startHub(hub) {
     setStatus('', 'Connecting...');
-    loadPeer(() => {
-      try { peer = new Peer(hub); } catch (e) { setStatus('off', 'Not supported in this browser'); return; }
-      peer.on('open', () => setStatus('on', 'Live: watching for visitors'));
-      peer.on('connection', c => {
-        c.on('data', d => onState(c, d));
-        c.on('close', () => { for (const k in users) if (users[k].conn === c) { users[k].gone = true; } render(); });
-        c.on('error', () => {});
-      });
-      peer.on('error', e => {
-        if (e && e.type === 'unavailable-id') setStatus('off', 'The admin panel is already open in another tab or device');
-        else if (e && e.type !== 'peer-unavailable') setStatus('off', 'Connection problem (' + (e.type || 'error') + '), retrying...');
-      });
-      peer.on('disconnected', () => { setStatus('', 'Reconnecting...'); setTimeout(() => { try { peer.reconnect(); } catch (e) {} }, 2000); });
-    });
+    loadPeer(() => { grIce().then(opts => {
+        try { peer = new Peer(hub, opts); } catch (e) { setStatus('off', 'Not supported in this browser'); return; }
+        peer.on('open', () => setStatus('on', 'Live: watching for visitors'));
+        peer.on('connection', c => {
+          c.on('data', d => onState(c, d));
+          c.on('close', () => { for (const k in users) if (users[k].conn === c) { users[k].gone = true; } render(); });
+          c.on('error', () => {});
+        });
+        peer.on('error', e => {
+          if (e && e.type === 'unavailable-id') setStatus('off', 'The admin panel is already open in another tab or device');
+          else if (e && e.type !== 'peer-unavailable') setStatus('off', 'Connection problem (' + (e.type || 'error') + '), retrying...');
+        });
+        peer.on('disconnected', () => { setStatus('', 'Reconnecting...'); setTimeout(() => { try { peer.reconnect(); } catch (e) {} }, 2000); });
+    }); });
   }
   function onState(c, d) {
     if (d && d.t === 'bye' && users[d.id]) { users[d.id].gone = true; render(); return; }

@@ -903,6 +903,22 @@ function ENGINE() {
   // ---------- online (PeerJS, browser to browser) ----------
   const PREFIX = 'gameroom-chess-';
   const ALPH = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let ICE = { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } };
+  function grIce() {
+    var exp = Math.floor(Date.now() / 1000) + 86400, user = exp + ':gameroom';
+    var fallback = [{ urls: 'stun:stun.l.google.com:19302' }];
+    try {
+      return crypto.subtle.importKey('raw', new TextEncoder().encode('openrelayprojectsecret'), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign'])
+        .then(function (k) { return crypto.subtle.sign('HMAC', k, new TextEncoder().encode(user)); })
+        .then(function (sig) {
+          var cred = btoa(String.fromCharCode.apply(null, new Uint8Array(sig)));
+          return { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:staticauth.openrelay.metered.ca:80' },
+            { urls: ['turn:staticauth.openrelay.metered.ca:80', 'turn:staticauth.openrelay.metered.ca:443', 'turn:staticauth.openrelay.metered.ca:80?transport=tcp', 'turn:staticauth.openrelay.metered.ca:443?transport=tcp', 'turns:staticauth.openrelay.metered.ca:443?transport=tcp'], username: user, credential: cred }] } };
+        })
+        .catch(function () { return { config: { iceServers: fallback } }; });
+    } catch (e) { return Promise.resolve({ config: { iceServers: fallback } }); }
+  }
+  grIce().then(o => { ICE = o; });
   function loadPeer(cb) {
     if (window.Peer) return cb();
     const s = document.createElement('script'); s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
@@ -919,7 +935,7 @@ function ENGINE() {
       let code = ''; for (let i = 0; i < 5; i++) code += ALPH[Math.floor(Math.random() * ALPH.length)];
       net.code = code; net.host = true;
       let peer;
-      try { peer = new Peer(PREFIX + code.toLowerCase()); } catch (e) { netFail('Online play is not supported in this browser.'); return; }
+      try { peer = new Peer(PREFIX + code.toLowerCase(), ICE); } catch (e) { netFail('Online play is not supported in this browser.'); return; }
       net.peer = peer;
       peer.on('open', () => { $('roomCode').textContent = code; $('lobbyMsg').textContent = 'Waiting for your friend to join...'; });
       peer.on('connection', c => {
@@ -946,7 +962,7 @@ function ENGINE() {
     $('netErr').textContent = 'Connecting...'; leaveOnline();
     loadPeer(() => {
       let peer;
-      try { peer = new Peer(); } catch (e) { netFail('Online play is not supported in this browser.'); return; }
+      try { peer = new Peer(ICE); } catch (e) { netFail('Online play is not supported in this browser.'); return; }
       net.peer = peer; net.code = code; net.host = false;
       const fail = setTimeout(() => { if (!net.connected) { netFail("Couldn't connect. Check the code and try again."); leaveOnline(); } }, 15000);
       peer.on('open', () => {

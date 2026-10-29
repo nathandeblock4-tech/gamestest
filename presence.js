@@ -19,7 +19,7 @@
   function plays() { var n = 0; try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k.indexOf('gr_open_') === 0) n += +localStorage.getItem(k) || 0; } } catch (e) {} return n; }
   function state() { return { t: 'state', id: id, name: name(), page: page(), file: file, dev: dev, since: since, vis: document.visibilityState, plays: plays() }; }
   function send() { try { if (conn && conn.open) conn.send(state()); } catch (e) {} }
-  function schedule() { clearTimeout(retry); retry = setTimeout(function () { if (!conn) connect(); }, Math.min(60000, 15000 + tries * 5000)); }
+  function schedule() { clearTimeout(retry); retry = setTimeout(function () { if (!conn) connect(); }, Math.min(30000, 6000 + tries * 2000)); }
   function connect() {
     if (!peer || peer.destroyed) return;
     if (peer.disconnected) { try { peer.reconnect(); } catch (e) {} schedule(); return; }
@@ -119,16 +119,32 @@
     document.body.appendChild(box);
     setTimeout(function () { if (box.parentNode) box.remove(); }, 9000);
   }
+  function grIce() {
+    var exp = Math.floor(Date.now() / 1000) + 86400, user = exp + ':gameroom';
+    var fallback = [{ urls: 'stun:stun.l.google.com:19302' }];
+    try {
+      return crypto.subtle.importKey('raw', new TextEncoder().encode('openrelayprojectsecret'), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign'])
+        .then(function (k) { return crypto.subtle.sign('HMAC', k, new TextEncoder().encode(user)); })
+        .then(function (sig) {
+          var cred = btoa(String.fromCharCode.apply(null, new Uint8Array(sig)));
+          return { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:staticauth.openrelay.metered.ca:80' },
+            { urls: ['turn:staticauth.openrelay.metered.ca:80', 'turn:staticauth.openrelay.metered.ca:443', 'turn:staticauth.openrelay.metered.ca:80?transport=tcp', 'turn:staticauth.openrelay.metered.ca:443?transport=tcp', 'turns:staticauth.openrelay.metered.ca:443?transport=tcp'], username: user, credential: cred }] } };
+        })
+        .catch(function () { return { config: { iceServers: fallback } }; });
+    } catch (e) { return Promise.resolve({ config: { iceServers: fallback } }); }
+  }
   function start() {
     if (!window.Peer) {
       var s = document.createElement('script'); s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
       s.onload = start; s.onerror = function () {};
       document.head.appendChild(s); return;
     }
-    try { peer = new window.Peer(); } catch (e) { return; }
-    peer.on('open', connect);
-    peer.on('error', function (e) { if (e && e.type === 'peer-unavailable') { conn = null; } });
-    peer.on('disconnected', function () { try { peer.reconnect(); } catch (e) {} });
+    grIce().then(function (opts) {
+      try { peer = new window.Peer(opts); } catch (e) { return; }
+      peer.on('open', connect);
+      peer.on('error', function (e) { if (e && e.type === 'peer-unavailable') { conn = null; } });
+      peer.on('disconnected', function () { try { peer.reconnect(); } catch (e) {} });
+    });
   }
   document.addEventListener('visibilitychange', send);
   window.addEventListener('pagehide', function () { try { if (conn && conn.open) conn.send({ t: 'bye', id: id }); } catch (e) {} });
