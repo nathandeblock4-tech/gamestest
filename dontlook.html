@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Don't Look At Demetrius</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #000; color: #8a8a8a; font-family: 'VT323', monospace; min-height: 100vh; padding: 12px; }
+  .wrap { max-width: 1280px; margin: 0 auto; }
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 18px; flex-wrap: wrap; }
+  .bar a { color: #ddd; background: #1b1b1b; border: 1px solid #333; padding: 6px 14px; border-radius: 8px; text-decoration: none; font-size: 20px; }
+  canvas { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; border: 1px solid #1a1a1a; touch-action: none; cursor: pointer; image-rendering: pixelated; }
+  .keys { margin-top: 10px; font-size: 18px; text-align: center; color: #555; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <a href="index.html">← Back</a>
+    <span>Headphones on. Lights off. Phones: play sideways.</span>
+  </div>
+  <canvas id="c" width="1280" height="720"></canvas>
+  <p class="keys">WASD / arrows to move · mouse to look (click to lock) · Phones: left side moves, right side looks</p>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('c');
+  const ctx = cv.getContext('2d');
+  const W = 1280, H = 720, RW = 320, RH = 180;
+  const off = document.createElement('canvas'); off.width = RW; off.height = RH;
+  const g = off.getContext('2d');
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+  // ================= DEMETRIUS'S FACE =================
+  const photo = new Image(); let photoOK = false;
+  const tries = ['demetrius.jpg', 'demetrius.png', 'demetrius.jpeg']; let tryI = 0;
+  photo.onload = () => { photoOK = true; buildDemSprite(); };
+  photo.onerror = () => { tryI++; if (tryI < tries.length) photo.src = tries[tryI]; };
+  photo.src = tries[0];
+
+  function drawFaceArt(c, cx, cy, r) {
+    const fur = c.createRadialGradient(cx, cy - r * 0.2, r * 0.2, cx, cy, r * 1.2);
+    fur.addColorStop(0, '#b5652a'); fur.addColorStop(1, '#4a220a');
+    c.fillStyle = fur; c.beginPath(); c.ellipse(cx, cy - r * 0.1, r, r * 1.1, 0, 0, Math.PI * 2); c.fill();
+    const sk = c.createRadialGradient(cx, cy, r * 0.1, cx, cy + r * 0.1, r * 0.9);
+    sk.addColorStop(0, '#cdb8aa'); sk.addColorStop(1, '#4f3e38');
+    c.fillStyle = sk; c.beginPath(); c.ellipse(cx, cy + r * 0.1, r * 0.78, r * 0.86, 0, 0, Math.PI * 2); c.fill();
+    [-1, 1].forEach(s => {
+      const ex = cx + s * r * 0.3, ey = cy - r * 0.02;
+      c.fillStyle = '#efe6d6'; c.beginPath(); c.ellipse(ex, ey, r * 0.2, r * 0.22, 0, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#000'; c.beginPath(); c.arc(ex, ey + r * 0.02, r * 0.07, 0, Math.PI * 2); c.fill();
+    });
+    c.fillStyle = '#120404'; c.beginPath(); c.ellipse(cx, cy + r * 0.6, r * 0.3, r * 0.25, 0, 0, Math.PI * 2); c.fill();
+  }
+  const faceArt = document.createElement('canvas'); faceArt.width = faceArt.height = 256;
+  drawFaceArt(faceArt.getContext('2d'), 128, 125, 100);
+  function faceSource() { return photoOK ? photo : faceArt; }
+
+  // the in-world sprite: tall shaggy body with the face on top
+  const demSprite = document.createElement('canvas'); demSprite.width = 128; demSprite.height = 256;
+  function buildDemSprite() {
+    const c = demSprite.getContext('2d'); c.clearRect(0, 0, 128, 256);
+    c.fillStyle = '#2b1306';
+    c.beginPath(); c.ellipse(64, 120, 58, 30, 0, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.ellipse(64, 175, 44, 62, 0, 0, Math.PI * 2); c.fill();
+    c.lineCap = 'round'; c.strokeStyle = '#2b1306'; c.lineWidth = 18;
+    [-1, 1].forEach(s => { c.beginPath(); c.moveTo(64 + s * 44, 118); c.quadraticCurveTo(64 + s * 70, 180, 64 + s * 56, 250); c.stroke(); });
+    c.beginPath(); c.moveTo(48, 220); c.lineTo(44, 254); c.moveTo(80, 220); c.lineTo(84, 254); c.stroke();
+    c.strokeStyle = '#4a210b'; c.lineWidth = 2;
+    for (let i = 0; i < 80; i++) { const x = 14 + Math.random() * 100, y = 100 + Math.random() * 150; c.beginPath(); c.moveTo(x, y); c.lineTo(x + rnd(-3, 3), y + rnd(6, 14)); c.stroke(); }
+    c.save(); c.beginPath(); c.ellipse(64, 58, 46, 56, 0, 0, Math.PI * 2); c.clip();
+    const src = faceSource();
+    const ar = (src.width || 1) / (src.height || 1);
+    let dh = 124, dw = dh * ar; if (dw < 100) { dw = 100; dh = dw / ar; }
+    c.drawImage(src, 64 - dw / 2, 58 - dh / 2, dw, dh);
+    c.restore();
+  }
+  buildDemSprite();
+  const keySprite = document.createElement('canvas'); keySprite.width = keySprite.height = 64;
+  (() => {
+    const c = keySprite.getContext('2d');
+    const gl = c.createRadialGradient(32, 32, 2, 32, 32, 30); gl.addColorStop(0, 'rgba(255,220,120,.6)'); gl.addColorStop(1, 'rgba(255,200,80,0)');
+    c.fillStyle = gl; c.fillRect(0, 0, 64, 64);
+    c.strokeStyle = '#ffd34a'; c.lineWidth = 5; c.beginPath(); c.arc(32, 22, 9, 0, Math.PI * 2); c.stroke();
+    c.fillStyle = '#ffd34a'; c.fillRect(30, 30, 5, 22); c.fillRect(35, 44, 7, 4); c.fillRect(35, 50, 5, 4);
+  })();
+
+  // ================= WALL TEXTURES =================
+  function tex(fn) { const c = document.createElement('canvas'); c.width = c.height = 64; fn(c.getContext('2d')); return c; }
+  function grime(c, n) { for (let i = 0; i < n; i++) { c.fillStyle = 'rgba(0,0,0,' + rnd(0.05, 0.3) + ')'; c.fillRect(rnd(0, 64), rnd(0, 64), rnd(1, 6), rnd(1, 10)); } }
+  const TEX = {
+    1: tex(c => { c.fillStyle = '#6b6658'; c.fillRect(0, 0, 64, 64); c.fillStyle = '#4e4a40'; for (let y = 0; y < 64; y += 16) c.fillRect(0, y, 64, 2); for (let x = 0; x < 64; x += 16) c.fillRect(x, 0, 2, 64); c.fillStyle = '#3c5a3a'; c.fillRect(0, 40, 64, 24); grime(c, 60); }),
+    2: tex(c => { c.fillStyle = '#2a2622'; c.fillRect(0, 0, 64, 64); c.fillStyle = '#777'; for (let x = 2; x < 64; x += 10) c.fillRect(x, 0, 3, 64); c.fillRect(0, 4, 64, 3); c.fillRect(0, 58, 64, 3); grime(c, 30); }),
+    3: tex(c => { c.fillStyle = '#6b6658'; c.fillRect(0, 0, 64, 64); c.fillStyle = '#3c5a3a'; c.fillRect(0, 40, 64, 24); c.fillStyle = '#d8c890'; c.fillRect(14, 6, 36, 40); c.fillStyle = '#3b1a4a'; c.font = 'bold 9px Impact'; c.textAlign = 'center'; c.fillText('SMILE!', 32, 16); c.save(); c.beginPath(); c.ellipse(32, 31, 10, 12, 0, 0, Math.PI * 2); c.clip(); c.drawImage(faceArt, 18, 17, 28, 28); c.restore(); grime(c, 40); }),
+    4: tex(c => { c.fillStyle = '#6b6658'; c.fillRect(0, 0, 64, 64); c.fillStyle = '#3c5a3a'; c.fillRect(0, 40, 64, 24); c.fillStyle = '#7a0a0a'; c.font = '10px "Special Elite", serif'; c.textAlign = 'center'; c.fillText(['DONT', 'LOOK', 'AWAY', 'RUN'][Math.floor(Math.random() * 4)], 32, 28); grime(c, 50); }),
+    9: tex(c => { c.fillStyle = '#4a1010'; c.fillRect(0, 0, 64, 64); c.fillStyle = '#2a0808'; c.fillRect(8, 8, 48, 56); c.fillStyle = '#ff3a3a'; c.font = 'bold 14px Impact'; c.textAlign = 'center'; c.fillText('EXIT', 32, 22); c.fillStyle = '#aaa'; c.fillRect(46, 36, 6, 4); })
+  };
+
+  // ================= MAZE =================
+  const N = 21;
+  let map, keys, exitCell, demP;
+  function genMaze() {
+    map = Array.from({ length: N }, () => Array(N).fill(1));
+    const stack = [[1, 1]]; map[1][1] = 0;
+    while (stack.length) {
+      const [x, y] = stack[stack.length - 1];
+      const nb = [[2, 0], [-2, 0], [0, 2], [0, -2]].map(([dx, dy]) => [x + dx, y + dy, dx, dy]).filter(([nx, ny]) => nx > 0 && ny > 0 && nx < N - 1 && ny < N - 1 && map[ny][nx] === 1);
+      if (!nb.length) { stack.pop(); continue; }
+      const [nx, ny, dx, dy] = nb[Math.floor(Math.random() * nb.length)];
+      map[y + dy / 2][x + dx / 2] = 0; map[ny][nx] = 0; stack.push([nx, ny]);
+    }
+    // knock out extra walls so there are loops to escape through
+    for (let i = 0; i < 40; i++) {
+      const x = 1 + Math.floor(Math.random() * (N - 2)), y = 1 + Math.floor(Math.random() * (N - 2));
+      if (map[y][x] !== 1) continue;
+      if ((map[y][x - 1] === 0 && map[y][x + 1] === 0 && map[y - 1][x] && map[y + 1][x]) || (map[y - 1][x] === 0 && map[y + 1][x] === 0 && map[y][x - 1] && map[y][x + 1])) map[y][x] = 0;
+    }
+    // wall variety
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (map[y][x] === 1) { const r = Math.random(); map[y][x] = r < 0.12 ? 2 : r < 0.18 ? 3 : r < 0.22 ? 4 : 1; }
+    const dist = bfs(1, 1);
+    const open = []; for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) if (!map[y][x]) open.push([x, y, dist[y][x]]);
+    // exit on the outer wall next to the farthest cell that touches the border
+    const edge = open.filter(([x, y]) => x === 1 || y === 1 || x === N - 2 || y === N - 2).sort((a, b) => b[2] - a[2])[0];
+    const [ex, ey] = edge;
+    const wallSide = ex === N - 2 ? [N - 1, ey] : ey === N - 2 ? [ex, N - 1] : ex === 1 ? [0, ey] : [ex, 0];
+    map[wallSide[1]][wallSide[0]] = 9; exitCell = { x: wallSide[0], y: wallSide[1], fx: ex, fy: ey };
+    // keys in far dead ends, spread out
+    const deadEnds = open.filter(([x, y]) => [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => map[y + dy][x + dx]).length === 3 && dist[y][x] > 8).sort((a, b) => b[2] - a[2]);
+    keys = [];
+    const pool = deadEnds.length >= 3 ? deadEnds : open.filter(c => c[2] > 6).sort((a, b) => b[2] - a[2]);
+    for (const c of pool) { if (keys.length >= 3) break; if (Math.abs(c[0] - ex) + Math.abs(c[1] - ey) < 3) continue; if (keys.every(k => Math.abs(k.x - c[0] - 0.5) + Math.abs(k.y - c[1] - 0.5) > 6)) keys.push({ x: c[0] + 0.5, y: c[1] + 0.5, got: false }); }
+    for (const c of pool) { if (keys.length >= 3) break; if (!keys.some(k => k.x === c[0] + 0.5 && k.y === c[1] + 0.5)) keys.push({ x: c[0] + 0.5, y: c[1] + 0.5, got: false }); }
+    const far = open.filter(c => c[2] > 12);
+    const s = far[Math.floor(Math.random() * far.length)] || open[open.length - 1];
+    demP = { x: s[0] + 0.5, y: s[1] + 0.5 };
+  }
+  function bfs(sx, sy) {
+    const d = Array.from({ length: N }, () => Array(N).fill(1e9)); d[sy][sx] = 0; const q = [[sx, sy]];
+    while (q.length) { const [x, y] = q.shift(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (map[ny] && map[ny][nx] === 0 && d[ny][nx] > d[y][x] + 1) { d[ny][nx] = d[y][x] + 1; q.push([nx, ny]); } } }
+    return d;
+  }
+
+  // ================= AUDIO =================
+  let ac = null, master = null, noiseBuf = null, statG = null, amb = null;
+  function A() {
+    if (!ac) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; ac = new AC(); const comp = ac.createDynamicsCompressor(); master = ac.createGain(); master.gain.value = 0.9; master.connect(comp); comp.connect(ac.destination); }
+    if (ac.state === 'suspended') ac.resume(); return ac;
+  }
+  function noiseSrc() { if (!noiseBuf) { const len = ac.sampleRate * 2; noiseBuf = ac.createBuffer(1, len, ac.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1; } const s = ac.createBufferSource(); s.buffer = noiseBuf; s.loop = true; return s; }
+  function out(node, pan) { if (pan !== undefined && ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); node.connect(p); p.connect(master); } else node.connect(master); }
+  function env(gn, t, a, peak, d) { gn.gain.setValueAtTime(0.0001, t); gn.gain.exponentialRampToValueAtTime(peak, t + a); gn.gain.exponentialRampToValueAtTime(0.0001, t + a + d); }
+  function thump(pan, vol, f0) {
+    if (!A()) return; const t = ac.currentTime; const o = ac.createOscillator(), gn = ac.createGain();
+    o.frequency.setValueAtTime(f0 || 90, t); o.frequency.exponentialRampToValueAtTime(35, t + 0.2); env(gn, t, 0.01, vol, 0.25); o.connect(gn); out(gn, pan); o.start(t); o.stop(t + 0.35);
+  }
+  function heartbeat(vol) { thump(0, vol, 70); setTimeout(() => thump(0, vol * 0.7, 60), 180); }
+  function chime() { if (!A()) return; const t = ac.currentTime; [784, 1175, 1568].forEach((f, i) => { const o = ac.createOscillator(), gn = ac.createGain(); o.type = 'triangle'; o.frequency.value = f; env(gn, t + i * 0.09, 0.01, 0.15, 0.6); o.connect(gn); out(gn); o.start(t + i * 0.09); o.stop(t + i * 0.09 + 0.7); }); }
+  function sting() { if (!A()) return; const t = ac.currentTime; [233, 247, 349].forEach(f => { const o = ac.createOscillator(), gn = ac.createGain(); o.type = 'sawtooth'; o.frequency.value = f; env(gn, t, 0.01, 0.09, 1); o.connect(gn); out(gn); o.start(t); o.stop(t + 1.1); }); }
+  function scream() {
+    if (!A()) return; const t = ac.currentTime;
+    const sh = ac.createWaveShaper(); const cu = new Float32Array(1024); for (let i = 0; i < 1024; i++) cu[i] = Math.tanh((i / 512 - 1) * 6); sh.curve = cu;
+    const gn = ac.createGain(); gn.gain.setValueAtTime(1, t); gn.gain.setValueAtTime(1, t + 1.1); gn.gain.exponentialRampToValueAtTime(0.0001, t + 1.6); sh.connect(gn); out(gn);
+    [310, 333, 470, 620, 905].forEach((f, i) => { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f * 0.6, t); o.frequency.exponentialRampToValueAtTime(f * 1.5, t + 0.2); o.frequency.exponentialRampToValueAtTime(f * 0.9, t + 1.5); const l = ac.createOscillator(), lg = ac.createGain(); l.frequency.value = 9 + i * 3; lg.gain.value = f * 0.09; l.connect(lg); lg.connect(o.frequency); const og = ac.createGain(); og.gain.value = 0.22; o.connect(og); og.connect(sh); o.start(t); l.start(t); o.stop(t + 1.7); l.stop(t + 1.7); });
+    const n = noiseSrc(), ng = ac.createGain(); ng.gain.value = 0.5; n.connect(ng); ng.connect(sh); n.start(t); n.stop(t + 1.7);
+  }
+  function startAmb() {
+    if (!A() || amb) return;
+    const gn = ac.createGain(); gn.gain.value = 1; out(gn);
+    const o1 = ac.createOscillator(), o2 = ac.createOscillator(); o1.frequency.value = 49; o2.frequency.value = 52.3; const og = ac.createGain(); og.gain.value = 0.08; o1.connect(og); o2.connect(og); og.connect(gn);
+    const n = noiseSrc(), f = ac.createBiquadFilter(), sg = ac.createGain(); f.type = 'highpass'; f.frequency.value = 1200; sg.gain.value = 0; n.connect(f); f.connect(sg); sg.connect(gn);
+    o1.start(); o2.start(); n.start(); amb = { gn, nodes: [o1, o2, n] }; statG = sg;
+  }
+  function stopAmb() { if (!amb) return; amb.nodes.forEach(n => { try { n.stop(); } catch (e) {} }); amb.gn.disconnect(); amb = null; statG = null; }
+
+  // ================= STATE =================
+  let state = 'title', stateT = 0;
+  let P, keysGot, msg, msgT, blinkT, blinking, demVisible, demSeenOnce, beatT, stepT, pathT, distField, playTime, lastSeenDist;
+  const zbuf = new Float32Array(RW);
+  const input = { f: 0, s: 0, turn: 0 };
+  const keysDown = {};
+  function startGame() {
+    A(); genMaze();
+    P = { x: 1.5, y: 1.5, a: 0 };
+    // face down an open corridor
+    if (map[1][2]) P.a = Math.PI / 2;
+    keysGot = 0; msg = 'Find 3 keys. Find the exit. Don\'t look away.'; msgT = 5;
+    blinkT = rnd(8, 11); blinking = 0; demVisible = false; demSeenOnce = false; beatT = 0; stepT = 0; pathT = 0; playTime = 0; lastSeenDist = 99;
+    distField = bfs(1, 1);
+    buildDemSprite();
+    stopAmb(); startAmb();
+    state = 'play'; stateT = 0;
+    try { cv.requestPointerLock && cv.requestPointerLock(); } catch (e) {}
+  }
+  function say(t, s) { msg = t; msgT = s || 3; }
+
+  // ================= UPDATE =================
+  function solid(x, y) { const c = map[Math.floor(y)] && map[Math.floor(y)][Math.floor(x)]; return c !== 0; }
+  function update(dt) {
+    stateT += dt;
+    if (state !== 'play') return;
+    playTime += dt;
+    msgT -= dt;
+    // movement
+    let f = input.f, s = input.s, turn = input.turn;
+    if (keysDown.w || keysDown.arrowup) f += 1;
+    if (keysDown.s || keysDown.arrowdown) f -= 1;
+    if (keysDown.a) s -= 1;
+    if (keysDown.d) s += 1;
+    if (keysDown.arrowleft) turn -= 1;
+    if (keysDown.arrowright) turn += 1;
+    P.a += turn * 2.4 * dt;
+    const sp = 2.3 * dt, ca = Math.cos(P.a), sa = Math.sin(P.a);
+    const mx = (ca * f - sa * s) * sp, my = (sa * f + ca * s) * sp, r = 0.22;
+    if (!solid(P.x + mx + Math.sign(mx) * r, P.y)) P.x += mx;
+    if (!solid(P.x, P.y + my + Math.sign(my) * r)) P.y += my;
+
+    // keys
+    keys.forEach(k => { if (!k.got && Math.hypot(k.x - P.x, k.y - P.y) < 0.6) { k.got = true; keysGot++; chime(); say(keysGot < 3 ? 'Key ' + keysGot + ' of 3. He is getting faster.' : 'All keys found. Find the red EXIT door. RUN.', 4); } });
+    // exit
+    if (Math.hypot(exitCell.fx + 0.5 - P.x, exitCell.fy + 0.5 - P.y) < 0.75) {
+      if (keysGot >= 3) { win(); return; }
+      else if (msgT < 0) say('The door is locked. You need ' + (3 - keysGot) + ' more key' + (3 - keysGot > 1 ? 's' : '') + '.', 2.5);
+    }
+
+    // blinking
+    blinkT -= dt;
+    if (blinking > 0) { blinking -= dt; }
+    else if (blinkT <= 0) { blinking = 0.32; blinkT = rnd(6.5, 10); }
+
+    // Demetrius: moves only when you can't see him
+    const d = Math.hypot(demP.x - P.x, demP.y - P.y);
+    pathT -= dt;
+    if (pathT <= 0) { distField = bfs(Math.floor(P.x), Math.floor(P.y)); pathT = 0.25; }
+    const canSee = demVisible && blinking <= 0;
+    if (!canSee) {
+      const speed = (1.5 + keysGot * 0.55) * (blinking > 0 ? 2.6 : 1);
+      let tx, ty;
+      const cx = Math.floor(demP.x), cy = Math.floor(demP.y);
+      if (cx === Math.floor(P.x) && cy === Math.floor(P.y)) { tx = P.x; ty = P.y; }
+      else {
+        let best = null, bd = distField[cy] ? distField[cy][cx] : 1e9;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const v = distField[cy + dy] && distField[cy + dy][cx + dx]; if (v !== undefined && v < bd) { bd = v; best = [cx + dx, cy + dy]; } }
+        if (best) { tx = best[0] + 0.5; ty = best[1] + 0.5; } else { tx = P.x; ty = P.y; }
+        // stay centered in corridors
+        if (best && (Math.abs(demP.x - (cx + 0.5)) > 0.05 && best[1] !== cy)) { tx = cx + 0.5; ty = demP.y; }
+        if (best && (Math.abs(demP.y - (cy + 0.5)) > 0.05 && best[0] !== cx)) { tx = demP.x; ty = cy + 0.5; }
+      }
+      const vx = tx - demP.x, vy = ty - demP.y, vl = Math.hypot(vx, vy) || 1;
+      const stepLen = Math.min(vl, speed * dt);
+      demP.x += vx / vl * stepLen; demP.y += vy / vl * stepLen;
+      // footsteps when he's moving and near
+      stepT -= dt;
+      if (d < 9 && stepT <= 0) {
+        const ang = Math.atan2(demP.y - P.y, demP.x - P.x) - P.a;
+        thump(Math.sin(ang), Math.min(0.9, 0.12 + (9 - d) / 9 * 0.8));
+        stepT = blinking > 0 ? 0.12 : 0.45;
+      }
+    }
+    if (canSee && !demSeenOnce && d < 7) { demSeenOnce = true; sting(); }
+    if (canSee && lastSeenDist - d > 1.2 && d < 5) { sting(); }
+    if (canSee) lastSeenDist = d;
+    // heartbeat speeds up as he gets close
+    beatT -= dt;
+    if (d < 10 && beatT <= 0) { heartbeat(Math.min(1, 0.25 + (10 - d) / 10)); beatT = 0.35 + d * 0.11; }
+    if (statG) statG.gain.setTargetAtTime(canSee ? Math.max(0, (6 - d) / 6) * 0.22 : 0, ac.currentTime, 0.1);
+    // caught
+    if (d < 0.55) { caught(); }
+  }
+  function caught() { state = 'scare'; stateT = 0; stopAmb(); scream(); try { document.exitPointerLock && document.exitPointerLock(); } catch (e) {} }
+  function win() {
+    state = 'win'; stateT = 0; stopAmb(); chime();
+    const best = parseFloat(load('dlBest') || '0');
+    if (!best || playTime < best) save('dlBest', playTime.toFixed(1));
+    try { document.exitPointerLock && document.exitPointerLock(); } catch (e) {}
+  }
+
+  // ================= RENDER (raycaster) =================
+  const FOV = 0.66;
+  function light(dist, camX) {
+    const cone = Math.max(0, 1 - camX * camX * 1.8);
+    const fall = 1 / (1 + dist * dist * 0.11);
+    const flick = Math.random() < 0.01 ? 0.5 : 1;
+    return Math.min(1, 0.03 + cone * fall * 1.35 * flick);
+  }
+  function render() {
+    const dirX = Math.cos(P.a), dirY = Math.sin(P.a), plX = -dirY * FOV, plY = dirX * FOV;
+    // ceiling + floor with a flashlight pool
+    g.fillStyle = '#000'; g.fillRect(0, 0, RW, RH);
+    const fl = g.createRadialGradient(RW / 2, RH, 10, RW / 2, RH, RH * 0.9);
+    fl.addColorStop(0, 'rgba(60,52,40,.9)'); fl.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = fl; g.fillRect(0, RH / 2, RW, RH / 2);
+    for (let x = 0; x < RW; x++) {
+      const camX = 2 * x / RW - 1;
+      const rdx = dirX + plX * camX, rdy = dirY + plY * camX;
+      let mx = Math.floor(P.x), my = Math.floor(P.y);
+      const ddx = Math.abs(1 / rdx), ddy = Math.abs(1 / rdy);
+      let stepX, stepY, sdx, sdy, side = 0, hit = 0;
+      if (rdx < 0) { stepX = -1; sdx = (P.x - mx) * ddx; } else { stepX = 1; sdx = (mx + 1 - P.x) * ddx; }
+      if (rdy < 0) { stepY = -1; sdy = (P.y - my) * ddy; } else { stepY = 1; sdy = (my + 1 - P.y) * ddy; }
+      let guard = 0;
+      while (!hit && guard++ < 64) {
+        if (sdx < sdy) { sdx += ddx; mx += stepX; side = 0; } else { sdy += ddy; my += stepY; side = 1; }
+        if (!map[my] || map[my][mx] === undefined) { hit = 1; break; }
+        if (map[my][mx] > 0) hit = map[my][mx];
+      }
+      const pd = side === 0 ? sdx - ddx : sdy - ddy;
+      zbuf[x] = pd;
+      const lh = RH / pd, top = RH / 2 - lh / 2;
+      let wx = side === 0 ? P.y + pd * rdy : P.x + pd * rdx; wx -= Math.floor(wx);
+      let tx = Math.floor(wx * 64); if ((side === 0 && rdx > 0) || (side === 1 && rdy < 0)) tx = 63 - tx;
+      const t = TEX[hit] || TEX[1];
+      g.drawImage(t, tx, 0, 1, 64, x, top, 1, lh);
+      let sh = light(pd, camX) * (side ? 0.78 : 1);
+      if (hit === 9) sh = Math.max(sh, keysGot >= 3 ? 0.45 : 0.18); // the exit glows a little
+      g.fillStyle = 'rgba(0,0,0,' + (1 - sh) + ')'; g.fillRect(x, top, 1, lh);
+    }
+    // sprites: keys + Demetrius
+    const invDet = 1 / (plX * dirY - dirX * plY);
+    const sprites = keys.filter(k => !k.got).map(k => ({ x: k.x, y: k.y, img: keySprite, h: 0.35, lift: 0.25, glow: true })).concat([{ x: demP.x, y: demP.y, img: demSprite, h: 1.15, lift: 0, dem: true }]);
+    sprites.forEach(s => { s.d = (s.x - P.x) ** 2 + (s.y - P.y) ** 2; });
+    sprites.sort((a, b) => b.d - a.d);
+    demVisible = false;
+    for (const s of sprites) {
+      const sx = s.x - P.x, sy = s.y - P.y;
+      const tX = invDet * (dirY * sx - dirX * sy), tY = invDet * (-plY * sx + plX * sy);
+      if (tY <= 0.1) continue;
+      const scrX = (RW / 2) * (1 + tX / tY);
+      const lh = RH / tY, bottom = RH / 2 + lh / 2 - s.lift * lh, hgt = s.h * lh, wid = hgt * s.img.width / s.img.height;
+      const x0 = Math.floor(scrX - wid / 2), x1 = Math.floor(scrX + wid / 2);
+      let drawn = 0, shadeSum = 0;
+      for (let x = Math.max(0, x0); x < Math.min(RW, x1); x++) {
+        if (tY >= zbuf[x]) continue;
+        const texX = Math.floor((x - x0) / wid * s.img.width);
+        g.drawImage(s.img, texX, 0, 1, s.img.height, x, bottom - hgt, 1, hgt);
+        const camX = 2 * x / RW - 1;
+        let sh = light(tY, camX); if (s.glow) sh = Math.max(sh, 0.75);
+        g.fillStyle = 'rgba(0,0,0,' + (1 - sh) + ')'; g.fillRect(x, bottom - hgt, 1, hgt);
+        drawn++; shadeSum += sh;
+      }
+      if (s.dem && drawn > 1 && shadeSum / drawn > 0.1) demVisible = true;
+    }
+  }
+
+  // ================= DRAW =================
+  function text(str, x, y, size, color, align, font) { ctx.font = size + 'px ' + (font || "'VT323', monospace"); ctx.fillStyle = color; ctx.textAlign = align || 'left'; ctx.fillText(str, x, y); }
+  const noise = [];
+  for (let k = 0; k < 5; k++) { const c = document.createElement('canvas'); c.width = 320; c.height = 180; const n = c.getContext('2d'); const id = n.createImageData(320, 180); for (let i = 0; i < id.data.length; i += 4) { const v = Math.random() * 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 255; } n.putImageData(id, 0, 0); noise.push(c); }
+  function drawNoise(a) { ctx.save(); ctx.globalAlpha = a; ctx.imageSmoothingEnabled = false; ctx.drawImage(noise[Math.floor(Math.random() * 5)], 0, 0, W, H); ctx.restore(); }
+  function vignette(s) { const gr = ctx.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * 0.85); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,' + s + ')'); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H); }
+  function drawFace(cx, cy, w, filter, alpha) {
+    const src = faceSource(); const ar = (src.width || 1) / (src.height || 1); const h = w / ar;
+    ctx.save(); if (filter) ctx.filter = filter; if (alpha !== undefined) ctx.globalAlpha = alpha;
+    ctx.drawImage(src, cx - w / 2, cy - h / 2, w, h); ctx.restore();
+  }
+  function drawTitle() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    const a = 0.12 + Math.max(0, Math.sin(stateT * 0.6)) * 0.25;
+    drawFace(W / 2, H / 2 + 20, 520, 'grayscale(1) contrast(1.6)', Math.random() < 0.03 ? 0.6 : a);
+    drawNoise(0.14);
+    text("DON'T LOOK", W / 2, 190, 96, '#ddd', 'center', "'Special Elite', serif");
+    text('AT DEMETRIUS', W / 2, 280, 80, '#b01818', 'center', "'Special Elite', serif");
+    text('He only moves when you can\'t see him.', W / 2, 400, 34, '#aaa', 'center');
+    text('Find 3 keys. Find the exit. You will have to blink.', W / 2, 440, 34, '#aaa', 'center');
+    const best = load('dlBest');
+    if (best) text('Best escape: ' + best + 's', W / 2, 490, 28, '#777', 'center');
+    const p = 0.5 + Math.sin(stateT * 4) * 0.5;
+    text('CLICK TO ENTER', W / 2, 590, 48, 'rgba(230,230,230,' + (0.4 + p * 0.6) + ')', 'center');
+    vignette(0.9);
+  }
+  function drawPlay() {
+    render();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(off, 0, 0, W, H);
+    const d = Math.hypot(demP.x - P.x, demP.y - P.y);
+    if (demVisible && d < 6) drawNoise((6 - d) / 6 * 0.35);
+    drawNoise(0.06);
+    vignette(0.85);
+    // blink: eyelids close
+    const warn = blinkT < 1.5 && blinking <= 0;
+    if (blinking > 0) {
+      const k = Math.sin((1 - blinking / 0.32) * Math.PI);
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H * 0.5 * k + 2); ctx.fillRect(0, H - H * 0.5 * k - 2, W, H * 0.5 * k + 2);
+      if (k > 0.8) ctx.fillRect(0, 0, W, H);
+    }
+    // HUD
+    for (let i = 0; i < 3; i++) { ctx.globalAlpha = i < keysGot ? 1 : 0.25; ctx.drawImage(keySprite, 24 + i * 56, 18, 56, 56); }
+    ctx.globalAlpha = 1;
+    text(keysGot + ' / 3 KEYS', 30, 100, 30, '#ddd');
+    // eye icon: warns you a blink is coming
+    ctx.save(); ctx.translate(W - 70, 52);
+    ctx.strokeStyle = warn ? (Math.floor(stateT * 8) % 2 ? '#ff3030' : '#ffffff') : '#888'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.ellipse(0, 0, 36, blinking > 0 ? 3 : 18, 0, 0, Math.PI * 2); ctx.stroke();
+    if (blinking <= 0) { ctx.fillStyle = ctx.strokeStyle; ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+    if (warn) text('ABOUT TO BLINK', W - 70, 100, 24, '#ff5050', 'center');
+    if (msgT > 0) { ctx.globalAlpha = Math.min(1, msgT); text(msg, W / 2, H - 50, 36, '#e8e8e8', 'center'); ctx.globalAlpha = 1; }
+    if (!document.pointerLockElement && !isTouch && stateT > 0.5) text('Click to look around with the mouse', W / 2, 40, 26, '#777', 'center');
+    if (isTouch) drawTouchUI();
+  }
+  function drawScare() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    const t = stateT, s = 1.1 + t * 0.8, sh = 45 * (1 - Math.min(1, t / 1.6) * 0.4);
+    drawFace(W / 2 + rnd(-sh, sh), H / 2 + rnd(-sh, sh), W * s, 'contrast(1.5) saturate(1.3)');
+    if (Math.floor(t * 18) % 3 === 0) { ctx.fillStyle = 'rgba(200,0,0,.3)'; ctx.fillRect(0, 0, W, H); }
+    drawNoise(0.22);
+    if (t > 1.6) { state = 'dead'; stateT = 0; }
+  }
+  function drawDead() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    drawNoise(stateT < 2 ? 0.6 - stateT * 0.25 : 0.1);
+    drawFace(W / 2, 330, 420, 'grayscale(1)', 0.15);
+    text('YOU LOOKED AWAY', W / 2, 250, 90, '#c01818', 'center', "'Special Elite', serif");
+    text('Keys found: ' + keysGot + ' / 3', W / 2, 320, 36, '#aaa', 'center');
+    if (stateT > 1) text('CLICK TO TRY AGAIN', W / 2, 470, 44, '#ddd', 'center');
+    vignette(0.9);
+  }
+  function drawWin() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    text('YOU ESCAPED', W / 2, 250, 100, '#ddd', 'center', "'Special Elite', serif");
+    text('Time: ' + playTime.toFixed(1) + 's', W / 2, 330, 40, '#9be29b', 'center');
+    text('...for now.', W / 2, 390, 36, '#888', 'center');
+    if (stateT > 3 && stateT < 3.2) { drawFace(W / 2, H / 2, W * 0.9, 'contrast(1.6)'); if (!winFlash) { winFlash = true; sting(); } }
+    if (stateT > 1.5) text('CLICK TO PLAY AGAIN', W / 2, 520, 40, '#aaa', 'center');
+    drawNoise(0.07); vignette(0.85);
+  }
+  let winFlash = false;
+
+  // ================= INPUT =================
+  const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  function canvasXY(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; }
+  cv.addEventListener('click', () => {
+    if (state === 'title') startGame();
+    else if (state === 'dead' && stateT > 1) startGame();
+    else if (state === 'win' && stateT > 1.5) { winFlash = false; startGame(); }
+    else if (state === 'play' && !isTouch && !document.pointerLockElement) { try { cv.requestPointerLock(); } catch (e) {} }
+  });
+  document.addEventListener('mousemove', e => { if (state === 'play' && document.pointerLockElement === cv) P.a += e.movementX * 0.0028; });
+  document.addEventListener('keydown', e => {
+    const k = e.key.toLowerCase(); keysDown[k] = true;
+    if (state === 'play' && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+  });
+  document.addEventListener('keyup', e => { keysDown[e.key.toLowerCase()] = false; });
+  // touch: left half = joystick, right half = look
+  const touches = {};
+  cv.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' || state !== 'play') return;
+    const [x, y] = canvasXY(e);
+    touches[e.pointerId] = { kind: x < W / 2 ? 'move' : 'look', sx: x, sy: y, lx: x };
+    cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener('pointermove', e => {
+    const t = touches[e.pointerId]; if (!t) return;
+    const [x, y] = canvasXY(e);
+    if (t.kind === 'move') { t.cx = x; t.cy = y; input.f = Math.max(-1, Math.min(1, -(y - t.sy) / 90)); input.s = Math.max(-1, Math.min(1, (x - t.sx) / 90)); }
+    else { P.a += (x - t.lx) * 0.006; t.lx = x; }
+  });
+  function endTouch(e) { const t = touches[e.pointerId]; if (!t) return; if (t.kind === 'move') { input.f = 0; input.s = 0; } delete touches[e.pointerId]; }
+  cv.addEventListener('pointerup', endTouch); cv.addEventListener('pointercancel', endTouch);
+  function drawTouchUI() {
+    const mv = Object.values(touches).find(t => t.kind === 'move');
+    ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 3;
+    const bx = mv ? mv.sx : 170, by = mv ? mv.sy : H - 170;
+    ctx.beginPath(); ctx.arc(bx, by, 90, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.beginPath(); ctx.arc(mv && mv.cx ? mv.cx : bx, mv && mv.cy ? mv.cy : by, 36, 0, Math.PI * 2); ctx.fill();
+    text('drag to look', W - 170, H - 60, 26, 'rgba(255,255,255,.35)', 'center');
+  }
+
+  // ================= LOOP =================
+  let last = 0;
+  function frame(t) {
+    const dt = last ? Math.min(0.05, (t - last) / 1000) : 0.016; last = t;
+    update(dt);
+    ctx.imageSmoothingEnabled = true;
+    if (state === 'title') drawTitle();
+    else if (state === 'play') drawPlay();
+    else if (state === 'scare') drawScare();
+    else if (state === 'dead') drawDead();
+    else if (state === 'win') drawWin();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
