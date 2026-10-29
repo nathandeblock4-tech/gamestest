@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pig Run · Game Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1020;
+    --panel: #1a1c35;
+    --panel-2: #24274a;
+    --text: #f2f3ff;
+    --muted: #9aa0c7;
+    --accent: #ffcc33;
+    --radius: 14px;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(circle at 20% 0%, #2a1f5c 0%, transparent 45%),
+                      radial-gradient(circle at 90% 100%, #123a4a 0%, transparent 40%);
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: 'Rubik', system-ui, sans-serif;
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  h1 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(22px, 5vw, 38px);
+    color: var(--accent);
+    text-shadow: 3px 3px 0 #b8440f;
+    text-align: center;
+    margin-bottom: 28px;
+    letter-spacing: 2px;
+  }
+  h1 a { color: inherit; text-decoration: none; }
+  .game-box { background: var(--panel); border: 2px solid var(--panel-2); border-radius: var(--radius); padding: 22px 16px; text-align: center; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 10px; flex-wrap: wrap; }
+  .topbar h2 { font-size: 22px; }
+  .btn { background: var(--accent); color: #1a1300; border: none; border-radius: 10px; padding: 10px 18px; font: 700 15px 'Rubik', system-ui, sans-serif; cursor: pointer; text-decoration: none; display: inline-block; }
+  .btn.ghost { background: var(--panel-2); color: var(--text); }
+  .btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .stats { display: flex; gap: 18px; justify-content: center; margin-bottom: 14px; color: var(--muted); font-weight: 600; flex-wrap: wrap; }
+  .stats b { color: var(--accent); }
+  canvas { width: 100%; max-width: 800px; border-radius: 10px; border: 2px solid var(--panel-2); display: block; margin: 0 auto; touch-action: none; cursor: pointer; }
+  .help { color: var(--muted); margin-top: 14px; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><a href="index.html">GAME ROOM</a></h1>
+  <div class="game-box">
+    <div class="topbar">
+      <a class="btn ghost" href="index.html">← Back</a>
+      <h2>🐷 Pig Run</h2>
+      <button class="btn" id="newGame">New Game</button>
+    </div>
+    <div class="stats"><span>Distance: <b id="dist">0 m</b></span><span>Apples: <b id="apples">0</b></span><span>Best: <b id="best">0</b></span></div>
+    <canvas id="c" width="800" height="360"></canvas>
+    <p class="help">Space, ↑ or tap to jump. Hold longer to jump higher. Grab apples for bonus points.</p>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('c');
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height, GROUND = 300, PIGX = 170;
+
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  let best = parseInt(load('pigBest') || '0', 10);
+  document.getElementById('best').textContent = best;
+
+  // ---------- state ----------
+  let state = 'ready', dist = 0, speed = 6, apples = 0, phase = 0;
+  let pigY = 0, vy = 0, onGround = true, holding = false;
+  let obstacles = [], fruit = [], particles = [], puddles = [];
+  let last = 0, nextGap = 400, flash = 0;
+
+  // pre-made dirt specks so the ground has texture
+  const specks = Array.from({ length: 140 }, () => ({ x: Math.random() * W, y: GROUND + 6 + Math.random() * (H - GROUND - 8), r: Math.random() * 2 + 0.6, c: Math.random() < 0.5 ? 'rgba(60,40,25,.5)' : 'rgba(170,135,95,.45)' }));
+  const clouds = Array.from({ length: 5 }, (_, i) => ({ x: i * 190 + Math.random() * 80, y: 30 + Math.random() * 60, s: 0.7 + Math.random() * 0.6 }));
+
+  function reset() {
+    state = 'run'; dist = 0; speed = 6; apples = 0; phase = 0;
+    pigY = 0; vy = 0; onGround = true;
+    obstacles = []; fruit = []; particles = []; puddles = [];
+    nextGap = 500; flash = 0;
+    updateHud();
+  }
+
+  // ---------- input ----------
+  function press() {
+    if (state !== 'run') { reset(); return; }
+    holding = true;
+    if (onGround) { vy = -11.2; onGround = false; }
+  }
+  function release() { holding = false; }
+  document.addEventListener('keydown', e => {
+    if ([' ', 'ArrowUp', 'w', 'W'].includes(e.key)) { e.preventDefault(); if (!e.repeat) press(); }
+  });
+  document.addEventListener('keyup', e => { if ([' ', 'ArrowUp', 'w', 'W'].includes(e.key)) release(); });
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); press(); });
+  window.addEventListener('pointerup', release);
+  document.getElementById('newGame').addEventListener('click', e => { e.currentTarget.blur(); reset(); });
+
+  // ---------- spawning ----------
+  function spawn() {
+    const r = Math.random();
+    let o;
+    if (r < 0.35) o = { type: 'hay', w: 58, h: 44 };
+    else if (r < 0.6) o = { type: 'tire', w: 50, h: 32 };
+    else if (r < 0.85 || speed < 8.5) o = { type: 'fence', w: 22, h: 60 };
+    else o = { type: 'stack', w: 58, h: 84 };
+    o.x = W + 20;
+    obstacles.push(o);
+    if (Math.random() < 0.55) fruit.push({ x: W + 20 + o.w / 2 + (Math.random() < 0.5 ? 0 : 140), y: GROUND - 70 - Math.random() * 90, got: false });
+    if (Math.random() < 0.3) puddles.push({ x: W + 200 + Math.random() * 200, w: 60 + Math.random() * 50 });
+    nextGap = 300 + Math.random() * 260 + speed * 28;
+  }
+
+  // ---------- update ----------
+  function update(k) {
+    if (state !== 'run') { phase += 0.05 * k; return; }
+    speed = Math.min(14, speed + 0.0016 * k);
+    const dx = speed * k;
+    dist += dx;
+    phase += 0.33 * k * (speed / 6);
+
+    // jump physics: lighter gravity while holding = higher jump
+    if (!onGround) {
+      vy += (holding && vy < 0 ? 0.45 : 0.95) * k;
+      pigY += vy * k;
+      if (pigY >= 0) {
+        pigY = 0; vy = 0; onGround = true;
+        for (let i = 0; i < 10; i++) particles.push({ x: PIGX + (Math.random() * 60 - 30), y: GROUND, vx: (Math.random() - 0.5) * 3 - dx * 0.2, vy: -Math.random() * 3.5, life: 1 });
+      }
+    }
+
+    obstacles.forEach(o => o.x -= dx);
+    fruit.forEach(f => f.x -= dx);
+    puddles.forEach(p => p.x -= dx);
+    obstacles = obstacles.filter(o => o.x + o.w > -50);
+    fruit = fruit.filter(f => f.x > -30 && !f.got);
+    puddles = puddles.filter(p => p.x + p.w > -20);
+
+    const lastO = obstacles[obstacles.length - 1];
+    if (!lastO || lastO.x < W - nextGap) spawn();
+
+    // pig hitbox (feet at GROUND + pigY)
+    const feet = GROUND + pigY;
+    const hb = { l: PIGX - 36, r: PIGX + 56, t: feet - 62, b: feet - 2 };
+    for (const o of obstacles) {
+      if (hb.r > o.x + 4 && hb.l < o.x + o.w - 4 && hb.b > GROUND - o.h + 4) { gameOver(); return; }
+    }
+    for (const f of fruit) {
+      if (!f.got && Math.abs(f.x - (PIGX + 20)) < 46 && f.y > hb.t - 14 && f.y < hb.b + 10) {
+        f.got = true; apples++; flash = 1;
+        for (let i = 0; i < 8; i++) particles.push({ x: f.x, y: f.y, vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5, life: 1, apple: true });
+      }
+    }
+    // little mud kicks while running
+    if (onGround && Math.random() < 0.25 * k) particles.push({ x: PIGX - 30, y: GROUND - 2, vx: -dx * 0.4 - Math.random() * 2, vy: -Math.random() * 2.5, life: 0.8 });
+
+    particles.forEach(p => { p.x += p.vx * k; p.y += p.vy * k; p.vy += 0.25 * k; p.life -= 0.03 * k; });
+    particles = particles.filter(p => p.life > 0);
+    flash = Math.max(0, flash - 0.05 * k);
+    updateHud();
+  }
+
+  function score() { return Math.floor(dist / 30) + apples * 25; }
+  function updateHud() {
+    document.getElementById('dist').textContent = Math.floor(dist / 30) + ' m';
+    document.getElementById('apples').textContent = apples;
+  }
+  function gameOver() {
+    state = 'over';
+    const s = score();
+    if (s > best) { best = s; save('pigBest', best); document.getElementById('best').textContent = best; }
+  }
+
+  // ---------- drawing: background ----------
+  function hillPath(offset, base, amp, freq, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    for (let x = 0; x <= W; x += 10) {
+      const wx = x + offset;
+      ctx.lineTo(x, base - Math.sin(wx * freq) * amp - Math.sin(wx * freq * 2.3 + 1) * amp * 0.4);
+    }
+    ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+  }
+  function drawBarn(x, y) {
+    ctx.fillStyle = '#8e2f25';
+    ctx.fillRect(x, y - 60, 90, 60);
+    ctx.beginPath(); ctx.moveTo(x - 8, y - 60); ctx.lineTo(x + 45, y - 98); ctx.lineTo(x + 98, y - 60); ctx.closePath();
+    ctx.fillStyle = '#6e221b'; ctx.fill();
+    ctx.strokeStyle = '#efe6d8'; ctx.lineWidth = 3;
+    ctx.strokeRect(x + 30, y - 38, 30, 38);
+    ctx.beginPath(); ctx.moveTo(x + 30, y - 38); ctx.lineTo(x + 60, y); ctx.moveTo(x + 60, y - 38); ctx.lineTo(x + 30, y); ctx.stroke();
+    ctx.fillStyle = '#efe6d8'; ctx.fillRect(x + 38, y - 56, 14, 10);
+  }
+  function drawTree(x, y, s) {
+    ctx.fillStyle = '#5b4330'; ctx.fillRect(x - 4 * s, y - 30 * s, 8 * s, 30 * s);
+    ctx.fillStyle = '#4f7d3c';
+    ctx.beginPath(); ctx.arc(x, y - 44 * s, 22 * s, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5f9147';
+    ctx.beginPath(); ctx.arc(x - 8 * s, y - 50 * s, 13 * s, 0, Math.PI * 2); ctx.fill();
+  }
+  function background() {
+    const sky = ctx.createLinearGradient(0, 0, 0, GROUND);
+    sky.addColorStop(0, '#7fb6de'); sky.addColorStop(0.75, '#cfe3ec'); sky.addColorStop(1, '#f2e2c4');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, GROUND);
+    // sun
+    const sun = ctx.createRadialGradient(660, 70, 10, 660, 70, 90);
+    sun.addColorStop(0, 'rgba(255,248,220,1)'); sun.addColorStop(0.25, 'rgba(255,240,190,.9)'); sun.addColorStop(1, 'rgba(255,240,190,0)');
+    ctx.fillStyle = sun; ctx.beginPath(); ctx.arc(660, 70, 90, 0, Math.PI * 2); ctx.fill();
+    // clouds
+    clouds.forEach(c => {
+      const x = ((c.x - dist * 0.05) % (W + 200) + W + 200) % (W + 200) - 100;
+      ctx.fillStyle = 'rgba(255,255,255,.85)';
+      ctx.beginPath();
+      [[0, 0, 26], [24, -10, 22], [46, 0, 24], [22, 6, 24]].forEach(([dx, dy, r]) => { ctx.moveTo(x + dx * c.s + r * c.s, c.y + dy * c.s); ctx.arc(x + dx * c.s, c.y + dy * c.s, r * c.s, 0, Math.PI * 2); });
+      ctx.fill();
+    });
+    hillPath(dist * 0.08, 215, 22, 0.006, '#9db98a');
+    // barn + trees on the middle layer
+    const mid = dist * 0.25;
+    const barnX = 900 - (mid % 1400);
+    hillPath(mid, 250, 14, 0.009, '#7fa268');
+    drawBarn(barnX, 252);
+    for (let i = 0; i < 6; i++) {
+      const tx = ((i * 230 + 60 - mid * 1.0) % 1380 + 1380) % 1380 - 100;
+      drawTree(tx, 258, 0.9 + (i % 3) * 0.15);
+    }
+    // fence layer
+    const fo = (dist * 0.6) % 70;
+    ctx.fillStyle = '#9a7a56';
+    for (let x = -fo; x < W + 70; x += 70) ctx.fillRect(x, GROUND - 46, 7, 46);
+    ctx.fillRect(0, GROUND - 40, W, 5); ctx.fillRect(0, GROUND - 24, W, 5);
+    // ground
+    const g = ctx.createLinearGradient(0, GROUND, 0, H);
+    g.addColorStop(0, '#8a6644'); g.addColorStop(1, '#5e432c');
+    ctx.fillStyle = g; ctx.fillRect(0, GROUND, W, H - GROUND);
+    ctx.fillStyle = '#6d8f3f'; ctx.fillRect(0, GROUND - 3, W, 6);
+    specks.forEach(s => {
+      const x = ((s.x - dist) % W + W) % W;
+      ctx.fillStyle = s.c; ctx.beginPath(); ctx.arc(x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+    });
+    puddles.forEach(p => {
+      ctx.fillStyle = '#4a3322'; ctx.beginPath(); ctx.ellipse(p.x + p.w / 2, GROUND + 22, p.w / 2, 8, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(190,215,235,.35)'; ctx.beginPath(); ctx.ellipse(p.x + p.w / 2 - 6, GROUND + 20, p.w / 3, 3, 0, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+
+  // ---------- drawing: obstacles & apples ----------
+  function hay(x, y, w, h) {
+    const gr = ctx.createLinearGradient(x, y, x, y + h);
+    gr.addColorStop(0, '#e8c56a'); gr.addColorStop(1, '#b8913d');
+    ctx.fillStyle = gr; ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = 'rgba(120,85,30,.6)'; ctx.lineWidth = 1;
+    for (let i = 4; i < h; i += 5) { ctx.beginPath(); ctx.moveTo(x + 2, y + i); ctx.lineTo(x + w - 2, y + i + ((i * 7) % 3) - 1); ctx.stroke(); }
+    ctx.fillStyle = '#7a3f22'; ctx.fillRect(x + w * 0.25, y, 3, h); ctx.fillRect(x + w * 0.7, y, 3, h);
+  }
+  function drawObstacle(o) {
+    const top = GROUND - o.h;
+    ctx.fillStyle = 'rgba(0,0,0,.22)';
+    ctx.beginPath(); ctx.ellipse(o.x + o.w / 2, GROUND + 3, o.w / 2 + 6, 5, 0, 0, Math.PI * 2); ctx.fill();
+    if (o.type === 'hay') hay(o.x, top, o.w, o.h);
+    if (o.type === 'stack') { hay(o.x, GROUND - 42, o.w, 42); hay(o.x + 4, top, o.w - 8, 42); }
+    if (o.type === 'tire') {
+      ctx.fillStyle = '#222'; ctx.beginPath(); ctx.ellipse(o.x + o.w / 2, GROUND - o.h / 2, o.w / 2, o.h / 2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#3d3d3d'; ctx.lineWidth = 3;
+      for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; ctx.beginPath(); ctx.moveTo(o.x + o.w / 2 + Math.cos(a) * o.w * 0.3, GROUND - o.h / 2 + Math.sin(a) * o.h * 0.3); ctx.lineTo(o.x + o.w / 2 + Math.cos(a) * o.w * 0.46, GROUND - o.h / 2 + Math.sin(a) * o.h * 0.46); ctx.stroke(); }
+      ctx.fillStyle = '#5e432c'; ctx.beginPath(); ctx.ellipse(o.x + o.w / 2, GROUND - o.h / 2, o.w * 0.2, o.h * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    if (o.type === 'fence') {
+      const wood = ctx.createLinearGradient(o.x, 0, o.x + o.w, 0);
+      wood.addColorStop(0, '#7b5a3a'); wood.addColorStop(0.5, '#a07a52'); wood.addColorStop(1, '#6e4f33');
+      ctx.fillStyle = wood; ctx.fillRect(o.x, top, o.w, o.h);
+      ctx.beginPath(); ctx.moveTo(o.x, top); ctx.lineTo(o.x + o.w / 2, top - 8); ctx.lineTo(o.x + o.w, top); ctx.fill();
+      ctx.fillStyle = 'rgba(60,40,20,.5)'; ctx.fillRect(o.x + 6, top + 10, 2, o.h - 16);
+    }
+  }
+  function drawApple(f) {
+    const bob = Math.sin(phase * 0.3 + f.x * 0.05) * 3;
+    const y = f.y + bob;
+    const gr = ctx.createRadialGradient(f.x - 3, y - 4, 2, f.x, y, 12);
+    gr.addColorStop(0, '#ff7b6b'); gr.addColorStop(1, '#b8221c');
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(f.x, y, 11, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#5b3a1e'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(f.x, y - 10); ctx.lineTo(f.x + 2, y - 16); ctx.stroke();
+    ctx.fillStyle = '#4f8a35'; ctx.beginPath(); ctx.ellipse(f.x + 6, y - 15, 5, 2.5, -0.5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // ---------- drawing: the pig ----------
+  function leg(hx, hy, angle, len, near) {
+    ctx.save();
+    ctx.translate(hx, hy); ctx.rotate(angle);
+    const g = ctx.createLinearGradient(0, 0, 0, len);
+    g.addColorStop(0, near ? '#efc7bd' : '#d5a69b');
+    g.addColorStop(0.55, near ? '#e3b4a8' : '#c39388');
+    g.addColorStop(0.75, near ? '#8a6446' : '#6f503a');  // muddy lower leg
+    g.addColorStop(1, '#5a3f2b');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(-6, 0); ctx.lineTo(6, 0); ctx.lineTo(4.5, len); ctx.lineTo(-4.5, len); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#2f2420'; ctx.fillRect(-5, len - 3, 10, 4); // hoof
+    ctx.restore();
+  }
+  function drawPig(x, feetY) {
+    const air = feetY < GROUND - 1;
+    const run = state === 'run' && !air;
+    const bob = run ? Math.abs(Math.sin(phase)) * 3.5 : 0;
+    const tilt = air ? Math.max(-0.18, Math.min(0.18, vy * 0.02)) : Math.sin(phase * 2) * 0.02;
+    // shadow (shrinks as pig jumps)
+    const sh = Math.max(0.35, 1 - (GROUND - feetY) / 160);
+    ctx.fillStyle = 'rgba(0,0,0,' + (0.25 * sh) + ')';
+    ctx.beginPath(); ctx.ellipse(x + 8, GROUND + 3, 52 * sh, 7 * sh, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.save();
+    ctx.translate(x, feetY - bob);
+    ctx.rotate(tilt);
+    const swing = (o) => run ? Math.sin(phase + o) * 0.6 : (air ? (o < 1 ? -0.7 : 0.6) : 0);
+    // far legs
+    leg(28, -30, swing(Math.PI), 30, false);
+    leg(-26, -30, swing(0), 30, false);
+
+    // body
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(0, -48, 50, 29, 0, 0, Math.PI * 2);
+    const bg = ctx.createRadialGradient(-6, -64, 6, 0, -46, 58);
+    bg.addColorStop(0, '#fff4ef'); bg.addColorStop(0.5, '#f6dcd3'); bg.addColorStop(0.85, '#e5b7ab'); bg.addColorStop(1, '#cf998d');
+    ctx.fillStyle = bg; ctx.fill();
+    ctx.clip();
+    // grey patch on the back like the photo
+    ctx.fillStyle = 'rgba(95,100,115,.45)';
+    ctx.beginPath(); ctx.ellipse(-22, -58, 20, 15, -0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(95,100,115,.25)';
+    ctx.beginPath(); ctx.ellipse(-30, -48, 12, 10, 0, 0, Math.PI * 2); ctx.fill();
+    // belly shading and mud
+    ctx.fillStyle = 'rgba(150,95,80,.28)';
+    ctx.beginPath(); ctx.ellipse(4, -22, 46, 10, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(110,80,55,.35)';
+    ctx.beginPath(); ctx.ellipse(-30, -26, 14, 6, 0.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(18, -24, 9, 4, -0.2, 0, Math.PI * 2); ctx.fill();
+    // fine bristle strokes
+    ctx.strokeStyle = 'rgba(200,160,150,.35)'; ctx.lineWidth = 0.8;
+    for (let i = -40; i < 40; i += 6) { ctx.beginPath(); ctx.moveTo(i, -70); ctx.lineTo(i - 3, -62); ctx.stroke(); }
+    ctx.restore();
+
+    // tail
+    ctx.strokeStyle = '#d9a497'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    const wag = Math.sin(phase * 1.5) * 3;
+    ctx.beginPath(); ctx.moveTo(-48, -56); ctx.bezierCurveTo(-62, -66 + wag, -66, -50, -58, -50); ctx.bezierCurveTo(-52, -50, -54, -60 + wag, -62, -60 + wag); ctx.stroke();
+
+    // head
+    ctx.save();
+    ctx.translate(46, -50);
+    ctx.rotate(0.08 + (run ? Math.sin(phase * 2) * 0.03 : 0));
+    const hg = ctx.createRadialGradient(-4, -10, 4, 0, 0, 26);
+    hg.addColorStop(0, '#fff2ec'); hg.addColorStop(0.7, '#f0cfc5'); hg.addColorStop(1, '#d7a497');
+    ctx.fillStyle = hg;
+    ctx.beginPath(); ctx.ellipse(0, 0, 24, 20, 0, 0, Math.PI * 2); ctx.fill();
+    // grey eye patch
+    ctx.fillStyle = 'rgba(80,85,100,.55)';
+    ctx.beginPath(); ctx.ellipse(4, -6, 10, 9, 0.2, 0, Math.PI * 2); ctx.fill();
+    // snout
+    const sg = ctx.createRadialGradient(22, 2, 1, 22, 2, 10);
+    sg.addColorStop(0, '#f7b3a6'); sg.addColorStop(1, '#d98a7d');
+    ctx.fillStyle = sg;
+    ctx.beginPath(); ctx.ellipse(23, 3, 7, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#6b3b34';
+    ctx.beginPath(); ctx.ellipse(25, 0, 1.6, 2.6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(25, 6, 1.6, 2.6, 0, 0, Math.PI * 2); ctx.fill();
+    // mouth
+    ctx.strokeStyle = '#a86a5f'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(15, 11); ctx.quadraticCurveTo(10, 15, 4, 12); ctx.stroke();
+    // eye
+    ctx.fillStyle = '#1d1414'; ctx.beginPath(); ctx.arc(6, -6, 2.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(6.8, -6.8, 0.9, 0, Math.PI * 2); ctx.fill();
+    // floppy ear (flaps while running)
+    const flap = run ? Math.sin(phase * 2) * 0.15 : (air ? -0.3 : 0);
+    ctx.save();
+    ctx.translate(-6, -16); ctx.rotate(flap);
+    ctx.fillStyle = '#e8b0a3';
+    ctx.beginPath(); ctx.moveTo(-6, 0); ctx.quadraticCurveTo(8, -12, 20, -4); ctx.quadraticCurveTo(14, 6, 2, 6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(190,120,110,.6)';
+    ctx.beginPath(); ctx.moveTo(-2, 1); ctx.quadraticCurveTo(8, -7, 16, -3); ctx.quadraticCurveTo(10, 3, 2, 3); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.restore();
+
+    // near legs
+    leg(22, -28, swing(0), 30, true);
+    leg(-32, -28, swing(Math.PI), 30, true);
+    ctx.restore();
+  }
+
+  // ---------- frame ----------
+  function overlay(title, sub) {
+    ctx.fillStyle = 'rgba(15,16,32,.55)'; ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffcc33'; ctx.font = '22px "Press Start 2P", monospace';
+    ctx.fillText(title, W / 2, H / 2 - 20);
+    ctx.fillStyle = '#f2f3ff'; ctx.font = '600 18px Rubik, system-ui, sans-serif';
+    ctx.fillText(sub, W / 2, H / 2 + 20);
+  }
+  function frame(t) {
+    const k = last ? Math.min(3, (t - last) / 16.67) : 1;
+    last = t;
+    update(k);
+    background();
+    obstacles.forEach(drawObstacle);
+    fruit.forEach(drawApple);
+    drawPig(PIGX, GROUND + pigY);
+    particles.forEach(p => {
+      ctx.fillStyle = p.apple ? 'rgba(255,120,100,' + p.life + ')' : 'rgba(95,65,40,' + p.life + ')';
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.apple ? 3 : 2.5, 0, Math.PI * 2); ctx.fill();
+    });
+    // score in-canvas
+    ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(30,25,20,.75)';
+    ctx.font = '14px "Press Start 2P", monospace';
+    ctx.fillText(String(score()).padStart(5, '0'), W - 16, 28);
+    if (flash > 0) { ctx.fillStyle = 'rgba(255,220,120,' + (flash * 0.25) + ')'; ctx.fillRect(0, 0, W, H); }
+    if (state === 'ready') overlay('PIG RUN', 'Press Space or tap to start');
+    if (state === 'over') overlay('OINK! GAME OVER', 'Score ' + score() + '  ·  Press Space or tap to retry');
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
