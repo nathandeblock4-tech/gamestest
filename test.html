@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Connection Test · Game Room</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0e0f1c; color: #f2f3ff; font: 16px system-ui, sans-serif; padding: 20px 14px; }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 6px; } p { color: #9aa0c7; margin-bottom: 16px; }
+  .row { display: flex; gap: 12px; align-items: flex-start; background: #17192f; border: 1px solid #262a4d; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+  .ic { font-size: 22px; width: 28px; text-align: center; }
+  .row b { display: block; } .row small { color: #9aa0c7; word-break: break-word; }
+  button { background: #ffcc33; color: #1a1300; border: none; border-radius: 10px; padding: 12px 18px; font: 800 16px system-ui, sans-serif; cursor: pointer; margin: 6px 0 16px; }
+  a { color: #ffcc33; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔧 Connection test</h1>
+  <p>Open this on the network you want to test (like school Wi-Fi) and screenshot the results.</p>
+  <button id="go">Run the test again</button>
+  <div id="out"></div>
+  <p style="margin-top:14px"><a href="index.html">← Back to Game Room</a></p>
+</div>
+<script>
+(() => {
+  const out = document.getElementById('out');
+  function row(title) { const d = document.createElement('div'); d.className = 'row'; d.innerHTML = '<div class="ic">⏳</div><div><b></b><small>testing...</small></div>'; d.querySelector('b').textContent = title; out.appendChild(d); return { ok: m => { d.querySelector('.ic').textContent = '✅'; d.querySelector('small').textContent = m || 'works'; }, bad: m => { d.querySelector('.ic').textContent = '❌'; d.querySelector('small').textContent = m || 'failed'; }, warn: m => { d.querySelector('.ic').textContent = '⚠️'; d.querySelector('small').textContent = m; } }; }
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const timeout = (p, ms, label) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(label || 'timed out')), ms))]);
+  function grIce(relayOnly) {
+    const exp = Math.floor(Date.now() / 1000) + 86400, user = exp + ':gameroom';
+    return crypto.subtle.importKey('raw', new TextEncoder().encode('openrelayprojectsecret'), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign'])
+      .then(k => crypto.subtle.sign('HMAC', k, new TextEncoder().encode(user)))
+      .then(sig => { const cred = btoa(String.fromCharCode.apply(null, new Uint8Array(sig))); return { config: { iceTransportPolicy: relayOnly ? 'relay' : 'all', iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: ['turn:staticauth.openrelay.metered.ca:80', 'turn:staticauth.openrelay.metered.ca:443', 'turn:staticauth.openrelay.metered.ca:80?transport=tcp', 'turn:staticauth.openrelay.metered.ca:443?transport=tcp', 'turns:staticauth.openrelay.metered.ca:443?transport=tcp'], username: user, credential: cred }] } }; });
+  }
+  async function pair(opts, label) {
+    const a = new Peer(opts), b = new Peer(opts);
+    try {
+      await timeout(Promise.all([new Promise((r, j) => { a.on('open', r); a.on('error', j); }), new Promise((r, j) => { b.on('open', r); b.on('error', j); })]), 10000, 'could not register with the server');
+      const got = new Promise((r, j) => { b.on('connection', c => c.on('data', d => r(d))); setTimeout(() => j(new Error('connection never opened (blocked?)')), 15000); });
+      const c = a.connect(b.id, { reliable: true }); c.on('open', () => c.send('hello'));
+      const d = await got; return d === 'hello';
+    } finally { try { a.destroy(); b.destroy(); } catch (e) {} }
+  }
+  async function run() {
+    out.innerHTML = '';
+    const info = row('Your browser');
+    info.ok(navigator.userAgent.replace(/\) .*/, ')') + ' · WebRTC: ' + (window.RTCPeerConnection ? 'yes' : 'NO'));
+    const r1 = row('1. Load the connection library (unpkg.com)');
+    try {
+      if (!window.Peer) await timeout(new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'; s.onload = res; s.onerror = () => rej(new Error('blocked or offline')); document.head.appendChild(s); }), 12000, 'timed out');
+      r1.ok('loaded');
+    } catch (e) { r1.bad(e.message + '. unpkg.com is probably blocked on this network.'); return; }
+    const r2 = row('2. Reach the matchmaking server (0.peerjs.com)');
+    let p;
+    try { p = new Peer(); await timeout(new Promise((res, rej) => { p.on('open', res); p.on('error', e => rej(new Error(e.type || 'error'))); }), 12000, 'timed out'); r2.ok('connected as ' + p.id.slice(0, 8) + '...'); p.destroy(); }
+    catch (e) { r2.bad(e.message + '. 0.peerjs.com is probably blocked on this network.'); return; }
+    const r3 = row('3. Direct connection between two players');
+    let direct = false;
+    try { direct = await pair(await grIce(false).catch(() => ({})), 'direct'); direct ? r3.ok('data went through') : r3.bad('wrong data'); } catch (e) { r3.bad(e.message); }
+    const r4 = row('4. Connection through the relay server only');
+    try { const ok = await pair(await grIce(true), 'relay'); ok ? r4.ok('data went through the relay') : r4.bad('wrong data'); } catch (e) { r4.bad(e.message); }
+    const r5 = row('5. Is the admin panel open right now?');
+    try {
+      const q = new Peer(await grIce(false)); await timeout(new Promise((res, rej) => { q.on('open', res); q.on('error', rej); }), 10000);
+      const res = await new Promise(res => { const c = q.connect('gameroom-hub-f8417eabf5faff202eed', { reliable: true }); c.on('open', () => res('yes')); q.on('error', e => res(e.type === 'peer-unavailable' ? 'no' : 'error: ' + e.type)); setTimeout(() => res('no answer (timed out)'), 12000); });
+      if (res === 'yes') r5.ok('yes, and this device can reach it'); else if (res === 'no') r5.warn('no admin panel is open right now (open it on another device and run this again)'); else r5.bad(res);
+      q.destroy();
+    } catch (e) { r5.bad(String(e && e.message || e)); }
+  }
+  document.getElementById('go').onclick = run;
+  run();
+})();
+</script>
+</body>
+</html>
