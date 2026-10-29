@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flappy Demetrius · Game Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1020; color: #f2f3ff; font-family: 'Rubik', system-ui, sans-serif; min-height: 100vh; padding: 16px 12px 32px; }
+  .wrap { max-width: 480px; margin: 0 auto; text-align: center; }
+  .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  a.back { color: #f2f3ff; background: #24274a; padding: 8px 14px; border-radius: 10px; text-decoration: none; font-weight: 700; }
+  h1 { font-family: 'Press Start 2P', monospace; font-size: 14px; color: #ffcc33; }
+  canvas { width: 100%; max-width: 440px; aspect-ratio: 2 / 3; border-radius: 14px; border: 3px solid #24274a; display: block; margin: 0 auto; touch-action: none; cursor: pointer; }
+  .help { color: #9aa0c7; font-size: 14px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar"><a class="back" href="index.html">← Back</a><h1>FLAPPY DEMETRIUS</h1><span></span></div>
+  <canvas id="c" width="440" height="660"></canvas>
+  <p class="help">Click, tap or press Space to flap. Squeeze through the zoo cages.</p>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  save('gr_plays_flappy', String(parseInt(load('gr_plays_flappy') || '0', 10) + 1));
+  const photo = new Image(); let photoOK = false;
+  photo.onload = () => { photoOK = true; }; photo.onerror = () => { if (!photo.dataset.t) { photo.dataset.t = 1; photo.src = 'demetrius.png'; } };
+  photo.src = 'demetrius.jpg';
+  let best = parseInt(load('flappyBest') || '0', 10);
+  let state = 'ready', y, vy, rot, pipes, score, t0 = 0, groundX = 0, flashT = 0, particles = [];
+  let ac = null;
+  function snd(f0, f1, d, type, vol) {
+    try {
+      if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+      const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + d);
+      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02);
+    } catch (e) {}
+  }
+  const gasp = () => snd(700, 300, 0.12, 'triangle', 0.12);
+  const point = () => { snd(880, 1320, 0.1, 'square', 0.06); };
+  const crash = () => { snd(300, 60, 0.5, 'sawtooth', 0.15); };
+  function reset() { y = H / 2 - 40; vy = 0; rot = 0; pipes = []; score = 0; particles = []; }
+  function flap() {
+    if (state === 'ready') { state = 'run'; reset(); }
+    if (state === 'over') { if (performance.now() - t0 > 600) { state = 'ready'; reset(); } return; }
+    vy = -8.2; gasp();
+    for (let i = 0; i < 5; i++) particles.push({ x: 110, y: y + 20, vx: -Math.random() * 3 - 1, vy: Math.random() * 2, life: 1 });
+  }
+  const R = 28, X = 120, GAP = 175, PW = 74, GROUND = H - 80;
+  function update(k) {
+    groundX = (groundX - 2.6 * k) % 40;
+    if (state === 'ready') { y = H / 2 - 40 + Math.sin(performance.now() / 300) * 10; return; }
+    if (state === 'over') { if (y < GROUND - R) { vy += 0.6 * k; y += vy * k; rot = Math.min(Math.PI / 2, rot + 0.12 * k); } return; }
+    vy += 0.48 * k; y += vy * k; rot = Math.max(-0.5, Math.min(1.2, vy * 0.08));
+    if (!pipes.length || pipes[pipes.length - 1].x < W - 230) pipes.push({ x: W + 20, gy: 120 + Math.random() * (GROUND - 240 - GAP), passed: false });
+    pipes.forEach(p => { p.x -= 2.6 * k; if (!p.passed && p.x + PW < X - R) { p.passed = true; score++; point(); } });
+    pipes = pipes.filter(p => p.x > -PW - 10);
+    const hit = pipes.some(p => X + R - 6 > p.x && X - R + 6 < p.x + PW && (y - R + 6 < p.gy || y + R - 6 > p.gy + GAP));
+    if (hit || y + R > GROUND || y < -40) {
+      state = 'over'; t0 = performance.now(); flashT = 1; crash();
+      if (score > best) { best = score; save('flappyBest', best); }
+    }
+  }
+  function cage(x, y0, y1) {
+    const g = ctx.createLinearGradient(x, 0, x + PW, 0);
+    g.addColorStop(0, '#5a5f6e'); g.addColorStop(0.5, '#b8bdc8'); g.addColorStop(1, '#4a4e5a');
+    ctx.fillStyle = g; for (let i = 0; i < 5; i++) ctx.fillRect(x + 4 + i * 15, y0, 7, y1 - y0);
+    ctx.fillStyle = '#3a3e48'; ctx.fillRect(x - 4, y0 === 0 ? y1 - 18 : y0, PW + 8, 18);
+  }
+  function face(x, y, r, a) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.closePath();
+    ctx.fillStyle = '#7a3a14'; ctx.fill();
+    if (photoOK) {
+      ctx.save(); ctx.clip(); const ar = photo.width / photo.height; const h = r * 2.3, w = h * ar; ctx.drawImage(photo, -w / 2, -h / 2, w, h); ctx.restore();
+    } else {
+      ctx.fillStyle = '#cdb8aa'; ctx.beginPath(); ctx.ellipse(0, 3, r * 0.75, r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff'; [-1, 1].forEach(s => { ctx.beginPath(); ctx.arc(s * r * 0.3, -r * 0.1, r * 0.2, 0, Math.PI * 2); ctx.fill(); });
+      ctx.fillStyle = '#000'; [-1, 1].forEach(s => { ctx.beginPath(); ctx.arc(s * r * 0.3, -r * 0.08, r * 0.08, 0, Math.PI * 2); ctx.fill(); });
+      ctx.fillStyle = '#300'; ctx.beginPath(); ctx.ellipse(0, r * 0.45, r * 0.25, r * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.lineWidth = 3; ctx.strokeStyle = '#2b1306'; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+    // tiny flapping arms
+    const fl = Math.sin(performance.now() / 60) * 0.6;
+    ctx.strokeStyle = '#6e3410'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-r * 0.8, r * 0.3); ctx.lineTo(-r * 1.4, r * 0.1 - fl * 14); ctx.stroke();
+    ctx.restore();
+  }
+  function draw() {
+    const sky = ctx.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#5ec4ff'); sky.addColorStop(1, '#c9f0ff');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    [[60, 120, 1], [300, 80, 1.3], [200, 220, 0.8]].forEach(([cx, cy, s]) => { const x = ((cx + groundX * 0.3 * 10) % (W + 120) + W + 120) % (W + 120) - 60; ctx.beginPath(); ctx.arc(x, cy, 22 * s, 0, 7); ctx.arc(x + 24 * s, cy - 10 * s, 26 * s, 0, 7); ctx.arc(x + 50 * s, cy, 22 * s, 0, 7); ctx.fill(); });
+    ctx.fillStyle = '#6fbf4a'; ctx.beginPath(); ctx.moveTo(0, GROUND); for (let x = 0; x <= W; x += 20) ctx.lineTo(x, GROUND - 40 - Math.sin(x / 50) * 18); ctx.lineTo(W, GROUND); ctx.fill();
+    pipes.forEach(p => { cage(p.x, 0, p.gy); cage(p.x, p.gy + GAP, GROUND); });
+    ctx.fillStyle = '#8a6040'; ctx.fillRect(0, GROUND, W, H - GROUND);
+    ctx.fillStyle = '#5fae3c'; ctx.fillRect(0, GROUND, W, 14);
+    ctx.fillStyle = '#4f9a30'; for (let x = groundX; x < W; x += 40) ctx.fillRect(x, GROUND, 20, 14);
+    particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.life -= 0.05; ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, 7); ctx.fill(); });
+    particles = particles.filter(p => p.life > 0); ctx.globalAlpha = 1;
+    face(X, y, R, rot);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (state === 'run' || state === 'over') { ctx.font = '40px "Press Start 2P", monospace'; ctx.lineWidth = 8; ctx.strokeStyle = '#2b0a3d'; ctx.strokeText(score, W / 2, 70); ctx.fillStyle = '#fff'; ctx.fillText(score, W / 2, 70); }
+    if (state === 'ready') {
+      ctx.font = '22px "Press Start 2P", monospace'; ctx.lineWidth = 7; ctx.strokeStyle = '#2b0a3d';
+      ctx.strokeText('FLAPPY', W / 2, 150); ctx.fillStyle = '#ffcc33'; ctx.fillText('FLAPPY', W / 2, 150);
+      ctx.strokeText('DEMETRIUS', W / 2, 190); ctx.fillText('DEMETRIUS', W / 2, 190);
+      ctx.font = '700 18px Rubik'; ctx.fillStyle = '#2b0a3d'; ctx.fillText('Tap to flap · Best ' + best, W / 2, GROUND - 120);
+    }
+    if (state === 'over') {
+      ctx.fillStyle = 'rgba(43,10,61,.75)'; ctx.fillRect(60, 220, W - 120, 200);
+      ctx.font = '20px "Press Start 2P", monospace'; ctx.fillStyle = '#ff5a8a'; ctx.fillText('SHOCKING!', W / 2, 265);
+      ctx.font = '700 22px Rubik'; ctx.fillStyle = '#fff'; ctx.fillText('Score ' + score + '   Best ' + best, W / 2, 315);
+      const medal = score >= 40 ? '🏆' : score >= 20 ? '🥇' : score >= 10 ? '🥈' : score >= 5 ? '🥉' : '';
+      ctx.font = '34px serif'; ctx.fillText(medal, W / 2, 355);
+      ctx.font = '700 16px Rubik'; ctx.fillStyle = '#ffd6ec'; ctx.fillText('Tap to try again', W / 2, 395);
+    }
+    if (flashT > 0) { ctx.fillStyle = 'rgba(255,255,255,' + flashT + ')'; ctx.fillRect(0, 0, W, H); flashT -= 0.08; }
+  }
+  let last = 0;
+  function loop(t) { const k = last ? Math.min(3, (t - last) / 16.67) : 1; last = t; update(k); draw(); requestAnimationFrame(loop); }
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); flap(); });
+  document.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'ArrowUp') { e.preventDefault(); if (!e.repeat) flap(); } });
+  reset(); requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
