@@ -98,7 +98,7 @@
       <div class="sw" id="rowF"><label>Face</label></div>
     </div>
   </div>
-  <p class="help"><b>How to play:</b> Space, ↑, W, click or tap to jump. Hold it down to keep jumping. <b>Yellow rings:</b> press while you touch one to jump in mid-air. <b>Yellow pads:</b> launch you automatically. <b>Pink portals</b> turn you into a ship: hold to fly up, let go to fall. <b>Green portals</b> turn you back into a cube. <b>Practice mode</b> saves checkpoints automatically (Z places one, X removes the last). P / Esc pauses, R restarts, M mutes, F goes full screen.</p>
+  <p class="help"><b>How to play:</b> Space, ↑, W, click or tap to jump. Hold it down to keep jumping. <b>6 levels</b> from Easy to Insane, and each hides <b>3 secret coins</b> 🟡 (they only count when you finish the level in normal mode).<br><b>Yellow rings</b> jump you in mid-air, <b>blue rings</b> flip your gravity. <b>Yellow pads</b> launch you high, <b>pink pads</b> give a small hop. Portals: <b style="color:#ff3df0">pink</b> = ship (hold to fly up), <b style="color:#ff7a1a">orange</b> = ball (tap to flip gravity), <b style="color:#3dff7a">green</b> = back to cube, <b style="color:#ffe14d">yellow</b> / <b style="color:#29a8ff">blue</b> = upside-down / normal gravity, and arrow portals change your speed. <b>Practice mode</b> saves checkpoints automatically (Z places one, X removes the last). P / Esc pauses, R restarts, M mutes, F goes full screen.</p>
 </div>
 <script>
 (() => {
@@ -110,19 +110,25 @@
 
   // ---------- world + physics (units are tiles) ----------
   const TS = 48, GROUND = 480, CEIL = 9, PW = 0.9;
-  const G = 88, JUMP = 19.6, PAD = 28, ORB = 19.6, MAXFALL = 26, SHIP_A = 45, SHIP_V = 10, STEP = 1 / 240;
+  const G = 88, JUMP = 19.6, PAD = 28, PINK = 21, ORB = 19.6, BLUE_PUSH = 6, MAXFALL = 26, SHIP_A = 45, SHIP_V = 10, BALL_G = 72, STEP = 1 / 240;
+  const SPEEDS = [7.2, 8.6, 10.6, 12.8];
 
   function Lv(name, dl, speed, bpm, hue, key, prog) {
     this.name = name; this.dl = dl; this.speed = speed; this.bpm = bpm; this.hue = hue; this.key = key; this.prog = prog;
-    this.list = []; this.portals = []; this.texts = []; this.endX = 100; this.n = 0;
+    this.list = []; this.portals = []; this.texts = []; this.endX = 100; this.n = 0; this.nc = 0;
   }
   Lv.prototype.add = function (o) { o.id = this.n++; this.list.push(o); return this; };
   Lv.prototype.b = function (x, y, w, h) { w = w || 1; h = h || 1; for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) this.add({ t: 'b', x: x + i, y: (y || 0) + j }); return this; };
   Lv.prototype.s = function (x, y, n) { n = n || 1; for (let i = 0; i < n; i++) this.add({ t: 's', x: x + i, y: y || 0 }); return this; };
   Lv.prototype.d = function (x, y, n) { n = n || 1; for (let i = 0; i < n; i++) this.add({ t: 'd', x: x + i, y: y }); return this; };
   Lv.prototype.p = function (x, y) { return this.add({ t: 'p', x: x, y: y || 0 }); };
+  Lv.prototype.k = function (x, y) { return this.add({ t: 'k', x: x, y: y || 0 }); };
   Lv.prototype.o = function (x, y) { return this.add({ t: 'o', x: x, y: y }); };
+  Lv.prototype.q = function (x, y) { return this.add({ t: 'q', x: x, y: y }); };
+  Lv.prototype.coin = function (x, y) { return this.add({ t: 'c', x: x, y: y, ci: this.nc++ }); };
   Lv.prototype.portal = function (x, m, yc) { this.portals.push({ x: x, m: m, yc: yc == null ? 2 : yc }); return this; };
+  Lv.prototype.grav = function (x, g, yc) { this.portals.push({ x: x, m: 'grav', g: g, yc: yc == null ? 4.5 : yc }); return this; };
+  Lv.prototype.spd = function (x, v, yc) { this.portals.push({ x: x, m: 'speed', v: v, yc: yc == null ? 2 : yc }); return this; };
   Lv.prototype.text = function (x, y, str) { this.texts.push([x, y, str]); return this; };
   Lv.prototype.tunnel = function (x, segs) {
     for (const sg of segs) {
@@ -132,6 +138,8 @@
       const mid = x + Math.floor(w / 2) - 1;
       if (extra.indexOf('F') >= 0) this.s(mid, f, 2);
       if (extra.indexOf('C') >= 0) this.d(mid, c - 1, 2);
+      if (extra.indexOf('f') >= 0) this.s(mid + 1, f, 1);
+      if (extra.indexOf('c') >= 0) this.d(mid + 1, c - 1, 1);
       x += w;
     }
     this.tx = x; return this;
@@ -152,18 +160,18 @@
       .b(44, 0, 3, 1).s(51)
       .b(57, 0, 2, 1).b(59, 0, 2, 2).s(66, 0, 2)
       .b(74, 0, 2, 1).s(76, 0, 3).b(79, 0, 2, 1)
-      .p(88).b(92, 2, 5, 1).s(91, 0, 6)
+      .p(88).b(92, 2, 5, 1).s(91, 0, 6).coin(95, 4.1)
       .s(106).s(110)
       .b(116, 0, 8, 1).s(119, 1).s(122, 1)
       .s(130, 0, 2)
-      .s(138, 0, 6).o(140, 1.6)
+      .s(138, 0, 6).o(140, 1.6).coin(143, 3.3)
       .b(152, 0, 2, 1).b(154, 0, 2, 2).b(156, 0, 2, 3).s(164, 0, 2)
       .s(173).s(175)
       .p(181).b(184, 0, 2, 3).s(192)
       .s(199, 0, 2)
       .b(207, 0, 2, 1).s(209, 0, 3).b(212, 0, 2, 1).s(214, 0, 3).b(217, 0, 2, 1)
       .s(227).s(233, 0, 2).s(241)
-      .b(247, 0, 11, 1).s(251, 1).s(255, 1)
+      .b(247, 0, 11, 1).s(251, 1).s(255, 1).coin(253, 2.4)
       .end(266);
     LEVELS.push(a.build());
 
@@ -180,14 +188,15 @@
       .s(136).s(141, 0, 2).s(147)
       .portal(156, 'ship', 2).text(158, 6, 'HOLD TO FLY UP');
     b.tunnel(160, [[8, 0, 9], [6, 1, 7], [6, 2, 8], [6, 3, 9, 'F'], [6, 3, 8], [6, 2, 7], [6, 1, 6, 'C'], [6, 1, 6], [6, 2, 7, 'F'], [6, 3, 8], [6, 4, 9], [6, 3, 8, 'F'], [6, 2, 7], [6, 2, 6], [6, 1, 5, 'C'], [6, 0, 5], [6, 1, 6, 'F'], [6, 2, 7], [8, 0, 9]]);
+    b.coin(222, 7.6);
     b.portal(b.tx + 2, 'cube', 2);
     const x2 = b.tx + 10;
     b.s(x2).s(x2 + 5, 0, 2)
       .b(x2 + 12, 0, 4, 1).b(x2 + 16, 0, 4, 2).s(x2 + 20, 0, 4).b(x2 + 24, 0, 4, 2)
       .s(x2 + 35, 0, 3)
-      .p(x2 + 44).b(x2 + 47, 0, 2, 3).s(x2 + 49, 0, 3)
+      .p(x2 + 44).b(x2 + 47, 0, 2, 3).s(x2 + 49, 0, 3).coin(x2 + 48, 5.2)
       .s(x2 + 60).s(x2 + 62)
-      .b(x2 + 70, 0, 12, 1).s(x2 + 74, 1, 2).s(x2 + 79, 1)
+      .b(x2 + 70, 0, 12, 1).s(x2 + 74, 1, 2).s(x2 + 79, 1).coin(x2 + 79, 3.0)
       .end(x2 + 92);
     LEVELS.push(b.build());
 
@@ -195,12 +204,13 @@
     const c = new Lv('Hyper Circuit', 2, 9.6, 156, 345, 164.81, [[0, 1], [-2, 0], [-4, 0], [-2, 0]]);
     c.s(16, 0, 2).s(23, 0, 3).s(31).s(33)
       .b(40, 0, 2, 1).s(42, 0, 3).b(45, 0, 2, 1).s(47, 0, 3).b(50, 0, 2, 2).s(52, 0, 4)
-      .s(62, 0, 11).o(65.2, 1.8).o(69.4, 1.8)
-      .p(83).b(87, 2, 3, 1).s(86, 0, 15).b(93, 3, 2, 1).b(98, 2, 3, 1)
+      .s(62, 0, 11).o(65.2, 1.8).o(69.4, 1.8).coin(67.4, 4.0)
+      .p(83).b(87, 2, 3, 1).s(86, 0, 15).b(93, 3, 2, 1).b(98, 2, 3, 1).coin(94, 6.0)
       .s(108, 0, 3)
       .b(115, 0, 9, 1).s(118, 1, 2).s(122, 1)
       .portal(130, 'ship', 2);
     c.tunnel(134, [[6, 0, 9], [5, 1, 6], [5, 2, 6, 'F'], [5, 3, 7], [5, 4, 8, 'C'], [5, 3, 7], [5, 2, 6, 'F'], [5, 1, 5], [5, 1, 5, 'C'], [5, 2, 6], [5, 4, 8, 'F'], [5, 5, 9], [5, 4, 8, 'C'], [5, 2, 6], [5, 1, 5, 'F'], [5, 2, 6], [5, 3, 7, 'C'], [5, 3, 7, 'F'], [5, 2, 6], [5, 1, 5], [6, 0, 9]]);
+    c.coin(192, 7.4);
     c.portal(c.tx + 1, 'cube', 2);
     const x3 = c.tx + 9;
     c.s(x3, 0, 3).s(x3 + 8).s(x3 + 10)
@@ -211,9 +221,72 @@
       .b(x3 + 90, 0, 14, 1).s(x3 + 93, 1, 2).s(x3 + 98, 1, 2)
       .end(x3 + 114);
     LEVELS.push(c.build());
+
+    // Level 4: Flip Side (normal) - gravity portals, pink pads, blue rings
+    const d = new Lv('Flip Side', 1, 8.6, 134, 165, 207.65, [[0, 1], [-4, 0], [-7, 0], [-2, 0]]);
+    d.text(30, 4.5, 'PINK PADS = SMALL JUMP').text(46, 6.4, 'GRAVITY FLIP!');
+    d.s(16).s(23, 0, 2)
+      .k(32).s(34, 0, 2)
+      .grav(44, -1, 4.5)
+      .d(56, 8).d(63, 8, 2).b(70, 8, 3, 1).d(73, 7).b(74, 8, 2, 1).d(82, 8, 2).coin(78, 5.6)
+      .grav(92, 1, 4.5)
+      .s(104).s(108, 0, 2)
+      .k(116).b(119, 0, 3, 2).s(122, 0, 3)
+      .text(130, 6.4, 'BLUE RINGS FLIP YOU')
+      .s(134, 0, 10).q(136, 1.6).coin(139.5, 6.2).q(141.5, 7.3).d(144, 8, 3)
+      .s(158).s(162, 0, 2)
+      .grav(170, -1, 4.5).d(180, 8, 2).b(186, 7, 3, 2).d(194, 8, 3).grav(200, 1, 4.5)
+      .s(210, 0, 2).p(218).b(221, 2, 4, 1).s(220, 0, 7).coin(223, 4.4)
+      .s(234, 0, 2).k(242).s(244, 0, 2)
+      .b(252, 0, 10, 1).s(255, 1).s(259, 1)
+      .end(272);
+    LEVELS.push(d.build());
+
+    // Level 5: Ball Breaker (hard) - ball mode + speed portals
+    const e = new Lv('Ball Breaker', 2, 8.6, 148, 25, 174.61, [[0, 1], [3, 0], [-2, 0], [5, 1]]);
+    e.s(16, 0, 2).s(24).s(30, 0, 2)
+      .portal(40, 'ball', 2).text(44, 5.8, 'TAP TO FLIP GRAVITY');
+    e.tunnel(44, [[8, 0, 9], [6, 2, 6, 'F'], [6, 2, 6, 'C'], [6, 2, 6, 'F'], [6, 1, 6, 'C'], [6, 1, 5, 'F'], [6, 2, 6, 'C'], [6, 2, 6], [6, 3, 7, 'F'], [6, 3, 7, 'C'], [6, 2, 6, 'F'], [6, 1, 5, 'C'], [6, 1, 5, 'F'], [8, 0, 9]]);
+    e.coin(e.tx - 20, 4.4);
+    e.portal(e.tx + 2, 'cube', 2).spd(e.tx + 6, 2, 2);
+    const x5 = e.tx + 14;
+    e.s(x5).s(x5 + 7, 0, 2)
+      .b(x5 + 15, 0, 3, 1).b(x5 + 18, 0, 3, 2).s(x5 + 21, 0, 4).b(x5 + 25, 0, 3, 2)
+      .s(x5 + 36, 0, 3).o(x5 + 37.5, 2.2).coin(x5 + 40, 4.6)
+      .spd(x5 + 48, 1, 2).portal(x5 + 52, 'ball', 2);
+    e.tunnel(x5 + 56, [[6, 0, 9], [6, 1, 5, 'F'], [5, 1, 5, 'C'], [5, 2, 6, 'F'], [5, 2, 6, 'C'], [5, 1, 5, 'F'], [5, 1, 5, 'C'], [5, 2, 6, 'F'], [5, 2, 6, 'C'], [6, 0, 9]]);
+    e.coin(e.tx - 12, 2.0);
+    e.portal(e.tx + 2, 'cube', 2);
+    const x6 = e.tx + 10;
+    e.s(x6, 0, 2).s(x6 + 8, 0, 3).p(x6 + 17).b(x6 + 20, 0, 2, 3).s(x6 + 22, 0, 4)
+      .b(x6 + 32, 0, 12, 1).s(x6 + 35, 1, 2).s(x6 + 40, 1)
+      .end(x6 + 54);
+    LEVELS.push(e.build());
+
+    // Level 6: Overload (insane) - everything, faster
+    const f = new Lv('Overload', 3, 10.6, 164, 0, 155.56, [[0, 1], [-4, 0], [-2, 0], [-5, 1]]);
+    f.s(16, 0, 2).s(24, 0, 3).s(33).s(35)
+      .k(42).s(44, 0, 3)
+      .s(54, 0, 12).o(56.4, 1.8).q(60.6, 3.0).coin(62.5, 5.2).q(66.2, 7.4).d(68, 8, 2)
+      .s(76, 0, 2)
+      .portal(84, 'ship', 2);
+    f.tunnel(88, [[6, 0, 9], [5, 1, 5, 'F'], [5, 2, 6, 'C'], [5, 3, 7, 'F'], [5, 4, 8, 'C'], [5, 3, 7, 'F'], [5, 2, 6, 'C'], [5, 1, 5, 'F'], [5, 2, 6, 'C'], [5, 4, 8, 'F'], [5, 4, 8, 'C'], [5, 2, 6, 'F'], [6, 0, 9]]);
+    f.coin(136.5, 6.9);
+    f.portal(f.tx + 2, 'ball', 2);
+    f.tunnel(f.tx + 4, [[6, 0, 9], [5, 2, 6, 'F'], [5, 2, 6, 'C'], [5, 1, 5, 'F'], [5, 1, 5, 'C'], [5, 2, 6, 'F'], [5, 2, 6, 'C'], [6, 0, 9]]);
+    f.portal(f.tx + 2, 'cube', 2).grav(f.tx + 8, -1, 4.5);
+    const x7 = f.tx + 16;
+    f.d(x7, 8).d(x7 + 6, 8, 2).b(x7 + 13, 8, 2, 1).d(x7 + 15, 8, 3).coin(x7 + 16, 5.0)
+      .grav(x7 + 24, 1, 4.5)
+      .s(x7 + 34, 0, 3).spd(x7 + 40, 3, 2).s(x7 + 50).s(x7 + 56, 0, 2)
+      .b(x7 + 64, 0, 3, 1).b(x7 + 67, 0, 3, 2).s(x7 + 70, 0, 5).b(x7 + 75, 0, 3, 2)
+      .spd(x7 + 82, 2, 2)
+      .b(x7 + 90, 0, 14, 1).s(x7 + 93, 1, 2).s(x7 + 98, 1, 2)
+      .end(x7 + 114);
+    LEVELS.push(f.build());
   })();
 
-  function newState(L) { return { x: 0, y: 0, vy: 0, mode: 'cube', g: true, ph: false, fresh: false, dead: false, won: false, pi: 0, lp: -1, lo: -1, jumps: 0, sp: L.speed, ev: null }; }
+  function newState(L) { return { x: 0, y: 0, vy: 0, mode: 'cube', gs: 1, g: true, ph: false, fresh: false, dead: false, won: false, pi: 0, lp: -1, lo: -1, jumps: 0, sp: L.speed, ev: null, cm: 0 }; }
   function hgt(s) { return s.mode === 'ship' ? 0.6 : PW; }
   function hits(ax, ay, aw, ah, bx, by, bw, bh) { return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by; }
   function step(s, hold, L, dt) {
@@ -222,52 +295,62 @@
     s.x += s.sp * dt;
     while (s.pi < L.portals.length && s.x + PW / 2 >= L.portals[s.pi].x + 0.5) {
       const p = L.portals[s.pi++];
-      if (p.m !== s.mode) { s.mode = p.m; s.vy *= p.m === 'ship' ? 0.4 : 0.5; if (s.ev) s.ev.push('portal'); }
+      if (p.m === 'grav') { if (s.gs !== p.g) { s.gs = p.g; s.vy *= 0.5; s.g = false; if (s.ev) s.ev.push('grav'); } }
+      else if (p.m === 'speed') { s.sp = SPEEDS[p.v]; if (s.ev) s.ev.push('speed'); }
+      else if (p.m !== s.mode) { s.mode = p.m; s.vy *= p.m === 'ship' ? 0.4 : 0.5; if (s.ev) s.ev.push('portal'); }
     }
     if (s.x + PW / 2 >= L.endX) { s.won = true; return; }
-    let h = hgt(s);
+    const h = hgt(s), up = s.gs < 0;
     const c0 = Math.floor(s.x) - 1, c1 = Math.floor(s.x + PW) + 1;
     for (let c = c0; c <= c1; c++) {
       const col = L.cols[c]; if (!col) continue;
       for (const b of col) {
         if (b.t !== 'b' || !hits(s.x, s.y, PW, h, b.x, b.y, 1, 1)) continue;
-        if (s.y >= b.y + 0.7) { s.y = b.y + 1; if (s.vy < 0) s.vy = 0; s.g = true; }
-        else if (s.y + h <= b.y + 0.3) { s.y = b.y - h; if (s.vy > 0) s.vy = 0; }
+        if (s.y >= b.y + 0.7) { s.y = b.y + 1; if (s.vy < 0) s.vy = 0; if (!up) s.g = true; }
+        else if (s.y + h <= b.y + 0.3) { s.y = b.y - h; if (s.vy > 0) s.vy = 0; if (up) s.g = true; }
         else { s.dead = true; return; }
       }
     }
     if (s.mode === 'cube') {
-      if (s.g && hold) { s.vy = JUMP; s.g = false; s.fresh = false; s.jumps++; if (s.ev) s.ev.push('jump'); }
-      s.vy -= G * dt; if (s.vy < -MAXFALL) s.vy = -MAXFALL;
+      if (s.g && hold) { s.vy = JUMP * s.gs; s.g = false; s.fresh = false; s.jumps++; if (s.ev) s.ev.push('jump'); }
+      s.vy -= G * s.gs * dt;
+    } else if (s.mode === 'ball') {
+      if (s.g && hold && s.fresh) { s.gs = -s.gs; s.vy = -s.gs * 4; s.g = false; s.fresh = false; s.jumps++; if (s.ev) s.ev.push('flip'); }
+      s.vy -= BALL_G * s.gs * dt;
     } else {
-      s.vy += (hold ? SHIP_A : -SHIP_A) * dt;
+      s.vy += (hold ? SHIP_A : -SHIP_A) * s.gs * dt;
       if (s.vy > SHIP_V) s.vy = SHIP_V; if (s.vy < -SHIP_V) s.vy = -SHIP_V;
     }
-    const py = s.y; s.y += s.vy * dt; s.g = false;
-    if (s.y <= 0) { s.y = 0; if (s.vy < 0) s.vy = 0; s.g = true; }
-    if (s.y + h >= CEIL) { s.y = CEIL - h; if (s.vy > 0) s.vy = 0; }
+    if (s.vy < -MAXFALL) s.vy = -MAXFALL; if (s.vy > MAXFALL) s.vy = MAXFALL;
+    const up2 = s.gs < 0, py = s.y; s.y += s.vy * dt; s.g = false;
+    if (s.y <= 0) { s.y = 0; if (s.vy < 0) s.vy = 0; if (!up2) s.g = true; }
+    if (s.y + h >= CEIL) { s.y = CEIL - h; if (s.vy > 0) s.vy = 0; if (up2) s.g = true; }
     for (let c = c0; c <= c1; c++) {
       const col = L.cols[c]; if (!col) continue;
       for (const b of col) {
-        if (b.t === 'b') {
-          if (!hits(s.x, s.y, PW, h, b.x, b.y, 1, 1)) continue;
-          if (s.vy <= 0 && py >= b.y + 1 - 0.02) { s.y = b.y + 1; s.vy = 0; s.g = true; }
-          else if (s.vy >= 0 && py + h <= b.y + 0.02) { s.y = b.y - h; s.vy = 0; }
-          else if (s.y >= b.y + 0.7) { s.y = b.y + 1; s.vy = 0; s.g = true; }
-          else if (s.y + h <= b.y + 0.3) { s.y = b.y - h; s.vy = 0; }
-          else { s.dead = true; return; }
-        }
+        if (b.t !== 'b' || !hits(s.x, s.y, PW, h, b.x, b.y, 1, 1)) continue;
+        if (s.vy <= 0 && py >= b.y + 1 - 0.02) { s.y = b.y + 1; s.vy = 0; if (!up2) s.g = true; }
+        else if (s.vy >= 0 && py + h <= b.y + 0.02) { s.y = b.y - h; s.vy = 0; if (up2) s.g = true; }
+        else if (s.y >= b.y + 0.7) { s.y = b.y + 1; s.vy = 0; if (!up2) s.g = true; }
+        else if (s.y + h <= b.y + 0.3) { s.y = b.y - h; s.vy = 0; if (up2) s.g = true; }
+        else { s.dead = true; return; }
       }
     }
     for (let c = c0; c <= c1; c++) {
       const col = L.cols[c]; if (!col) continue;
       for (const b of col) {
-        if (b.t === 's') { if (hits(s.x + 0.1, s.y + 0.1, PW - 0.2, h - 0.2, b.x + 0.32, b.y, 0.36, 0.55)) { s.dead = true; return; } }
-        else if (b.t === 'd') { if (hits(s.x + 0.1, s.y + 0.1, PW - 0.2, h - 0.2, b.x + 0.32, b.y + 0.45, 0.36, 0.55)) { s.dead = true; return; } }
-        else if (b.t === 'p') {
-          if (s.mode === 'cube' && s.lp !== b.id && hits(s.x, s.y, PW, h, b.x, b.y, 1, 0.3)) { s.vy = PAD; s.g = false; s.lp = b.id; if (s.ev) s.ev.push('pad'); }
-        } else if (b.t === 'o') {
-          if (s.mode === 'cube' && s.lo !== b.id && hold && s.fresh && hits(s.x, s.y, PW, h, b.x - 0.15, b.y - 0.15, 1.3, 1.3)) { s.vy = ORB; s.g = false; s.fresh = false; s.lo = b.id; s.jumps++; if (s.ev) s.ev.push('orb'); }
+        const t = b.t;
+        if (t === 's') { if (hits(s.x + 0.1, s.y + 0.1, PW - 0.2, h - 0.2, b.x + 0.32, b.y, 0.36, 0.55)) { s.dead = true; return; } }
+        else if (t === 'd') { if (hits(s.x + 0.1, s.y + 0.1, PW - 0.2, h - 0.2, b.x + 0.32, b.y + 0.45, 0.36, 0.55)) { s.dead = true; return; } }
+        else if (t === 'p' || t === 'k') {
+          if (s.mode !== 'ship' && s.lp !== b.id && hits(s.x, s.y, PW, h, b.x, b.y, 1, 0.3)) { s.vy = (t === 'p' ? PAD : PINK) * s.gs; s.g = false; s.lp = b.id; if (s.ev) s.ev.push(t === 'p' ? 'pad' : 'pink'); }
+        } else if (t === 'o' || t === 'q') {
+          if (s.mode !== 'ship' && s.lo !== b.id && hold && s.fresh && hits(s.x, s.y, PW, h, b.x - 0.15, b.y - 0.15, 1.3, 1.3)) {
+            if (t === 'o') s.vy = ORB * s.gs; else { const old = s.gs; s.gs = -old; s.vy = old * BLUE_PUSH; }
+            s.g = false; s.fresh = false; s.lo = b.id; s.jumps++; if (s.ev) s.ev.push(t === 'o' ? 'orb' : 'blue');
+          }
+        } else if (t === 'c') {
+          if (!(s.cm & (1 << b.ci)) && hits(s.x, s.y, PW, h, b.x + 0.15, b.y + 0.15, 0.7, 0.7)) { s.cm |= 1 << b.ci; if (s.ev) s.ev.push('coin'); }
         }
       }
     }
@@ -309,6 +392,11 @@
       else if (name === 'portal') { osc('sawtooth', 180, t, 0.45, 0.09, d, 2200, 900); noise(t, 0.35, 0.12, 'bandpass', 3000, d); }
       else if (name === 'cp') { osc('triangle', 988, t, 0.1, 0.15, d); osc('triangle', 1318, t + 0.08, 0.14, 0.15, d); }
       else if (name === 'win') { [523, 659, 784, 1046, 1318].forEach((f, i) => osc('triangle', f, t + i * 0.09, 0.3, 0.18, d)); }
+      else if (name === 'coin') { osc('square', 1318, t, 0.08, 0.08, d); osc('square', 1760, t + 0.08, 0.18, 0.08, d); osc('triangle', 2637, t + 0.16, 0.2, 0.05, d); }
+      else if (name === 'grav') { osc('sine', 300, t, 0.35, 0.14, d, 0, 900); osc('triangle', 600, t, 0.3, 0.06, d, 0, 1800); }
+      else if (name === 'blue') { osc('sine', 660, t, 0.18, 0.2, d, 0, 330); osc('triangle', 990, t + 0.03, 0.14, 0.08, d); }
+      else if (name === 'speed') { noise(t, 0.4, 0.14, 'highpass', 2500, d); osc('sawtooth', 220, t, 0.35, 0.06, d, 3000, 1600); }
+      else if (name === 'flip') { osc('triangle', 520, t, 0.08, 0.06, d, 0, 780); }
       else if (name === 'click') { osc('square', 660, t, 0.05, 0.05, d, 3000); }
     } catch (e) {}
   }
@@ -349,7 +437,7 @@
   }
   function playStep(i, t, st) {
     const L = Mus.L, bar = Math.floor(i / 16), s = i % 16, ch = L.prog[bar % 4], root = L.key * Math.pow(2, ch[0] / 12), tones = ch[1] ? [0, 3, 7] : [0, 4, 7], D = L.dl, mb = musicBus;
-    if (s % 4 === 0 || (D === 2 && s === 10 && bar >= 2)) osc('sine', 150, t, 0.24, 0.9, mb, 0, 42);
+    if (s % 4 === 0 || (D >= 2 && s === 10 && bar >= 2)) osc('sine', 150, t, 0.24, 0.9, mb, 0, 42);
     if (bar >= 1 && (s === 4 || s === 12)) { noise(t, 0.15, 0.3, 'bandpass', 1900, mb); osc('triangle', 220, t, 0.08, 0.14, mb, 0, 120); }
     if (s % 2 === 0) noise(t, 0.03, 0.05, 'highpass', 8000, mb);
     if (s % 4 === 2) noise(t, 0.1, 0.07, 'highpass', 6500, mb);
@@ -422,10 +510,12 @@
     $('lvlCard').style.setProperty('--c', c);
     const done = load('nd_done_' + sel) === '1';
     $('lvName').textContent = lv.name + (done ? ' ⭐' : '');
-    $('lvDiff').textContent = ['🙂 EASY', '😐 NORMAL', '😈 HARD'][lv.dl] + '  ·  LEVEL ' + (sel + 1) + ' OF ' + LEVELS.length;
+    const cm = +(load('nd_coins_' + sel) || 0); let cs = ''; for (let i = 0; i < lv.nc; i++) cs += (cm & (1 << i)) ? '🟡' : '⚪';
+    $('lvDiff').textContent = ['🙂 EASY', '😐 NORMAL', '😈 HARD', '💀 INSANE'][lv.dl] + '  ·  LEVEL ' + (sel + 1) + ' OF ' + LEVELS.length + '  ·  ' + cs;
     const bN = +(load('nd_best_' + sel) || 0), bP = +(load('nd_prac_' + sel) || 0);
     $('lvN').style.width = bN + '%'; $('lvNt').textContent = bN + '%'; $('lvP').style.width = bP + '%'; $('lvPt').textContent = bP + '%';
-    $('lvMeta').textContent = 'Total attempts: ' + (+(load('nd_att_' + sel) || 0)) + '   ·   ← → to change level, Space to play';
+    let stars = 0, coinsAll = 0, coinsMax = 0; LEVELS.forEach((l, i) => { if (load('nd_done_' + i) === '1') stars++; coinsAll += popcount(+(load('nd_coins_' + i) || 0)); coinsMax += l.nc; });
+    $('lvMeta').textContent = 'Attempts: ' + (+(load('nd_att_' + sel) || 0)) + '   ·   ⭐ ' + stars + '/' + LEVELS.length + '   ·   🟡 ' + coinsAll + '/' + coinsMax + ' coins   ·   ← → change level';
     menuCam = 0;
   }
   function goMenu() { musicStop(); if (ac && ac.state === 'suspended') { try { ac.resume(); } catch (e) {} } mode = 'menu'; L = null; s = null; parts = []; rings = []; refreshMenu(); show('menu'); }
@@ -465,9 +555,11 @@
     save(bestKey(practice), '100');
     const first = !practice && load('nd_done_' + li) !== '1';
     if (!practice) save('nd_done_' + li, '1');
+    const oldC = +(load('nd_coins_' + li) || 0), gotNew = !practice ? s.cm & ~oldC : 0;
+    if (!practice) save('nd_coins_' + li, String(oldC | s.cm));
     $('wA').textContent = attempts; $('wJ').textContent = totalJumps; $('wT').textContent = runT.toFixed(1) + 's';
     $('winTitle').textContent = practice ? 'PRACTICE COMPLETE!' : 'LEVEL COMPLETE!';
-    $('winSub').textContent = practice ? 'Nice! Now try to beat it in normal mode, with no checkpoints.' : (first ? '⭐ First clear! You earned a star for ' + L.name + '.' : 'Cleared ' + L.name + ' again.');
+    $('winSub').textContent = practice ? 'Nice! Now try to beat it in normal mode, with no checkpoints.' : (first ? '⭐ First clear! You earned a star for ' + L.name + '.' : 'Cleared ' + L.name + ' again.') + (practice ? '' : '  Coins: ' + popcount(s.cm) + '/' + L.nc + (gotNew ? ' (' + popcount(gotNew) + ' new!)' : ''));
     $('wN').style.display = li < LEVELS.length - 1 ? '' : 'none';
   }
   function pauseGame() { if (mode !== 'play') return; mode = 'pause'; $('pauseInfo').textContent = L.name + '  ·  ' + pctOf(s) + '%  ·  Attempt ' + attempts + (practice ? '  ·  Practice' : ''); $('togPrac').textContent = practice ? '▶ Normal mode' : '◆ Practice'; show('pause'); if (ac) { try { ac.suspend(); } catch (e) {} } }
@@ -484,13 +576,22 @@
         const cx = s.x + PW / 2, cy = s.y + hgt(s) / 2;
         if (e === 'orb') { sfx('orb'); rings.push({ x: cx, y: cy, r: 0.3, life: 1, c: '#ffd400', grow: 5 }); }
         else if (e === 'pad') { sfx('pad'); burst(cx, s.y, 10, ['#ffd400', '#fff27a'], 4); }
-        else if (e === 'portal') { sfx('portal'); rings.push({ x: cx, y: cy, r: 0.4, life: 1, c: s.mode === 'ship' ? '#ff3df0' : '#3dff7a', grow: 7 }); rot = 0; }
+        else if (e === 'portal') { sfx('portal'); rings.push({ x: cx, y: cy, r: 0.4, life: 1, c: s.mode === 'ship' ? '#ff3df0' : s.mode === 'ball' ? '#ff7a1a' : '#3dff7a', grow: 7 }); rot = 0; }
+        else if (e === 'pink') { sfx('pad'); burst(cx, s.y, 10, ['#ff4fd8', '#ffc2f1'], 3.5); }
+        else if (e === 'blue') { sfx('blue'); rings.push({ x: cx, y: cy, r: 0.3, life: 1, c: '#29a8ff', grow: 5 }); }
+        else if (e === 'grav') { sfx('grav'); rings.push({ x: cx, y: cy, r: 0.4, life: 1, c: s.gs < 0 ? '#ffe14d' : '#29a8ff', grow: 8 }); }
+        else if (e === 'speed') { sfx('speed'); shake = Math.max(shake, 0.12); for (let i = 0; i < 14; i++) parts.push({ x: cx + 2 + Math.random() * 8, y: Math.random() * 9, vx: -s.sp * 2, vy: 0, life: 0.35, max: 0.35, sz: 0.05, c: '#ffffff', g: 0, streak: true }); }
+        else if (e === 'coin') { sfx('coin'); burst(cx, cy, 16, ['#ffd400', '#fff27a', '#ffffff'], 5); toast = { t: 'COIN ' + popcount(s.cm) + '/' + L.nc, life: 1.1, small: true, coin: true }; }
+        else if (e === 'flip') { sfx('flip'); burst(cx, s.gs < 0 ? s.y : s.y + 0.9, 6, [COLORS[icon.s]], 3); }
       }
       s.ev.length = 0;
-      if (s.mode === 'cube') {
-        if (!s.g) rot += 7.05 * dt;
+      if (s.mode === 'ball') {
+        rot += dt * s.sp * 1.6 * s.gs;
+        if (s.g && Math.random() < 0.6) parts.push({ x: s.x + 0.05, y: s.gs < 0 ? s.y + 0.85 : s.y + 0.05, vx: -1 - Math.random() * 2, vy: (0.5 + Math.random() * 2) * -s.gs * -1, life: 0.3, max: 0.3, sz: 0.08 + Math.random() * 0.1, c: COLORS[icon.s], g: s.gs });
+      } else if (s.mode === 'cube') {
+        if (!s.g) rot += 7.05 * dt * s.gs;
         else { const tg = Math.round(rot / (Math.PI / 2)) * (Math.PI / 2); rot += (tg - rot) * Math.min(1, dt * 22); }
-        if (s.g && Math.random() < 0.7) parts.push({ x: s.x + 0.05, y: s.y + 0.05, vx: -1 - Math.random() * 2, vy: 0.5 + Math.random() * 2, life: 0.35, max: 0.35, sz: 0.08 + Math.random() * 0.1, c: COLORS[icon.p], g: 1 });
+        if (s.g && Math.random() < 0.7) parts.push({ x: s.x + 0.05, y: s.gs < 0 ? s.y + 0.85 : s.y + 0.05, vx: -1 - Math.random() * 2, vy: (0.5 + Math.random() * 2) * s.gs, life: 0.35, max: 0.35, sz: 0.08 + Math.random() * 0.1, c: COLORS[icon.p], g: 1 });
       } else {
         parts.push({ x: s.x - 0.05, y: s.y + 0.25, vx: -3 - Math.random() * 3, vy: (Math.random() - 0.5) * 2, life: 0.4, max: 0.4, sz: 0.1 + Math.random() * 0.14, c: Math.random() < 0.5 ? '#ff9a3c' : COLORS[icon.s], g: 0 });
       }
@@ -511,7 +612,7 @@
     parts = parts.filter(p => p.life > 0); if (parts.length > 400) parts.splice(0, parts.length - 400);
     for (const r of rings) { r.r += r.grow * dt; r.life -= dt * 1.8; }
     rings = rings.filter(r => r.life > 0);
-    shipA += (((s && s.mode === 'ship' && mode !== 'menu') ? 1 : 0) - shipA) * Math.min(1, dt * 5);
+    shipA += (((s && (s.mode !== 'cube' || s.gs < 0) && mode !== 'menu') ? 1 : 0) - shipA) * Math.min(1, dt * 5);
     shake = Math.max(0, shake - dt);
     if (toast) toast.life -= dt;
   }
@@ -544,7 +645,7 @@
     ctx.font = '18px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     if (mode !== 'menu') for (const t of lv.texts) { const tx = X(t[0]); if (tx > -400 && tx < W + 400) { ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillText(t[2], tx, Y(t[1])); } }
     if (s && mode !== 'menu') { const tx = X(3.5); if (tx > -300) { ctx.font = '26px "Press Start 2P", monospace'; ctx.fillStyle = '#fff'; ctx.fillText('Attempt ' + attempts, tx, Y(5.5)); } }
-    for (const p of lv.portals) { const px = X(p.x + 0.5); if (px > -80 && px < W + 80) drawPortal(px, Y(p.yc), p.m, bt); }
+    for (const p of lv.portals) { const px = X(p.x + 0.5); if (px > -80 && px < W + 80) drawPortal(px, Y(p.yc), p, bt); }
     for (let c = c0; c <= c1; c++) {
       const col = lv.cols[c]; if (!col) continue;
       for (const o of col) {
@@ -553,7 +654,10 @@
         else if (o.t === 's') drawSpike(x, y, false, line);
         else if (o.t === 'd') drawSpike(x, y, true, line);
         else if (o.t === 'p') drawPad(x, Y(o.y), bt);
-        else if (o.t === 'o') drawOrb(x + TS / 2, Y(o.y + 0.5), pulse, s && s.lo === o.id);
+        else if (o.t === 'o') drawOrb(x + TS / 2, Y(o.y + 0.5), pulse, s && s.lo === o.id, '#ffd400', '255,212,0', '255,230,80', '#fff6b0');
+        else if (o.t === 'q') drawOrb(x + TS / 2, Y(o.y + 0.5), pulse, s && s.lo === o.id, '#29a8ff', '41,168,255', '120,200,255', '#d6f0ff');
+        else if (o.t === 'k') drawPad(x, Y(o.y), bt, '#ff4fd8', '#7a1a66');
+        else if (o.t === 'c') { if (!(s && mode !== 'menu' && (s.cm & (1 << o.ci)))) drawCoin(x + TS / 2, Y(o.y + 0.5), bt, load('nd_coins_' + LEVELS.indexOf(lv)) & (1 << o.ci)); }
       }
     }
     const ex = X(lv.endX);
@@ -570,7 +674,7 @@
     ctx.strokeStyle = gl; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, GROUND + 1); ctx.lineTo(W, GROUND + 1); ctx.stroke();
     if (practice && s) for (const cp of cps) { const x = X(cp.x + PW / 2), y = Y(cp.y + 0.5); if (x > -20 && x < W + 20) { ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI / 4); ctx.fillStyle = '#4ade80'; ctx.strokeStyle = '#063'; ctx.lineWidth = 3; ctx.fillRect(-9, -9, 18, 18); ctx.strokeRect(-9, -9, 18, 18); ctx.restore(); } }
     if (s && mode !== 'menu' && mode !== 'dead') drawPlayer();
-    for (const p of parts) { ctx.globalAlpha = Math.max(0, p.life / p.max); ctx.fillStyle = p.c; const sz = p.sz * TS; ctx.fillRect(X(p.x) - sz / 2, Y(p.y) - sz / 2, sz, sz); }
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, p.life / p.max); ctx.fillStyle = p.c; const sz = p.sz * TS; if (p.streak) ctx.fillRect(X(p.x), Y(p.y), TS * 1.6, 2); else ctx.fillRect(X(p.x) - sz / 2, Y(p.y) - sz / 2, sz, sz); }
     ctx.globalAlpha = 1;
     for (const r of rings) { ctx.globalAlpha = Math.max(0, r.life); ctx.strokeStyle = r.c; ctx.lineWidth = 5 * r.life + 1; ctx.beginPath(); ctx.arc(X(r.x), Y(r.y), r.r * TS, 0, Math.PI * 2); ctx.stroke(); }
     ctx.globalAlpha = 1;
@@ -598,20 +702,38 @@
     else { ctx.moveTo(x + 14, y + 4); ctx.lineTo(x + TS / 2, y + TS - 20); ctx.lineTo(x + TS - 14, y + 4); }
     ctx.strokeStyle = line; ctx.globalAlpha = 0.6; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 1;
   }
-  function drawPad(x, by, bt) {
-    const cx = x + TS / 2;
-    for (let i = 0; i < 3; i++) { const ph = (bt * 0.8 + i / 3) % 1; ctx.globalAlpha = (1 - ph) * 0.6; ctx.fillStyle = '#ffd400'; ctx.fillRect(cx - 12 + i * 10, by - 8 - ph * 34, 4, 8); }
-    ctx.globalAlpha = 1; ctx.beginPath(); ctx.ellipse(cx, by, TS * 0.44, TS * 0.22, 0, Math.PI, 0); ctx.fillStyle = '#ffd400'; ctx.fill(); ctx.strokeStyle = '#7a5c00'; ctx.lineWidth = 2; ctx.stroke();
+  function drawPad(x, by, bt, col, dark) {
+    const cx = x + TS / 2; col = col || '#ffd400'; dark = dark || '#7a5c00';
+    for (let i = 0; i < 3; i++) { const ph = (bt * 0.8 + i / 3) % 1; ctx.globalAlpha = (1 - ph) * 0.6; ctx.fillStyle = col; ctx.fillRect(cx - 12 + i * 10, by - 8 - ph * 34, 4, 8); }
+    ctx.globalAlpha = 1; ctx.beginPath(); ctx.ellipse(cx, by, TS * 0.44, TS * 0.22, 0, Math.PI, 0); ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = dark; ctx.lineWidth = 2; ctx.stroke();
   }
-  function drawOrb(cx, cy, pulse, used) {
+  function drawOrb(cx, cy, pulse, used, col, glow, fill, core) {
     ctx.globalAlpha = used ? 0.35 : 1;
-    ctx.beginPath(); ctx.arc(cx, cy, TS * (0.46 + pulse * 0.12), 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,212,0,.35)'; ctx.lineWidth = 3; ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx, cy, TS * 0.33, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,230,80,.35)'; ctx.fill(); ctx.strokeStyle = '#ffd400'; ctx.lineWidth = 6; ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx, cy, TS * 0.14, 0, Math.PI * 2); ctx.fillStyle = '#fff6b0'; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, TS * (0.46 + pulse * 0.12), 0, Math.PI * 2); ctx.strokeStyle = 'rgba(' + glow + ',.35)'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, TS * 0.33, 0, Math.PI * 2); ctx.fillStyle = 'rgba(' + fill + ',.35)'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 6; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, TS * 0.14, 0, Math.PI * 2); ctx.fillStyle = core; ctx.fill();
     ctx.globalAlpha = 1;
   }
-  function drawPortal(cx, cy, m, bt) {
-    const col = m === 'ship' ? '#ff3df0' : '#3dff7a';
+  function drawCoin(cx, cy, bt, had) {
+    const sq = Math.abs(Math.cos(bt * 1.6)), r = TS * 0.34;
+    ctx.save(); ctx.translate(cx, cy + Math.sin(bt * 2) * 4); ctx.scale(Math.max(0.12, sq), 1);
+    ctx.shadowBlur = 16; ctx.shadowColor = had ? '#9aa0c7' : '#ffd400';
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fillStyle = had ? '#c9cbe0' : '#ffd400'; ctx.fill(); ctx.shadowBlur = 0;
+    ctx.lineWidth = 4; ctx.strokeStyle = had ? '#7d82ad' : '#b8860b'; ctx.stroke();
+    ctx.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.28 : r * 0.62; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } ctx.closePath();
+    ctx.fillStyle = had ? '#9aa0c7' : '#fff3a0'; ctx.fill();
+    ctx.restore();
+  }
+  function popcount(n) { let c = 0; while (n) { c += n & 1; n >>= 1; } return c; }
+  function drawPortal(cx, cy, p, bt) {
+    const m = p.m;
+    if (m === 'speed') {
+      const col = ['#ffa726', '#29a8ff', '#3dff7a', '#ff3df0'][p.v], n = p.v + 1;
+      ctx.save(); ctx.shadowBlur = 16; ctx.shadowColor = col; ctx.fillStyle = col; ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
+      for (let i = 0; i < n; i++) { const ox = cx + (i - (n - 1) / 2) * TS * 0.42; ctx.beginPath(); ctx.moveTo(ox - TS * 0.25, cy - TS * 0.9); ctx.lineTo(ox + TS * 0.25, cy); ctx.lineTo(ox - TS * 0.25, cy + TS * 0.9); ctx.lineTo(ox - TS * 0.05, cy); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+      ctx.restore(); return;
+    }
+    const col = m === 'ship' ? '#ff3df0' : m === 'ball' ? '#ff7a1a' : m === 'grav' ? (p.g < 0 ? '#ffe14d' : '#29a8ff') : '#3dff7a';
     ctx.save(); ctx.shadowBlur = 18; ctx.shadowColor = col;
     ctx.beginPath(); ctx.ellipse(cx, cy, TS * 0.42, TS * 1.6, 0, 0, Math.PI * 2); ctx.strokeStyle = col; ctx.lineWidth = 8; ctx.stroke();
     ctx.shadowBlur = 0; ctx.beginPath(); ctx.ellipse(cx, cy, TS * 0.24, TS * 1.3, 0, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 2; ctx.stroke();
@@ -621,9 +743,16 @@
   function drawPlayer() {
     const x = X(s.x), y = Y(s.y);
     if (s.mode === 'cube') { ctx.save(); ctx.translate(x + PW * TS / 2, y - PW * TS / 2); ctx.rotate(rot); drawIcon(ctx, PW * TS, icon); ctx.restore(); }
-    else {
+    else if (s.mode === 'ball') {
+      const r = PW * TS / 2; ctx.save(); ctx.translate(x + r, y - r); ctx.rotate(rot);
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fillStyle = COLORS[icon.p]; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2); ctx.fillStyle = COLORS[icon.s]; ctx.fill(); ctx.stroke();
+      for (let i = 0; i < 4; i++) { ctx.rotate(Math.PI / 2); ctx.fillStyle = '#000'; ctx.fillRect(r * 0.62, -r * 0.1, r * 0.38, r * 0.2); }
+      ctx.save(); ctx.rotate(-rot); drawIcon(ctx, r * 0.9, icon); ctx.restore();
+      ctx.restore();
+    } else {
       const T = TS, ang = -Math.atan2(s.vy * 0.7, s.sp);
-      ctx.save(); ctx.translate(x + PW * T / 2, y - 0.3 * T); ctx.rotate(ang);
+      ctx.save(); ctx.translate(x + PW * T / 2, y - 0.3 * T); ctx.rotate(ang); if (s.gs < 0) ctx.scale(1, -1);
       ctx.save(); ctx.translate(-0.05 * T, -0.3 * T); drawIcon(ctx, 0.46 * T, icon); ctx.restore();
       ctx.beginPath(); ctx.moveTo(-0.58 * T, -0.12 * T); ctx.lineTo(0.62 * T, -0.06 * T); ctx.lineTo(0.42 * T, 0.2 * T); ctx.lineTo(-0.5 * T, 0.26 * T); ctx.closePath();
       ctx.fillStyle = COLORS[icon.p]; ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke();
@@ -637,10 +766,11 @@
     const fg = ctx.createLinearGradient(bx, 0, bx + bw, 0); fg.addColorStop(0, practice ? '#4ade80' : '#00e5ff'); fg.addColorStop(1, practice ? '#bbf7d0' : '#7cff4f');
     ctx.fillStyle = fg; if (p > 0) { roundRect(bx, by, bw * p / 100, 12, 6); ctx.fill(); }
     ctx.font = '14px "Press Start 2P", monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff'; ctx.fillText(p + '%', bx + bw + 14, by + 7);
+    for (let i = 0; i < L.nc; i++) { const got = s.cm & (1 << i); ctx.beginPath(); ctx.arc(26 + i * 30, 26, 11, 0, Math.PI * 2); ctx.fillStyle = got ? '#ffd400' : 'rgba(0,0,0,.35)'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = got ? '#b8860b' : 'rgba(255,255,255,.35)'; ctx.stroke(); }
     if (practice) { ctx.textAlign = 'center'; ctx.fillStyle = '#4ade80'; ctx.font = '11px "Press Start 2P", monospace'; ctx.fillText('PRACTICE  ·  Z place / X remove checkpoint', W / 2, by + 30); }
     if (toast && toast.life > 0) {
       ctx.globalAlpha = Math.min(1, toast.life * 2); ctx.textAlign = 'center'; ctx.font = (toast.small ? '30px' : '34px') + ' "Press Start 2P", monospace';
-      ctx.fillStyle = toast.small ? '#fff' : '#ffd400'; ctx.strokeStyle = '#000'; ctx.lineWidth = 6; ctx.strokeText(toast.t, W / 2, H / 2 - 40); ctx.fillText(toast.t, W / 2, H / 2 - 40); ctx.globalAlpha = 1;
+      ctx.fillStyle = toast.coin ? '#ffd400' : toast.small ? '#fff' : '#ffd400'; ctx.strokeStyle = '#000'; ctx.lineWidth = 6; ctx.strokeText(toast.t, W / 2, H / 2 - 40); ctx.fillText(toast.t, W / 2, H / 2 - 40); ctx.globalAlpha = 1;
     }
   }
   function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }

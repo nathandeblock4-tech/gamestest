@@ -3,94 +3,145 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Game Room</title>
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;600;800&display=swap" rel="stylesheet">
+<title>Game Room · Free Browser Games</title>
+<meta name="description" content="Game Room: free browser games. Chess online, Road Hopper, Neon Dash, Fakele, Five Nights at Demetrius and more. No downloads.">
+<link href="https://fonts.googleapis.com/css2?family=Monoton&family=Press+Start+2P&family=Rubik:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
-  :root { --bg: #0f1020; --panel: #1a1c35; --panel-2: #24274a; --text: #f2f3ff; --muted: #9aa0c7; --accent: #ffcc33; --green: #4ade80; --pink: #f472b6; --blue: #60a5fa; --radius: 14px; color-scheme: dark; }
+  :root { --bg: #090a18; --panel: #15172e; --panel-2: #1f2242; --line: #2a2e57; --text: #f2f3ff; --muted: #9aa0c7; --accent: #ffcc33; --pink: #ff4fd8; --cyan: #29e7ff; color-scheme: dark; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); background-image: radial-gradient(circle at 20% 0%, #2a1f5c 0%, transparent 45%), radial-gradient(circle at 90% 100%, #123a4a 0%, transparent 40%); background-attachment: fixed; color: var(--text); font-family: 'Rubik', system-ui, sans-serif; min-height: 100vh; padding: 24px 16px 48px; }
-  header { text-align: center; margin-bottom: 24px; }
-  h1 { font-family: 'Press Start 2P', monospace; font-size: clamp(22px, 5vw, 38px); color: var(--accent); text-shadow: 3px 3px 0 #b8440f; cursor: pointer; letter-spacing: 2px; }
-  header p { color: var(--muted); margin-top: 12px; }
-  .total { display: inline-block; margin-top: 10px; background: var(--panel-2); padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--muted); }
-  .total b { color: var(--accent); }
-  .wrap { max-width: 1000px; margin: 0 auto; }
-  h3 { font-family: 'Press Start 2P', monospace; font-size: 13px; color: var(--muted); margin: 28px 4px 12px; letter-spacing: 1px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
-  .card { display: block; text-decoration: none; background: var(--panel); border: 2px solid var(--panel-2); border-radius: var(--radius); padding: 22px 20px; cursor: pointer; transition: transform .15s, border-color .15s; text-align: left; color: var(--text); font: inherit; position: relative; width: 100%; }
-  .card:hover, .card:focus-visible { transform: translateY(-4px); border-color: var(--accent); outline: none; }
-  .card.dark { background: #0a0a0a; border-color: #5a1010; }
-  .card.dark h2 { color: #e03030; }
-  .card .icon { font-size: 38px; margin-bottom: 10px; }
-  .card h2 { font-size: 19px; margin-bottom: 6px; }
-  .card p { color: var(--muted); font-size: 14px; line-height: 1.5; }
-  .card .plays { position: absolute; top: 12px; right: 14px; font-size: 12px; font-weight: 600; color: var(--muted); }
-  .card .new { position: absolute; top: 12px; right: 14px; font-size: 11px; font-weight: 800; background: var(--pink); color: #2b0a3d; padding: 3px 8px; border-radius: 999px; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--text); font-family: 'Rubik', system-ui, sans-serif; min-height: 100vh; overflow-x: hidden; }
+  /* animated background */
+  .bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+  .blob { position: absolute; width: 60vmax; height: 60vmax; border-radius: 50%; filter: blur(90px); opacity: .35; animation: drift 26s ease-in-out infinite alternate; }
+  .blob.a { background: #5b2cff; left: -20vmax; top: -25vmax; }
+  .blob.b { background: #ff2fa8; right: -25vmax; top: 10vmax; animation-delay: -8s; opacity: .22; }
+  .blob.c { background: #00c2ff; left: 20vmax; bottom: -35vmax; animation-delay: -15s; opacity: .22; }
+  @keyframes drift { to { transform: translate(8vmax, 6vmax) scale(1.15); } }
+  .floor { position: absolute; left: -50%; right: -50%; bottom: -10vh; height: 55vh; background-image: linear-gradient(rgba(41, 231, 255, .22) 1px, transparent 1px), linear-gradient(90deg, rgba(41, 231, 255, .22) 1px, transparent 1px); background-size: 60px 60px; transform: perspective(500px) rotateX(62deg); transform-origin: bottom; mask-image: linear-gradient(to top, rgba(0,0,0,.9), transparent 80%); -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,.9), transparent 80%); animation: floor 3s linear infinite; }
+  @keyframes floor { to { background-position: 0 60px, 0 0; } }
+  /* top nav */
+  nav { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); background: rgba(9, 10, 24, .72); border-bottom: 1px solid var(--line); }
+  .navIn { max-width: 1120px; margin: 0 auto; display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
+  .mini { font-family: 'Press Start 2P', monospace; font-size: 12px; color: var(--accent); text-decoration: none; white-space: nowrap; text-shadow: 0 0 10px rgba(255, 204, 51, .6); cursor: pointer; }
+  .search { flex: 1; display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; max-width: 460px; margin-left: auto; }
+  .search input { flex: 1; min-width: 0; background: none; border: none; color: var(--text); font: 600 15px Rubik, sans-serif; padding: 10px 0; outline: none; }
+  .search kbd { font: 700 11px Rubik, sans-serif; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
+  .nbtn { background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 12px; padding: 9px 13px; font: 800 14px Rubik, sans-serif; cursor: pointer; white-space: nowrap; }
+  .nbtn:hover { border-color: var(--accent); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px 60px; }
+  /* hero */
+  .hero { text-align: center; padding: 46px 0 26px; }
+  .sign { display: inline-block; font-family: 'Monoton', 'Press Start 2P', cursive; font-size: clamp(46px, 11vw, 120px); line-height: 1; letter-spacing: 4px; color: #fff; text-shadow: 0 0 6px #fff, 0 0 18px var(--pink), 0 0 42px var(--pink), 0 0 80px var(--pink); animation: flick 6s infinite; cursor: pointer; user-select: none; }
+  .sign .r { color: #fff; text-shadow: 0 0 6px #fff, 0 0 18px var(--cyan), 0 0 42px var(--cyan), 0 0 80px var(--cyan); }
+  .sign .o2 { animation: flick2 4.5s infinite; display: inline-block; }
+  @keyframes flick { 0%, 18%, 22%, 25%, 53%, 57%, 100% { opacity: 1; } 20%, 24%, 55% { opacity: .55; } }
+  @keyframes flick2 { 0%, 60%, 64%, 100% { opacity: 1; } 62% { opacity: .15; } }
+  .tagline { margin-top: 16px; color: #cfd3ff; font-size: clamp(15px, 2.4vw, 19px); font-weight: 600; }
+  .tagline b { color: var(--accent); }
+  .chipsRow { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+  .stat { background: rgba(21, 23, 46, .8); border: 1px solid var(--line); padding: 8px 14px; border-radius: 999px; font-weight: 700; font-size: 14px; color: var(--muted); }
+  .stat b { color: #fff; }
+  /* featured */
+  .featured { display: grid; grid-template-columns: 1.15fr 1fr; gap: 0; border-radius: 22px; overflow: hidden; border: 1px solid var(--line); background: var(--panel); margin: 18px 0 10px; text-decoration: none; color: var(--text); position: relative; transition: transform .2s, box-shadow .2s; }
+  .featured:hover { transform: translateY(-3px); box-shadow: 0 18px 50px -12px var(--fc, #ff4fd8); }
+  .fArt { min-height: 230px; position: relative; display: flex; align-items: center; justify-content: center; font-size: 110px; overflow: hidden; }
+  .fArt::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 14px, transparent 14px 28px); }
+  .fArt span { position: relative; z-index: 1; filter: drop-shadow(0 10px 18px rgba(0,0,0,.45)); animation: bob 3s ease-in-out infinite; }
+  @keyframes bob { 50% { transform: translateY(-10px) rotate(-4deg); } }
+  .fBody { padding: 26px 28px; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+  .fBody .kick { font: 800 12px Rubik, sans-serif; letter-spacing: 2px; color: var(--accent); }
+  .fBody h2 { font-size: clamp(26px, 4vw, 38px); font-weight: 900; line-height: 1.05; }
+  .fBody p { color: var(--muted); line-height: 1.5; }
+  .play { align-self: flex-start; background: var(--accent); color: #1a1300; font-weight: 900; padding: 12px 22px; border-radius: 12px; box-shadow: 0 5px 0 #b8860b; margin-top: 6px; }
+  @media (max-width: 720px) { .featured { grid-template-columns: 1fr; } .fArt { min-height: 170px; font-size: 86px; } }
+  /* sections */
+  .secHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 30px 2px 12px; flex-wrap: wrap; }
+  .secHead h3 { font-size: 20px; font-weight: 900; }
+  .secHead h3 small { color: var(--muted); font-weight: 700; font-size: 14px; margin-left: 6px; }
+  .recent { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+  .rc { flex: none; display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px 10px 10px; text-decoration: none; color: var(--text); font-weight: 800; transition: border-color .15s, transform .15s; cursor: pointer; }
+  .rc:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .rc i { font-style: normal; width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+  .fchip { background: var(--panel); border: 1px solid var(--line); color: #dfe2ff; border-radius: 999px; padding: 8px 14px; font: 800 14px Rubik, sans-serif; cursor: pointer; transition: all .15s; }
+  .fchip:hover { border-color: #6b71a3; }
+  .fchip.on { background: var(--accent); color: #1a1300; border-color: var(--accent); }
+  .tools { display: flex; gap: 8px; align-items: center; }
+  select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font: 700 14px Rubik, sans-serif; }
+  /* game cards */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(245px, 1fr)); gap: 16px; }
+  .card { position: relative; display: flex; flex-direction: column; text-decoration: none; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; transition: transform .18s, box-shadow .18s, border-color .18s; cursor: pointer; text-align: left; font: inherit; padding: 0; width: 100%; animation: in .35s both; }
+  @keyframes in { from { opacity: 0; transform: translateY(12px); } }
+  .card:hover, .card:focus-visible { transform: translateY(-5px); border-color: var(--c1); box-shadow: 0 16px 40px -14px var(--c1); outline: none; }
+  .art { height: 118px; position: relative; display: flex; align-items: center; justify-content: center; font-size: 58px; background: linear-gradient(135deg, var(--c1), var(--c2)); overflow: hidden; }
+  .art::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(rgba(255,255,255,.18) 1.5px, transparent 1.5px); background-size: 16px 16px; }
+  .art span { position: relative; filter: drop-shadow(0 6px 10px rgba(0,0,0,.4)); transition: transform .25s; }
+  .card:hover .art span { transform: scale(1.18) rotate(-6deg); }
+  .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .body h4 { font-size: 18px; font-weight: 900; }
+  .body p { color: var(--muted); font-size: 14px; line-height: 1.45; flex: 1; }
+  .meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+  .tag { font: 800 10.5px Rubik, sans-serif; letter-spacing: .6px; padding: 3px 8px; border-radius: 999px; background: var(--panel-2); color: #cfd3ff; }
+  .tag.NEW { background: #ff4fd8; color: #2b0a3d; } .tag.ONLINE { background: #29e7ff; color: #022a33; } .tag.DAILY { background: #4ade80; color: #06290f; } .tag.SCARY { background: #b91c1c; color: #fff; } .tag.TP { background: #ffcc33; color: #1a1300; }
+  .plays { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 700; }
+  .fav { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; border-radius: 50%; border: none; background: rgba(0,0,0,.35); color: #fff; font-size: 18px; cursor: pointer; z-index: 2; transition: transform .15s; }
+  .fav:hover { transform: scale(1.15); } .fav.on { background: rgba(255, 204, 51, .9); }
+  .empty { text-align: center; color: var(--muted); padding: 40px; font-weight: 700; display: none; }
+  /* embedded mini games */
   .screen { display: none; } .screen.active { display: block; }
-  .game-box { background: var(--panel); border: 2px solid var(--panel-2); border-radius: var(--radius); padding: 22px 16px; text-align: center; }
+  .game-box { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px 16px; text-align: center; margin-top: 26px; }
   .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 10px; flex-wrap: wrap; }
   .topbar h2 { font-size: 22px; }
   .stats { display: flex; gap: 18px; justify-content: center; margin-bottom: 14px; color: var(--muted); font-weight: 600; flex-wrap: wrap; }
   .stats b { color: var(--accent); }
   button.btn { background: var(--accent); color: #1a1300; border: none; border-radius: 10px; padding: 10px 18px; font: 700 15px 'Rubik', sans-serif; cursor: pointer; }
   button.btn.ghost { background: var(--panel-2); color: var(--text); }
-  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  button:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .msg { min-height: 26px; margin: 12px 0; font-weight: 700; font-size: 18px; }
   .ttt { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 320px; margin: 0 auto; }
   .ttt button { aspect-ratio: 1; background: #0a0b17; border: 2px solid var(--panel-2); border-radius: 12px; font: 800 52px 'Rubik', sans-serif; cursor: pointer; color: var(--text); }
-  .ttt button.x { color: var(--blue); } .ttt button.o { color: var(--pink); } .ttt button.win { background: #2d3a1c; border-color: var(--green); }
+  .ttt button.x { color: #60a5fa; } .ttt button.o { color: #f472b6; } .ttt button.win { background: #2d3a1c; border-color: #4ade80; }
   .mode { display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; }
   .mode button.on { background: var(--accent); color: #1a1300; }
   .mem { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; max-width: 400px; margin: 0 auto; }
   .tile { aspect-ratio: 1; border-radius: 12px; border: none; background: var(--panel-2); font-size: 36px; cursor: pointer; transition: transform .2s, background .2s; color: transparent; }
   .tile:hover { transform: scale(1.04); } .tile.flip { background: #0a0b17; color: inherit; } .tile.done { background: #1d3324; color: inherit; cursor: default; }
-  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 40px; }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 50px; line-height: 1.8; }
+  footer b { color: var(--text); }
+  @media (max-width: 560px) { .search kbd { display: none; } .mini .mt { display: none; } .mini { font-size: 18px; } .nbtn span { display: none; } .navIn { gap: 8px; padding: 10px 12px; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
+<div class="bg"><div class="blob a"></div><div class="blob b"></div><div class="blob c"></div><div class="floor"></div></div>
+<nav><div class="navIn">
+  <a class="mini" onclick="show('home')" title="Home">🎮 <span class="mt">GAME ROOM</span></a>
+  <label class="search"><span>🔍</span><input id="q" type="search" placeholder="Search games..." autocomplete="off" aria-label="Search games"><kbd>/</kbd></label>
+  <button class="nbtn" id="surprise" title="Play a random game">🎲 <span>Surprise me</span></button>
+</div></nav>
+
 <div class="wrap">
-  <header>
-    <h1 onclick="show('home')">GAME ROOM</h1>
-    <p>Pick a game and have fun.</p>
-    <div class="total">You've opened games <b id="totalPlays">0</b> times</div>
-  </header>
-
   <section id="home" class="screen active">
-    <h3>🐒 THE DEMETRIUS UNIVERSE</h3>
-    <div class="grid">
-      <a class="card dark" href="fnad.html" data-id="fnad"><div class="icon">🐒</div><h2>Five Nights at Demetrius</h2><p>Survive 12 AM to 6 AM. Watch the cameras. Close the doors. Don't let him get close to your face.</p></a>
-      <a class="card dark" href="fnad2.html" data-id="fnad2" data-new="1"><div class="icon">🔊</div><h2>Five Nights at Demetrius 2</h2><p>The Lure. Play sounds on the cameras to lead him away. Doors overheat, systems break, vents are open.</p></a>
-      <a class="card dark" href="dontlook.html" data-id="dontlook"><div class="icon">👁️</div><h2>Don't Look At Demetrius</h2><p>Lost in the dark zoo with a flashlight. He only moves when you can't see him... and you have to blink.</p></a>
-      <a class="card" href="flappy.html" data-id="flappy" data-new="1"><div class="icon">🪽</div><h2>Flappy Demetrius</h2><p>His shocked face flies through the zoo cages. Tap to flap. Every tap, he gasps.</p></a>
-      <a class="card" href="whack.html" data-id="whack" data-new="1"><div class="icon">🔨</div><h2>Whack-a-Demetrius</h2><p>30 seconds. Bonk him when he pops up, build combos, and dodge the bombs.</p></a>
-      <a class="card" href="clicker.html" data-id="clicker" data-new="1"><div class="icon">👆</div><h2>Demetrius Clicker</h2><p>Click to shock him. Buy upgrades. Build a planet of shocked orangutans. Progress saves.</p></a>
-      <a class="card" href="reaction.html" data-id="reaction" data-new="1"><div class="icon">⚡</div><h2>Shock Reflex</h2><p>Wait for Demetrius to pop up, then click as fast as you can. How fast are your reflexes?</p></a>
-      <a class="card" href="simon.html" data-id="simon" data-new="1"><div class="icon">🎨</div><h2>Demetrius Says</h2><p>Watch the colors flash, then repeat the pattern. It gets longer every round.</p></a>
-      <a class="card" href="catch.html" data-id="catch" data-new="1"><div class="icon">🍌</div><h2>Banana Catch</h2><p>Move Demetrius to catch falling bananas and dodge the coconuts. Golden bananas are worth 5.</p></a>
+    <header class="hero">
+      <div class="sign" onclick="show('home')" aria-label="Game Room">GAME <span class="r">R<span class="o2">O</span>OM</span></div>
+      <p class="tagline">Free games in your browser. <b>No downloads, no sign-ups.</b> Just play.</p>
+      <div class="chipsRow"><div class="stat">🎮 <b id="nGames">0</b> games</div><div class="stat">▶️ You've played <b id="totalPlays">0</b> <span id="timesWord">times</span></div><div class="stat">⭐ <b id="nFav">0</b> favorites</div></div>
+    </header>
+
+    <a class="featured" id="featured"></a>
+
+    <div id="recentWrap" hidden>
+      <div class="secHead"><h3>⏱️ Continue playing</h3></div>
+      <div class="recent" id="recent"></div>
     </div>
 
-    <h3>🕹️ ARCADE</h3>
-    <div class="grid">
-      <a class="card" href="hopper.html" data-id="hopper" data-new="1"><div class="icon">🐔</div><h2>Road Hopper</h2><p>Hop across busy roads, rivers and train tracks in 3D. Collect coins to unlock 6 characters.</p></a>
-      <a class="card" href="snake.html" data-id="snake" data-new="1"><div class="icon">🐍</div><h2>Snake Deluxe</h2><p>The upgraded Snake: golden apples, speed modes, wrap-around walls, particles and sound.</p></a>
-      <a class="card" href="hog.html" data-id="hog"><div class="icon">🐖</div><h2>Hog Wild 3000</h2><p>A fully 3D pig dodges tractors and hay in the dumbest, most dramatic farm race ever.</p></a>
-      <a class="card" href="pig.html" data-id="pig"><div class="icon">🐷</div><h2>Pig Run</h2><p>Race through the farm as a muddy pig. Jump hay bales and fences, grab apples.</p></a>
-      <a class="card" href="breakout.html" data-id="breakout" data-new="1"><div class="icon">🧱</div><h2>Breakout</h2><p>Smash every brick across 8 levels. Catch power-ups for a wide paddle, extra balls and lives.</p></a>
-      <a class="card" href="pong.html" data-id="pong" data-new="1"><div class="icon">🏓</div><h2>Pong</h2><p>Play the computer or a friend on the same keyboard or phone. First to 7 wins.</p></a>
-      <a class="card" href="invaders.html" data-id="invaders" data-new="1"><div class="icon">🚀</div><h2>Banana Invaders</h2><p>A space shooter where you fire bananas at an invading army of Demetriuses.</p></a>
-      <a class="card" href="dash.html" data-id="dash" data-new="1"><div class="icon">🟦</div><h2>Neon Dash</h2><p>Jump to the beat over spikes, fly a ship through tunnels, and beat 3 levels. Practice mode included.</p></a>
+    <div class="secHead">
+      <div class="filters" id="filters"></div>
+      <div class="tools"><select id="sort" aria-label="Sort games"><option value="cat">Sort: Category</option><option value="new">Newest</option><option value="played">Most played</option><option value="az">A–Z</option></select></div>
     </div>
-
-    <h3>🧩 PUZZLE &amp; CLASSICS</h3>
-    <div class="grid">
-      <a class="card" href="chess.html" data-id="chess" data-new="1"><div class="icon">♞</div><h2>Chess</h2><p>Play a friend on one device, the computer (5 levels), or online with a room code.</p></a>
-      <a class="card" href="fakele.html" data-id="fakele" data-new="1"><div class="icon">🟩</div><h2>Fakele</h2><p>Guess the secret 5-letter word in 6 tries. New daily word every day, plus unlimited mode.</p></a>
-      <a class="card" href="2048.html" data-id="2048" data-new="1"><div class="icon">🔢</div><h2>2048</h2><p>Slide and merge matching tiles. Can you reach 2048?</p></a>
-      <a class="card" href="minesweeper.html" data-id="minesweeper" data-new="1"><div class="icon">💣</div><h2>Minesweeper</h2><p>Clear the board without hitting a mine. Easy, medium and hard boards.</p></a>
-      <button class="card" onclick="show('ttt')" data-id="ttt"><div class="icon">❌⭕</div><h2>Tic-Tac-Toe</h2><p>Play against the computer or a friend. Three in a row wins.</p></button>
-      <button class="card" onclick="show('memory')" data-id="memory"><div class="icon">🃏</div><h2>Memory Match</h2><p>Flip cards and find all the matching pairs in as few moves as you can.</p></button>
-    </div>
+    <div id="sections"></div>
+    <div class="empty" id="empty">No games match that. Try another search! 🔍</div>
   </section>
 
   <section id="ttt" class="screen">
@@ -112,34 +163,137 @@
     </div>
   </section>
 
-  <footer>Made with HTML, CSS &amp; JavaScript</footer>
+  <footer><b>GAME ROOM</b> · made with HTML, CSS &amp; JavaScript<br>Your scores and favorites are saved on this device.</footer>
 </div>
 
 <script>
 function save(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
 function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+function loadJ(key, d) { try { const v = JSON.parse(load(key) || 'null'); return v == null ? d : v; } catch (e) { return d; } }
 
-// play counts: each time a game is opened from here
-function refreshCounts() {
-  let total = 0;
-  document.querySelectorAll('.card[data-id]').forEach(c => {
-    const n = parseInt(load('gr_open_' + c.dataset.id) || '0', 10); total += n;
-    let tag = c.querySelector('.plays, .new'); if (tag) tag.remove();
-    tag = document.createElement('span');
-    if (n > 0) { tag.className = 'plays'; tag.textContent = 'Played ' + n + (n === 1 ? ' time' : ' times'); }
-    else if (c.dataset.new) { tag.className = 'new'; tag.textContent = 'NEW'; }
-    else return;
-    c.appendChild(tag);
-  });
-  document.getElementById('totalPlays').textContent = total;
+// ---------- the game list (newest have the highest "n") ----------
+const GAMES = [
+  { id: 'hopper', href: 'hopper.html', t: 'Road Hopper', d: 'Hop across busy roads, rivers and train tracks in 3D. Collect coins to unlock 6 characters.', i: '🐔', cat: 'arcade', tags: ['NEW', '3D'], c: ['#38c95c', '#1f7a8c'], n: 27 },
+  { id: 'fakele', href: 'fakele.html', t: 'Fakele', d: 'Guess the secret 5-letter word in 6 tries. New daily word every day, plus unlimited mode.', i: '🟩', cat: 'puzzle', tags: ['NEW', 'DAILY'], c: ['#22c55e', '#a16207'], n: 26 },
+  { id: 'chess', href: 'chess.html', t: 'Chess', d: 'Play a friend on one device, the computer (5 levels), or online with a room code.', i: '♞', cat: 'puzzle', tags: ['NEW', 'ONLINE', '2P'], c: ['#769656', '#2b3a1c'], n: 25 },
+  { id: 'dash', href: 'dash.html', t: 'Neon Dash', d: 'Jump to the beat across 6 levels: ship tunnels, ball mode, gravity flips and secret coins.', i: '🟦', cat: 'arcade', tags: ['NEW'], c: ['#00e5ff', '#7b2cff'], n: 24 },
+  { id: 'catch', href: 'catch.html', t: 'Banana Catch', d: 'Move Demetrius to catch falling bananas and dodge the coconuts. Golden bananas are worth 5.', i: '🍌', cat: 'demetrius', tags: [], c: ['#ffd23f', '#1b4a3a'], n: 23 },
+  { id: 'invaders', href: 'invaders.html', t: 'Banana Invaders', d: 'A space shooter where you fire bananas at an invading army of Demetriuses.', i: '🚀', cat: 'arcade', tags: [], c: ['#2b1d6b', '#05060e'], n: 22 },
+  { id: 'simon', href: 'simon.html', t: 'Demetrius Says', d: 'Watch the colors flash, then repeat the pattern. It gets longer every round.', i: '🎨', cat: 'demetrius', tags: [], c: ['#ff5a5a', '#60a5fa'], n: 21 },
+  { id: 'pong', href: 'pong.html', t: 'Pong', d: 'Play the computer or a friend on the same keyboard or phone. First to 7 wins.', i: '🏓', cat: 'arcade', tags: ['2P'], c: ['#f472b6', '#60a5fa'], n: 20 },
+  { id: 'reaction', href: 'reaction.html', t: 'Shock Reflex', d: 'Wait for Demetrius to pop up, then click as fast as you can. How fast are your reflexes?', i: '⚡', cat: 'demetrius', tags: [], c: ['#1d7a3a', '#8a1a1a'], n: 19 },
+  { id: 'minesweeper', href: 'minesweeper.html', t: 'Minesweeper', d: 'Clear the board without hitting a mine. Easy, medium and hard boards.', i: '💣', cat: 'puzzle', tags: [], c: ['#64748b', '#1e293b'], n: 18 },
+  { id: 'breakout', href: 'breakout.html', t: 'Breakout', d: 'Smash every brick across 8 levels. Catch power-ups for a wide paddle, extra balls and lives.', i: '🧱', cat: 'arcade', tags: [], c: ['#f97316', '#7c2d12'], n: 17 },
+  { id: 'clicker', href: 'clicker.html', t: 'Demetrius Clicker', d: 'Click to shock him. Buy upgrades. Build a planet of shocked orangutans. Progress saves.', i: '👆', cat: 'demetrius', tags: [], c: ['#c1561e', '#4a1d06'], n: 16 },
+  { id: 'whack', href: 'whack.html', t: 'Whack-a-Demetrius', d: '30 seconds. Bonk him when he pops up, build combos, and dodge the bombs.', i: '🔨', cat: 'demetrius', tags: [], c: ['#84cc16', '#3f6212'], n: 15 },
+  { id: '2048', href: '2048.html', t: '2048', d: 'Slide and merge matching tiles. Can you reach 2048?', i: '🔢', cat: 'puzzle', tags: [], c: ['#edc22e', '#8f7a66'], n: 14 },
+  { id: 'flappy', href: 'flappy.html', t: 'Flappy Demetrius', d: 'His shocked face flies through the zoo cages. Tap to flap. Every tap, he gasps.', i: '🪽', cat: 'demetrius', tags: [], c: ['#38bdf8', '#0f766e'], n: 13 },
+  { id: 'snake', href: 'snake.html', t: 'Snake Deluxe', d: 'The upgraded Snake: golden apples, speed modes, wrap-around walls, particles and sound.', i: '🐍', cat: 'arcade', tags: [], c: ['#4ade80', '#14532d'], n: 12 },
+  { id: 'fnad2', href: 'fnad2.html', t: 'Five Nights at Demetrius 2', d: 'The Lure. Play sounds on the cameras to lead him away. Doors overheat, systems break, vents are open.', i: '🔊', cat: 'demetrius', tags: ['SCARY'], c: ['#450a0a', '#000000'], n: 11 },
+  { id: 'dontlook', href: 'dontlook.html', t: "Don't Look At Demetrius", d: "Lost in the dark zoo with a flashlight. He only moves when you can't see him... and you have to blink.", i: '👁️', cat: 'demetrius', tags: ['SCARY', '3D'], c: ['#1c1917', '#000000'], n: 10 },
+  { id: 'fnad', href: 'fnad.html', t: 'Five Nights at Demetrius', d: "Survive 12 AM to 6 AM. Watch the cameras. Close the doors. Don't let him get close to your face.", i: '🐒', cat: 'demetrius', tags: ['SCARY'], c: ['#7f1d1d', '#000000'], n: 9 },
+  { id: 'hog', href: 'hog.html', t: 'Hog Wild 3000', d: 'A fully 3D pig dodges tractors and hay in the dumbest, most dramatic farm race ever.', i: '🐖', cat: 'arcade', tags: ['3D'], c: ['#f9a8d4', '#be185d'], n: 8 },
+  { id: 'pig', href: 'pig.html', t: 'Pig Run', d: 'Race through the farm as a muddy pig. Jump hay bales and fences, grab apples.', i: '🐷', cat: 'arcade', tags: [], c: ['#fda4af', '#65a30d'], n: 7 },
+  { id: 'ttt', href: '#ttt', t: 'Tic-Tac-Toe', d: 'Play against the computer or a friend. Three in a row wins.', i: '❌', cat: 'puzzle', tags: ['2P'], c: ['#60a5fa', '#f472b6'], n: 2 },
+  { id: 'memory', href: '#memory', t: 'Memory Match', d: 'Flip cards and find all the matching pairs in as few moves as you can.', i: '🃏', cat: 'puzzle', tags: [], c: ['#a78bfa', '#4c1d95'], n: 1 }
+];
+const CATS = [
+  { id: 'all', name: '🌐 All' }, { id: 'fav', name: '⭐ Favorites' },
+  { id: 'arcade', name: '🕹️ Arcade', title: '🕹️ Arcade' }, { id: 'puzzle', name: '🧩 Puzzle & Classics', title: '🧩 Puzzle & Classics' }, { id: 'demetrius', name: '🐒 Demetrius Universe', title: '🐒 The Demetrius Universe' },
+  { id: 'multi', name: '👥 Multiplayer' }, { id: 'scary', name: '😱 Scary' }
+];
+const TAGNAMES = { NEW: 'NEW', ONLINE: '🌐 ONLINE', '2P': '👥 2 PLAYER', DAILY: '📅 DAILY', SCARY: '😱 SCARY', '3D': '🧊 3D' };
+let filter = 'all', query = '', sortBy = load('gr_sort') || 'cat';
+let favs = loadJ('gr_favs', []);
+const plays = id => parseInt(load('gr_open_' + id) || '0', 10);
+
+function cardFor(g) {
+  const a = document.createElement('a');
+  a.className = 'card'; a.href = g.href; a.dataset.id = g.id;
+  a.style.setProperty('--c1', g.c[0]); a.style.setProperty('--c2', g.c[1]);
+  const art = document.createElement('div'); art.className = 'art'; const sp = document.createElement('span'); sp.textContent = g.i; art.appendChild(sp);
+  const fav = document.createElement('button'); fav.className = 'fav' + (favs.indexOf(g.id) >= 0 ? ' on' : ''); fav.textContent = favs.indexOf(g.id) >= 0 ? '⭐' : '☆'; fav.title = 'Favorite';
+  fav.setAttribute('aria-label', 'Favorite ' + g.t);
+  fav.onclick = e => { e.preventDefault(); e.stopPropagation(); const k = favs.indexOf(g.id); if (k >= 0) favs.splice(k, 1); else favs.push(g.id); save('gr_favs', JSON.stringify(favs)); render(); };
+  const body = document.createElement('div'); body.className = 'body';
+  const h = document.createElement('h4'); h.textContent = g.t;
+  const p = document.createElement('p'); p.textContent = g.d;
+  const meta = document.createElement('div'); meta.className = 'meta';
+  const n = plays(g.id);
+  g.tags.forEach(t => { if (t === 'NEW' && n > 0) return; const s = document.createElement('span'); s.className = 'tag ' + (t === '2P' ? 'TP' : t); s.textContent = TAGNAMES[t] || t; meta.appendChild(s); });
+  const pl = document.createElement('span'); pl.className = 'plays'; pl.textContent = n ? '▶ ' + n : ''; meta.appendChild(pl);
+  body.append(h, p, meta); a.append(art, fav, body);
+  a.addEventListener('click', e => { opened(g.id); if (g.href[0] === '#') { e.preventDefault(); show(g.id); } });
+  return a;
 }
-document.querySelectorAll('.card[data-id]').forEach(c => c.addEventListener('click', () => { const k = 'gr_open_' + c.dataset.id; save(k, String(parseInt(load(k) || '0', 10) + 1)); refreshCounts(); }));
-refreshCounts();
+function opened(id) {
+  save('gr_open_' + id, String(plays(id) + 1));
+  let r = loadJ('gr_recent', []); r = [id].concat(r.filter(x => x !== id)).slice(0, 6); save('gr_recent', JSON.stringify(r));
+}
+function matches(g) {
+  if (query) { const q = query.toLowerCase(); if ((g.t + ' ' + g.d + ' ' + g.cat + ' ' + g.tags.join(' ')).toLowerCase().indexOf(q) < 0) return false; }
+  if (filter === 'fav') return favs.indexOf(g.id) >= 0;
+  if (filter === 'multi') return g.tags.indexOf('2P') >= 0 || g.tags.indexOf('ONLINE') >= 0;
+  if (filter === 'scary') return g.tags.indexOf('SCARY') >= 0;
+  if (filter !== 'all') return g.cat === filter;
+  return true;
+}
+function grid(list) { const d = document.createElement('div'); d.className = 'grid'; list.forEach((g, i) => { const c = cardFor(g); c.style.animationDelay = Math.min(i * 0.03, 0.4) + 's'; d.appendChild(c); }); return d; }
+function render() {
+  const secs = document.getElementById('sections'); secs.innerHTML = '';
+  const list = GAMES.filter(matches);
+  document.getElementById('empty').style.display = list.length ? 'none' : 'block';
+  if (filter === 'fav' && !list.length && !query) document.getElementById('empty').textContent = 'No favorites yet. Tap the ☆ on any game to add it here!';
+  else document.getElementById('empty').textContent = 'No games match that. Try another search! 🔍';
+  if (sortBy === 'cat' && filter === 'all' && !query) {
+    for (const c of CATS.filter(c => c.title)) {
+      const sub = list.filter(g => g.cat === c.id); if (!sub.length) continue;
+      const hd = document.createElement('div'); hd.className = 'secHead'; const h3 = document.createElement('h3'); h3.textContent = c.title; const sm = document.createElement('small'); sm.textContent = sub.length + ' games'; h3.appendChild(sm); hd.appendChild(h3);
+      secs.append(hd, grid(sub));
+    }
+  } else {
+    const sorted = list.slice();
+    if (sortBy === 'new' || sortBy === 'cat') sorted.sort((a, b) => b.n - a.n);
+    else if (sortBy === 'played') sorted.sort((a, b) => plays(b.id) - plays(a.id) || b.n - a.n);
+    else sorted.sort((a, b) => a.t.localeCompare(b.t));
+    secs.style.marginTop = '8px'; secs.appendChild(grid(sorted));
+  }
+  // filters
+  const fr = document.getElementById('filters'); fr.innerHTML = '';
+  CATS.forEach(c => { const b = document.createElement('button'); b.className = 'fchip' + (filter === c.id ? ' on' : ''); b.textContent = c.name; b.onclick = () => { filter = c.id; render(); }; fr.appendChild(b); });
+  // stats
+  document.getElementById('nGames').textContent = GAMES.length;
+  const tp = GAMES.reduce((s, g) => s + plays(g.id), 0); document.getElementById('totalPlays').textContent = tp; document.getElementById('timesWord').textContent = tp === 1 ? 'time' : 'times';
+  document.getElementById('nFav').textContent = favs.length;
+  // recent
+  const r = loadJ('gr_recent', []).map(id => GAMES.find(g => g.id === id)).filter(Boolean);
+  document.getElementById('recentWrap').hidden = !r.length;
+  const rr = document.getElementById('recent'); rr.innerHTML = '';
+  r.forEach(g => { const a = document.createElement('a'); a.className = 'rc'; a.href = g.href; const i = document.createElement('i'); i.textContent = g.i; i.style.background = 'linear-gradient(135deg,' + g.c[0] + ',' + g.c[1] + ')'; a.append(i, document.createTextNode(g.t)); a.onclick = e => { opened(g.id); if (g.href[0] === '#') { e.preventDefault(); show(g.id); } }; rr.appendChild(a); });
+}
+function renderFeatured() {
+  const g = GAMES.slice().sort((a, b) => b.n - a.n)[0], f = document.getElementById('featured');
+  f.href = g.href; f.style.setProperty('--fc', g.c[0]); f.innerHTML = '';
+  const art = document.createElement('div'); art.className = 'fArt'; art.style.background = 'linear-gradient(135deg,' + g.c[0] + ',' + g.c[1] + ')'; const s = document.createElement('span'); s.textContent = g.i; art.appendChild(s);
+  const body = document.createElement('div'); body.className = 'fBody';
+  const k = document.createElement('div'); k.className = 'kick'; k.textContent = '★ NEWEST GAME';
+  const h = document.createElement('h2'); h.textContent = g.t; const p = document.createElement('p'); p.textContent = g.d;
+  const pl = document.createElement('span'); pl.className = 'play'; pl.textContent = '▶ Play now';
+  body.append(k, h, p, pl); f.append(art, body);
+  f.onclick = () => opened(g.id);
+}
+document.getElementById('q').addEventListener('input', e => { query = e.target.value.trim(); if (query && filter === 'fav') filter = 'all'; render(); });
+document.getElementById('sort').value = sortBy;
+document.getElementById('sort').addEventListener('change', e => { sortBy = e.target.value; save('gr_sort', sortBy); render(); });
+document.getElementById('surprise').onclick = () => { const g = GAMES[Math.floor(Math.random() * GAMES.length)]; opened(g.id); if (g.href[0] === '#') show(g.id); else location.href = g.href; };
+document.addEventListener('keydown', e => { if (e.key === '/' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); show('home'); document.getElementById('q').focus(); } });
+window.addEventListener('pageshow', () => render());
 
 function show(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if (id === 'memory' && !Memory.started) Memory.start();
+  if (id === 'home') render();
   window.scrollTo(0, 0);
 }
 
@@ -226,6 +380,9 @@ const Memory = (() => {
   }
   return { start, started: false };
 })();
+
+renderFeatured(); render();
+if (location.hash === '#ttt' || location.hash === '#memory') show(location.hash.slice(1));
 </script>
 </body>
 </html>
