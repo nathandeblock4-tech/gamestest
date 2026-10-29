@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pong · Game Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1020; color: #f2f3ff; font-family: 'Rubik', system-ui, sans-serif; min-height: 100vh; padding: 16px 12px 32px; }
+  .wrap { max-width: 860px; margin: 0 auto; text-align: center; }
+  .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  a.back, button { color: #f2f3ff; background: #24274a; padding: 8px 14px; border-radius: 10px; text-decoration: none; font: 700 14px Rubik, sans-serif; border: 2px solid transparent; cursor: pointer; }
+  button.on { border-color: #ffcc33; color: #ffcc33; }
+  h1 { font-family: 'Press Start 2P', monospace; font-size: 18px; color: #f2f3ff; }
+  .row { display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; }
+  canvas { width: 100%; aspect-ratio: 16 / 10; border-radius: 14px; border: 3px solid #24274a; background: #05060e; display: block; touch-action: none; }
+  .help { color: #9aa0c7; font-size: 14px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar"><a class="back" href="index.html">← Back</a><h1>PONG</h1><span></span></div>
+  <div class="row"><button id="cpu" class="on">1 Player (vs CPU)</button><button id="pvp">2 Players</button></div>
+  <canvas id="c" width="800" height="500"></canvas>
+  <p class="help">Left paddle: W / S. Right paddle (2 players): ↑ / ↓. On a phone, drag on your side of the screen. First to 7 wins. Space to serve.</p>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  const PH = 90, PW = 14;
+  let mode = 'cpu', L, R, ball, sL, sR, state = 'ready', keys = {}, trail = [];
+  let ac = null;
+  function snd(f, d, vol) { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.setValueAtTime(f, t); g.gain.setValueAtTime(vol || 0.07, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02); } catch (e) {} }
+  function reset() { L = H / 2; R = H / 2; sL = 0; sR = 0; serve(1); state = 'ready'; }
+  function serve(dir) { ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, dir }; trail = []; }
+  function go() { if (state === 'over') reset(); if (ball.vx === 0) { const a = (Math.random() - 0.5) * 0.8; ball.vx = Math.cos(a) * 6 * ball.dir; ball.vy = Math.sin(a) * 6; state = 'run'; } }
+  function update(k) {
+    const sp = 8 * k;
+    if (keys.w) L -= sp; if (keys.s) L += sp;
+    if (mode === 'pvp') { if (keys.arrowup) R -= sp; if (keys.arrowdown) R += sp; }
+    else { const target = ball.vx > 0 ? ball.y + Math.sin(performance.now() / 400) * 25 : H / 2; R += Math.max(-5.5 * k, Math.min(5.5 * k, target - R)); }
+    L = Math.max(PH / 2, Math.min(H - PH / 2, L)); R = Math.max(PH / 2, Math.min(H - PH / 2, R));
+    if (state !== 'run') return;
+    ball.x += ball.vx * k; ball.y += ball.vy * k;
+    trail.push({ x: ball.x, y: ball.y }); if (trail.length > 12) trail.shift();
+    if (ball.y < 8 || ball.y > H - 8) { ball.vy *= -1; ball.y = Math.max(8, Math.min(H - 8, ball.y)); snd(300, 0.04); }
+    const hitP = (px, py, side) => {
+      if (Math.abs(ball.x - px) < PW / 2 + 8 && Math.abs(ball.y - py) < PH / 2 + 8 && Math.sign(ball.vx) === side) {
+        const off = (ball.y - py) / (PH / 2), speed = Math.min(16, Math.hypot(ball.vx, ball.vy) * 1.06);
+        const ang = off * 0.9; ball.vx = -side * Math.cos(ang) * speed; ball.vy = Math.sin(ang) * speed; snd(520, 0.05);
+      }
+    };
+    hitP(30, L, -1); hitP(W - 30, R, 1);
+    if (ball.x < -20) { sR++; snd(150, 0.3); point(-1); }
+    if (ball.x > W + 20) { sL++; snd(150, 0.3); point(1); }
+  }
+  function point(dir) { if (sL >= 7 || sR >= 7) { state = 'over'; [523, 659, 784].forEach((f, i) => setTimeout(() => snd(f, 0.15), i * 120)); } else { state = 'ready'; } serve(dir); }
+  function draw() {
+    ctx.fillStyle = '#05060e'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#24274a'; for (let y = 10; y < H; y += 30) ctx.fillRect(W / 2 - 2, y, 4, 16);
+    ctx.font = '48px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#3a3e6a';
+    ctx.fillText(sL, W / 2 - 80, 70); ctx.fillText(sR, W / 2 + 80, 70);
+    ctx.shadowBlur = 16; ctx.shadowColor = '#60a5fa'; ctx.fillStyle = '#60a5fa'; ctx.fillRect(30 - PW / 2, L - PH / 2, PW, PH);
+    ctx.shadowColor = '#f472b6'; ctx.fillStyle = '#f472b6'; ctx.fillRect(W - 30 - PW / 2, R - PH / 2, PW, PH);
+    trail.forEach((t, i) => { ctx.globalAlpha = i / trail.length * 0.4; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(t.x, t.y, 6, 0, 7); ctx.fill(); });
+    ctx.globalAlpha = 1; ctx.shadowColor = '#fff'; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, 8, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
+    if (state !== 'run') {
+      ctx.fillStyle = '#ffcc33'; ctx.font = '22px "Press Start 2P", monospace';
+      ctx.fillText(state === 'over' ? (sL > sR ? (mode === 'cpu' ? 'YOU WIN!' : 'BLUE WINS!') : (mode === 'cpu' ? 'CPU WINS' : 'PINK WINS!')) : 'PONG', W / 2, H / 2 - 10);
+      ctx.fillStyle = '#f2f3ff'; ctx.font = '700 18px Rubik'; ctx.fillText(state === 'over' ? 'Press Space or tap to play again' : 'Press Space or tap to serve', W / 2, H / 2 + 30);
+    }
+  }
+  let last = 0;
+  function loop(t) { const k = last ? Math.min(3, (t - last) / 16.67) : 1; last = t; update(k); draw(); requestAnimationFrame(loop); }
+  document.addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys[k] = true; if (k === ' ') { e.preventDefault(); go(); } if (k.startsWith('arrow')) e.preventDefault(); });
+  document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+  const touches = {};
+  cv.addEventListener('pointerdown', e => { go(); const r = cv.getBoundingClientRect(); touches[e.pointerId] = (e.clientX - r.left) < r.width / 2 ? 'L' : 'R'; move(e); });
+  cv.addEventListener('pointermove', move);
+  function move(e) { const side = touches[e.pointerId]; if (!side) return; const r = cv.getBoundingClientRect(); const y = (e.clientY - r.top) * H / r.height; if (side === 'L') L = y; else if (mode === 'pvp') R = y; }
+  cv.addEventListener('pointerup', e => { delete touches[e.pointerId]; });
+  document.getElementById('cpu').onclick = () => { mode = 'cpu'; document.getElementById('cpu').classList.add('on'); document.getElementById('pvp').classList.remove('on'); reset(); };
+  document.getElementById('pvp').onclick = () => { mode = 'pvp'; document.getElementById('pvp').classList.add('on'); document.getElementById('cpu').classList.remove('on'); reset(); };
+  reset(); requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
