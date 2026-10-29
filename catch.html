@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banana Catch · Game Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1020; color: #f2f3ff; font-family: 'Rubik', system-ui, sans-serif; min-height: 100vh; padding: 16px 12px 32px; }
+  .wrap { max-width: 640px; margin: 0 auto; text-align: center; }
+  .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  a.back { color: #f2f3ff; background: #24274a; padding: 8px 14px; border-radius: 10px; text-decoration: none; font-weight: 700; }
+  h1 { font-family: 'Press Start 2P', monospace; font-size: 14px; color: #ffcc33; }
+  canvas { width: 100%; max-width: 600px; aspect-ratio: 5 / 6; border-radius: 14px; border: 3px solid #24274a; display: block; margin: 0 auto; touch-action: none; }
+  .help { color: #9aa0c7; font-size: 14px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar"><a class="back" href="index.html">← Back</a><h1>BANANA CATCH</h1><span></span></div>
+  <canvas id="c" width="500" height="600"></canvas>
+  <p class="help">Move Demetrius with the mouse, your finger, or ← →. Catch bananas 🍌 (golden ones are worth 5), dodge coconuts 🥥. Miss 5 bananas and it's over.</p>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  let best = parseInt(load('catchBest') || '0', 10);
+  const img = new Image(); let photoOK = false; img.onload = () => { photoOK = true; }; img.src = 'demetrius.jpg';
+  let px, items, parts, pops, score, misses, lives, state = 'ready', keys = {}, spawnT, time, shock = 0, combo;
+  let ac = null;
+  function snd(f0, f1, d, type, vol) { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + d); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02); } catch (e) {} }
+  function reset() { px = W / 2; items = []; parts = []; pops = []; score = 0; misses = 0; lives = 3; spawnT = 0; time = 0; combo = 0; }
+  function spawn() {
+    const r = Math.random(), lvl = Math.min(1, time / 3600);
+    const type = r < 0.06 ? 'gold' : r < 0.06 + 0.18 + lvl * 0.17 ? 'coco' : 'nana';
+    items.push({ x: 30 + Math.random() * (W - 60), y: -20, vy: 2.2 + Math.random() * 1.5 + lvl * 3, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 0.15, type });
+  }
+  function burst(x, y, color, n) { for (let i = 0; i < n; i++) parts.push({ x, y, vx: (Math.random() - 0.5) * 7, vy: -Math.random() * 6, life: 1, color }); }
+  function update(k) {
+    parts.forEach(p => { p.x += p.vx * k; p.y += p.vy * k; p.vy += 0.25 * k; p.life -= 0.025 * k; }); parts = parts.filter(p => p.life > 0);
+    pops.forEach(p => { p.y -= 1 * k; p.life -= 0.02 * k; }); pops = pops.filter(p => p.life > 0);
+    shock = Math.max(0, shock - k);
+    if (state !== 'run') return;
+    time += k;
+    if (keys.arrowleft || keys.a) px -= 8 * k;
+    if (keys.arrowright || keys.d) px += 8 * k;
+    px = Math.max(40, Math.min(W - 40, px));
+    spawnT -= k;
+    if (spawnT <= 0) { spawn(); spawnT = Math.max(16, 50 - time / 90); }
+    for (const it of items) {
+      it.y += it.vy * k; it.rot += it.spin * k;
+      if (!it.dead && it.y > H - 110 && it.y < H - 50 && Math.abs(it.x - px) < 48) {
+        it.dead = true;
+        if (it.type === 'coco') { lives--; combo = 0; shock = 40; burst(it.x, it.y, '#8b5a2b', 20); snd(220, 50, 0.4, 'sawtooth', 0.12); pops.push({ x: it.x, y: it.y, t: 'BONK!', c: '#ff5a5a', life: 1 }); if (lives <= 0) over(); }
+        else { combo++; const pts = (it.type === 'gold' ? 5 : 1) * (combo >= 10 ? 2 : 1); score += pts; burst(it.x, it.y, it.type === 'gold' ? '#fff27a' : '#ffcc33', 12); snd(it.type === 'gold' ? 880 : 600, it.type === 'gold' ? 1760 : 900, 0.12, 'triangle', 0.08); pops.push({ x: it.x, y: it.y, t: '+' + pts, c: '#ffcc33', life: 1 }); }
+      }
+      if (!it.dead && it.y > H + 20) { it.dead = true; if (it.type !== 'coco') { misses++; combo = 0; snd(300, 150, 0.2, 'square', 0.05); if (misses >= 5) over(); } }
+    }
+    items = items.filter(it => !it.dead);
+  }
+  function over() { state = 'over'; if (score > best) { best = score; save('catchBest', best); } snd(400, 60, 0.8, 'sawtooth', 0.1); }
+  function drawFace(x, y, r) {
+    ctx.save(); ctx.translate(x, y);
+    if (shock > 0) ctx.translate((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6);
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fillStyle = '#7a3a14'; ctx.fill();
+    if (photoOK) { ctx.save(); ctx.clip(); const ar = img.width / img.height, h = r * 2.4, w = h * ar; ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore(); }
+    else { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-12, -6, 9, 0, 7); ctx.arc(12, -6, 9, 0, 7); ctx.fill(); ctx.fillStyle = '#300'; ctx.beginPath(); ctx.ellipse(0, 16, 11, 9, 0, 0, 7); ctx.fill(); }
+    ctx.lineWidth = 4; ctx.strokeStyle = shock > 0 ? '#ff5a5a' : '#ffcc33'; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+  function draw() {
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#1b4a3a'); g.addColorStop(1, '#0c2219');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(80,160,90,.25)'; for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.ellipse(i * 100 + 40, 30, 70, 40, 0, 0, 7); ctx.fill(); }
+    ctx.fillStyle = '#3d2a14'; ctx.fillRect(0, H - 30, W, 30);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const it of items) {
+      ctx.save(); ctx.translate(it.x, it.y); ctx.rotate(it.rot); ctx.font = '34px serif';
+      if (it.type === 'gold') { ctx.shadowBlur = 20; ctx.shadowColor = '#fff27a'; }
+      ctx.fillText(it.type === 'coco' ? '🥥' : '🍌', 0, 0); ctx.restore();
+    }
+    drawFace(px, H - 75, 40);
+    parts.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x - 3, p.y - 3, 6, 6); }); ctx.globalAlpha = 1;
+    pops.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.c; ctx.font = '800 22px Rubik'; ctx.fillText(p.t, p.x, p.y); }); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#f2f3ff'; ctx.font = '700 17px Rubik'; ctx.textAlign = 'left';
+    ctx.fillText('🍌 ' + score + (combo >= 10 ? '   x2 COMBO!' : ''), 14, 22);
+    ctx.textAlign = 'right'; ctx.fillText('❤️'.repeat(Math.max(0, lives)) + '   Missed ' + misses + '/5', W - 14, 22);
+    ctx.fillStyle = '#9aa0c7'; ctx.fillText('Best ' + best, W - 14, 46);
+    if (state !== 'run') {
+      ctx.fillStyle = 'rgba(5,6,14,.7)'; ctx.fillRect(0, 0, W, H); ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffcc33'; ctx.font = '20px "Press Start 2P", monospace'; ctx.fillText(state === 'over' ? 'GAME OVER' : 'BANANA CATCH', W / 2, H / 2 - 30);
+      ctx.fillStyle = '#f2f3ff'; ctx.font = '700 17px Rubik';
+      ctx.fillText(state === 'over' ? 'You caught ' + score + ' · Best ' + best : 'Catch bananas, dodge coconuts', W / 2, H / 2 + 10);
+      ctx.fillText('Tap or press Space to ' + (state === 'over' ? 'retry' : 'start'), W / 2, H / 2 + 40);
+    }
+  }
+  function start() { if (state !== 'run') { reset(); state = 'run'; } }
+  let last = 0;
+  function loop(t) { const k = last ? Math.min(3, (t - last) / 16.67) : 1; last = t; update(k); draw(); requestAnimationFrame(loop); }
+  document.addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys[k] = true; if (k === ' ' || k === 'enter') { e.preventDefault(); start(); } if (k.startsWith('arrow')) e.preventDefault(); });
+  document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+  const tx = e => { const r = cv.getBoundingClientRect(); return (e.clientX - r.left) * W / r.width; };
+  cv.addEventListener('pointerdown', e => { start(); px = tx(e); });
+  cv.addEventListener('pointermove', e => { if (state === 'run') px = tx(e); });
+  reset(); requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
