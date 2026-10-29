@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Admin · Game Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0e0f1c; color: #f2f3ff; font-family: 'Rubik', system-ui, sans-serif; min-height: 100vh; padding: 20px 14px 40px; }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; gap: 10px; }
+  a.back, .ghost { color: #f2f3ff; background: #1f2140; padding: 8px 14px; border-radius: 10px; text-decoration: none; font: 700 14px Rubik, sans-serif; border: none; cursor: pointer; }
+  h1 { font-family: 'Press Start 2P', monospace; font-size: 14px; color: #ffcc33; }
+  .card { background: #16182e; border: 1px solid #262a4d; border-radius: 16px; padding: 18px; margin-bottom: 16px; }
+  .lock { max-width: 380px; margin: 60px auto; text-align: center; display: flex; flex-direction: column; gap: 14px; }
+  .lock .big { font-size: 46px; }
+  input[type=password], input[type=text] { background: #0e0f1c; border: 2px solid #2c3060; border-radius: 10px; color: #fff; font: 700 17px Rubik, sans-serif; padding: 11px 14px; width: 100%; }
+  input:focus { outline: none; border-color: #ffcc33; }
+  .btn { background: #ffcc33; color: #1a1300; border: none; border-radius: 10px; padding: 11px 18px; font: 800 15px Rubik, sans-serif; cursor: pointer; }
+  .err { color: #ff8a8a; font-weight: 700; min-height: 18px; font-size: 14px; }
+  .muted { color: #8f95c2; font-size: 13px; }
+  label.chk { display: flex; gap: 8px; align-items: center; justify-content: center; color: #b8bce0; font-size: 14px; }
+  .top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .count { font-size: 46px; font-weight: 800; line-height: 1; }
+  .status { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; background: #f59e0b; }
+  .dot.on { background: #4ade80; box-shadow: 0 0 10px #4ade80; } .dot.off { background: #ef4444; }
+  h2 { font-size: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 10px 6px; border-top: 1px solid #22254a; }
+  .row:first-of-type { border-top: none; }
+  .av { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 17px; flex: none; color: #0e0f1c; }
+  .who { flex: 1; min-width: 0; }
+  .who b { font-size: 16px; } .who div { color: #8f95c2; font-size: 13px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .game { background: #1f2140; padding: 5px 10px; border-radius: 99px; font-weight: 700; font-size: 13px; white-space: nowrap; max-width: 46%; overflow: hidden; text-overflow: ellipsis; }
+  .idle { opacity: .55; }
+  .mini { background: #1f2140; border: none; color: #fff; border-radius: 8px; padding: 6px 9px; cursor: pointer; font-size: 14px; }
+  .empty { color: #8f95c2; text-align: center; padding: 18px; font-weight: 600; }
+  .send { display: flex; gap: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; color: #8f95c2; font-weight: 700; padding: 6px; font-size: 12px; }
+  td { padding: 8px 6px; border-top: 1px solid #22254a; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar"><a class="back" href="index.html">← Game Room</a><h1>🔒 ADMIN</h1><button class="ghost hidden" id="lockBtn">Lock</button></div>
+
+  <div class="card lock" id="lockBox">
+    <div class="big">🔐</div>
+    <h2 style="justify-content:center">Enter the secret code</h2>
+    <input type="password" id="code" placeholder="Secret code" autocomplete="off">
+    <label class="chk"><input type="checkbox" id="remember" checked> Remember on this device</label>
+    <button class="btn" id="unlock">Unlock</button>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div id="panel" class="hidden">
+    <div class="card top">
+      <div><div class="count" id="count">0</div><div class="muted">online now</div></div>
+      <div style="flex:1"></div>
+      <div class="status"><span class="dot" id="dot"></span><span id="statusText">Connecting...</span></div>
+    </div>
+
+    <div class="card">
+      <h2>🟢 Online now</h2>
+      <div id="online"><div class="empty">Nobody else is on right now.</div></div>
+    </div>
+
+    <div class="card">
+      <h2>📣 Send a message to everyone online</h2>
+      <div class="send"><input type="text" id="msg" maxlength="200" placeholder="e.g. Chess tournament in 5 minutes!"><button class="btn" id="sendAll">Send</button></div>
+      <div class="muted" style="margin-top:8px">It pops up at the top of their screen.</div>
+    </div>
+
+    <div class="card">
+      <h2>📒 Visitor history <button class="mini" id="clearLog">Clear</button></h2>
+      <div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Last seen</th><th>Visits</th><th>Time on site</th><th>Top game</th></tr></thead><tbody id="log"></tbody></table></div>
+      <div class="muted" style="margin-top:10px">History is only recorded while this panel is open, and it's saved on this device.</div>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+  'use strict';
+  const CHECK = '23a7cdf1ce0c7edff615996d9cc04c0ff2bb9acda73e626dc8139260af654fe5';
+  const $ = id => document.getElementById(id);
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  async function sha(t) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+
+  async function tryUnlock(code, remember) {
+    if (!code) return false;
+    if (await sha('chk:' + code) !== CHECK) return false;
+    if (remember) save('gr_admin_code', code);
+    const hub = 'gameroom-hub-' + (await sha('hub:' + code)).slice(0, 20);
+    $('lockBox').classList.add('hidden'); $('panel').classList.remove('hidden'); $('lockBtn').classList.remove('hidden');
+    startHub(hub);
+    return true;
+  }
+  $('unlock').onclick = async () => { $('err').textContent = ''; if (!(await tryUnlock($('code').value.trim(), $('remember').checked))) { $('err').textContent = 'Wrong code.'; $('code').select(); } };
+  $('code').addEventListener('keydown', e => { if (e.key === 'Enter') $('unlock').click(); });
+  $('lockBtn').onclick = () => { try { localStorage.removeItem('gr_admin_code'); } catch (e) {} location.reload(); };
+
+  // ---------- hub ----------
+  const users = {};
+  let log = {}; try { log = JSON.parse(load('gr_admin_log') || '{}'); } catch (e) { log = {}; }
+  let peer = null;
+  function setStatus(cls, text) { $('dot').className = 'dot ' + cls; $('statusText').textContent = text; }
+  function loadPeer(cb) { if (window.Peer) return cb(); const s = document.createElement('script'); s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'; s.onload = cb; s.onerror = () => setStatus('off', 'Could not load the connection library'); document.head.appendChild(s); }
+  function startHub(hub) {
+    setStatus('', 'Connecting...');
+    loadPeer(() => {
+      try { peer = new Peer(hub); } catch (e) { setStatus('off', 'Not supported in this browser'); return; }
+      peer.on('open', () => setStatus('on', 'Live: watching for visitors'));
+      peer.on('connection', c => {
+        c.on('data', d => onState(c, d));
+        c.on('close', () => { for (const k in users) if (users[k].conn === c) { users[k].gone = true; } render(); });
+        c.on('error', () => {});
+      });
+      peer.on('error', e => {
+        if (e && e.type === 'unavailable-id') setStatus('off', 'The admin panel is already open in another tab or device');
+        else if (e && e.type !== 'peer-unavailable') setStatus('off', 'Connection problem (' + (e.type || 'error') + '), retrying...');
+      });
+      peer.on('disconnected', () => { setStatus('', 'Reconnecting...'); setTimeout(() => { try { peer.reconnect(); } catch (e) {} }, 2000); });
+    });
+  }
+  function onState(c, d) {
+    if (d && d.t === 'bye' && users[d.id]) { users[d.id].gone = true; render(); return; }
+    if (!d || d.t !== 'state' || typeof d.id !== 'string') return;
+    const now = Date.now(), name = String(d.name || 'Guest').slice(0, 20), page = String(d.page || '?').slice(0, 40);
+    const u = users[d.id] || (users[d.id] = { first: now });
+    const wasGone = !u.last || u.gone || now - u.last > 60000;
+    if (u.conn && u.conn !== c) { try { u.conn.close(); } catch (e) {} }
+    Object.assign(u, { conn: c, name: name, page: page, dev: d.dev === 'phone' ? 'phone' : 'computer', since: +d.since || now, vis: d.vis, last: now, gone: false, plays: +d.plays || 0 });
+    const L = log[d.id] || (log[d.id] = { name: name, first: now, last: now, visits: 0, ms: 0, games: {} });
+    if (wasGone) L.visits++;
+    L.ms += Math.min(30000, Math.max(0, now - L.last));
+    L.last = now; L.name = name;
+    if (page !== 'Home page' && page !== 'Admin panel') L.games[page] = (L.games[page] || 0) + 1;
+    save('gr_admin_log', JSON.stringify(log));
+    render();
+  }
+  setInterval(() => { const now = Date.now(); for (const k in users) if (now - users[k].last > 50000) users[k].gone = true; for (const k in users) { const u = users[k]; if (!u.gone && u.conn && u.conn.open) { try { u.conn.send({ t: 'ping' }); } catch (e) {} } } render(); }, 10000);
+
+  const COLS = ['#ffcc33', '#4ade80', '#60a5fa', '#f472b6', '#a78bfa', '#fb923c', '#2dd4bf'];
+  const colFor = id => COLS[[...id].reduce((a, ch) => a + ch.charCodeAt(0), 0) % COLS.length];
+  function dur(ms) { const m = Math.floor(ms / 60000); if (m < 1) return 'just now'; if (m < 60) return m + ' min'; return Math.floor(m / 60) + 'h ' + (m % 60) + 'm'; }
+  function ago(t) { const s = (Date.now() - t) / 1000; if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' h ago'; return new Date(t).toLocaleDateString(); }
+  function render() {
+    const on = Object.entries(users).filter(([, u]) => !u.gone).sort((a, b) => a[1].since - b[1].since);
+    $('count').textContent = on.length;
+    const box = $('online'); box.innerHTML = '';
+    if (!on.length) box.innerHTML = '<div class="empty">Nobody else is on right now.</div>';
+    for (const [id, u] of on) {
+      const r = document.createElement('div'); r.className = 'row' + (u.vis === 'hidden' ? ' idle' : '');
+      const av = document.createElement('div'); av.className = 'av'; av.style.background = colFor(id); av.textContent = u.name.charAt(0).toUpperCase();
+      const who = document.createElement('div'); who.className = 'who';
+      const b = document.createElement('b'); b.textContent = u.name;
+      const sub = document.createElement('div'); sub.textContent = (u.dev === 'phone' ? '📱 Phone' : '💻 Computer') + ' · on for ' + dur(Date.now() - u.since) + (u.vis === 'hidden' ? ' · 💤 tab in background' : '');
+      who.append(b, sub);
+      const g = document.createElement('div'); g.className = 'game'; g.textContent = '🎮 ' + u.page;
+      const m = document.createElement('button'); m.className = 'mini'; m.textContent = '📣'; m.title = 'Message ' + u.name;
+      m.onclick = () => { const t = prompt('Message to ' + u.name + ':'); if (t && u.conn && u.conn.open) u.conn.send({ t: 'msg', text: t.slice(0, 200) }); };
+      r.append(av, who, g, m); box.appendChild(r);
+    }
+    const tb = $('log'); tb.innerHTML = '';
+    Object.entries(log).sort((a, b) => b[1].last - a[1].last).slice(0, 60).forEach(([id, L]) => {
+      const tr = document.createElement('tr');
+      const top = Object.entries(L.games).sort((a, b) => b[1] - a[1])[0];
+      const online = users[id] && !users[id].gone;
+      [(online ? '🟢 ' : '') + L.name, online ? 'online now' : ago(L.last), L.visits, dur(L.ms), top ? top[0] : '–'].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
+      tb.appendChild(tr);
+    });
+    if (!tb.children.length) { const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = 5; td.className = 'empty'; td.textContent = 'No visitors recorded yet.'; tr.appendChild(td); tb.appendChild(tr); }
+  }
+  $('sendAll').onclick = () => {
+    const t = $('msg').value.trim(); if (!t) return;
+    let n = 0; for (const k in users) { const u = users[k]; if (!u.gone && u.conn && u.conn.open) { try { u.conn.send({ t: 'msg', text: t.slice(0, 200) }); n++; } catch (e) {} } }
+    $('msg').value = ''; $('sendAll').textContent = n ? 'Sent to ' + n + '!' : 'Nobody online'; setTimeout(() => { $('sendAll').textContent = 'Send'; }, 1800);
+  };
+  $('clearLog').onclick = () => { if (confirm('Clear the visitor history on this device?')) { log = {}; save('gr_admin_log', '{}'); render(); } };
+
+  const saved = load('gr_admin_code');
+  if (saved) tryUnlock(saved, true);
+  else $('code').focus();
+})();
+</script>
+</body>
+</html>
