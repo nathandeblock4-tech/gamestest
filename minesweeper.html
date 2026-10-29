@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minesweeper · Game Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1020; color: #f2f3ff; font-family: 'Rubik', system-ui, sans-serif; min-height: 100vh; padding: 16px 12px 32px; }
+  .wrap { max-width: 640px; margin: 0 auto; text-align: center; }
+  .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  a.back, button { color: #f2f3ff; background: #24274a; padding: 8px 14px; border-radius: 10px; text-decoration: none; font: 700 14px Rubik, sans-serif; border: 2px solid transparent; cursor: pointer; }
+  button.on { border-color: #ffcc33; color: #ffcc33; }
+  h1 { font-family: 'Press Start 2P', monospace; font-size: 16px; color: #f472b6; }
+  .row { display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .hud { display: flex; justify-content: space-between; align-items: center; background: #1a1c35; border-radius: 12px; padding: 8px 14px; margin-bottom: 10px; font-weight: 800; font-size: 18px; }
+  #face { font-size: 26px; background: none; padding: 0 6px; }
+  #board { display: grid; gap: 3px; background: #1a1c35; padding: 8px; border-radius: 12px; user-select: none; touch-action: manipulation; margin: 0 auto; width: fit-content; max-width: 100%; }
+  .c { width: var(--s); height: var(--s); border-radius: 5px; background: #3a3e6a; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: calc(var(--s) * .55); cursor: pointer; }
+  .c:hover { background: #4a4f84; }
+  .c.open { background: #12142a; cursor: default; }
+  .c.boom { background: #b02020; }
+  .help { color: #9aa0c7; font-size: 14px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar"><a class="back" href="index.html">← Back</a><h1>MINESWEEPER</h1><button id="flagBtn">🚩 Flag: OFF</button></div>
+  <div class="row"><button data-l="easy" class="on">Easy</button><button data-l="medium">Medium</button><button data-l="hard">Hard</button></div>
+  <div class="hud"><span>💣 <span id="left">0</span></span><button id="face">🙂</button><span>⏱ <span id="time">0</span></span></div>
+  <div id="board"></div>
+  <p class="help">Click to reveal. Right-click (or turn on Flag mode on phones) to flag a mine. Numbers show how many mines touch that square.</p>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  const LV = { easy: [9, 9, 10], medium: [14, 14, 32], hard: [16, 20, 60] };
+  const NUMC = ['', '#60a5fa', '#4ade80', '#ff5a5a', '#a78bfa', '#ff9a3c', '#22d3ee', '#f2f3ff', '#9aa0c7'];
+  let lvl = 'easy', R, C, M, cells, first, over, flags, opened, t0, timer, flagMode = false;
+  let ac = null;
+  function snd(f, d, type, vol) { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'square'; o.frequency.setValueAtTime(f, t); g.gain.setValueAtTime(vol || 0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02); } catch (e) {} }
+  function start() {
+    [R, C, M] = LV[lvl]; first = true; over = false; flags = 0; opened = 0; clearInterval(timer); $('time').textContent = 0; $('face').textContent = '🙂';
+    cells = []; const b = $('board'); b.innerHTML = '';
+    const size = Math.min(36, Math.floor((Math.min(innerWidth, 640) - 50) / C) - 3);
+    b.style.gridTemplateColumns = 'repeat(' + C + ', var(--s))'; b.style.setProperty('--s', size + 'px');
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+      const el = document.createElement('div'); el.className = 'c'; b.appendChild(el);
+      const cell = { r, c, el, mine: false, n: 0, open: false, flag: false }; cells.push(cell);
+      el.addEventListener('click', () => (flagMode ? flag(cell) : reveal(cell)));
+      el.addEventListener('contextmenu', e => { e.preventDefault(); flag(cell); });
+    }
+    $('left').textContent = M;
+  }
+  const at = (r, c) => (r >= 0 && c >= 0 && r < R && c < C) ? cells[r * C + c] : null;
+  const around = cell => { const o = []; for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (dr || dc) { const n = at(cell.r + dr, cell.c + dc); if (n) o.push(n); } return o; };
+  function plant(safe) {
+    const banned = new Set([safe, ...around(safe)]); let placed = 0;
+    while (placed < M) { const c = cells[Math.floor(Math.random() * cells.length)]; if (!c.mine && !banned.has(c)) { c.mine = true; placed++; } }
+    cells.forEach(c => { c.n = around(c).filter(x => x.mine).length; });
+    t0 = Date.now(); timer = setInterval(() => { $('time').textContent = Math.floor((Date.now() - t0) / 1000); }, 250);
+  }
+  function reveal(cell) {
+    if (over || cell.open || cell.flag) return;
+    if (first) { plant(cell); first = false; }
+    if (cell.mine) { lose(cell); return; }
+    const stack = [cell]; let count = 0;
+    while (stack.length) {
+      const c = stack.pop(); if (c.open || c.flag) continue;
+      c.open = true; opened++; count++; c.el.classList.add('open');
+      if (c.n) { c.el.textContent = c.n; c.el.style.color = NUMC[c.n]; } else around(c).forEach(n => { if (!n.open) stack.push(n); });
+    }
+    snd(count > 1 ? 520 : 420, 0.05);
+    if (opened === R * C - M) win();
+  }
+  function flag(cell) { if (over || cell.open) return; cell.flag = !cell.flag; flags += cell.flag ? 1 : -1; cell.el.textContent = cell.flag ? '🚩' : ''; $('left').textContent = M - flags; snd(300, 0.04); }
+  function lose(cell) {
+    over = true; clearInterval(timer); $('face').textContent = '😵'; snd(120, 0.5, 'sawtooth', 0.12);
+    cells.forEach(c => { if (c.mine) { c.el.classList.add('open'); c.el.textContent = '💣'; } else if (c.flag) c.el.textContent = '❌'; });
+    cell.el.classList.add('boom');
+  }
+  function win() {
+    over = true; clearInterval(timer); $('face').textContent = '😎';
+    const t = Math.floor((Date.now() - t0) / 1000), k = 'mineBest_' + lvl, best = parseInt(load(k) || '0', 10);
+    if (!best || t < best) save(k, t);
+    cells.forEach(c => { if (c.mine) c.el.textContent = '🚩'; });
+    [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => snd(f, 0.2, 'triangle', 0.08), i * 120));
+    setTimeout(() => { $('face').title = 'Best ' + Math.min(t, best || t) + 's'; }, 10);
+  }
+  document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { lvl = b.dataset.l; document.querySelectorAll('[data-l]').forEach(x => x.classList.toggle('on', x === b)); start(); });
+  $('face').onclick = start;
+  $('flagBtn').onclick = () => { flagMode = !flagMode; $('flagBtn').textContent = '🚩 Flag: ' + (flagMode ? 'ON' : 'OFF'); $('flagBtn').classList.toggle('on', flagMode); };
+  start();
+})();
+</script>
+</body>
+</html>
