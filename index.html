@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1020;
+    --panel: #1a1c35;
+    --panel-2: #24274a;
+    --text: #f2f3ff;
+    --muted: #9aa0c7;
+    --accent: #ffcc33;
+    --green: #4ade80;
+    --pink: #f472b6;
+    --blue: #60a5fa;
+    --radius: 14px;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(circle at 20% 0%, #2a1f5c 0%, transparent 45%),
+                      radial-gradient(circle at 90% 100%, #123a4a 0%, transparent 40%);
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: 'Rubik', system-ui, sans-serif;
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+  }
+  header { text-align: center; margin-bottom: 28px; }
+  h1 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(22px, 5vw, 38px);
+    color: var(--accent);
+    text-shadow: 3px 3px 0 #b8440f;
+    cursor: pointer;
+    letter-spacing: 2px;
+  }
+  header p { color: var(--muted); margin-top: 12px; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+  .card {
+    background: var(--panel);
+    border: 2px solid var(--panel-2);
+    border-radius: var(--radius);
+    padding: 26px 22px;
+    cursor: pointer;
+    transition: transform .15s, border-color .15s;
+    text-align: left;
+    color: var(--text);
+    font: inherit;
+  }
+  .card:hover, .card:focus-visible { transform: translateY(-4px); border-color: var(--accent); outline: none; }
+  .card .icon { font-size: 42px; margin-bottom: 14px; }
+  .card h2 { font-size: 20px; margin-bottom: 6px; }
+  .card p { color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+  .game-box {
+    background: var(--panel);
+    border: 2px solid var(--panel-2);
+    border-radius: var(--radius);
+    padding: 22px 16px;
+    text-align: center;
+  }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 10px; flex-wrap: wrap; }
+  .topbar h2 { font-size: 22px; }
+  .stats { display: flex; gap: 18px; justify-content: center; margin-bottom: 14px; color: var(--muted); font-weight: 600; flex-wrap: wrap; }
+  .stats b { color: var(--accent); }
+  button.btn {
+    background: var(--accent);
+    color: #1a1300;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 18px;
+    font: 700 15px 'Rubik', system-ui, sans-serif;
+    cursor: pointer;
+  }
+  button.btn:hover { filter: brightness(1.08); }
+  button.btn.ghost { background: var(--panel-2); color: var(--text); }
+  .msg { min-height: 26px; margin: 12px 0; font-weight: 700; font-size: 18px; }
+  #snakeCanvas {
+    background: #0a0b17;
+    border-radius: 10px;
+    border: 2px solid var(--panel-2);
+    width: 100%;
+    max-width: 400px;
+    aspect-ratio: 1;
+    touch-action: none;
+  }
+  .dpad { display: grid; grid-template-columns: repeat(3, 56px); gap: 6px; justify-content: center; margin-top: 14px; }
+  .dpad button { height: 52px; border-radius: 10px; border: none; background: var(--panel-2); color: var(--text); font-size: 20px; cursor: pointer; }
+  .dpad .blank { visibility: hidden; }
+  .ttt { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 320px; margin: 0 auto; }
+  .ttt button {
+    aspect-ratio: 1;
+    background: #0a0b17;
+    border: 2px solid var(--panel-2);
+    border-radius: 12px;
+    font: 800 52px 'Rubik', system-ui, sans-serif;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .ttt button.x { color: var(--blue); }
+  .ttt button.o { color: var(--pink); }
+  .ttt button.win { background: #2d3a1c; border-color: var(--green); }
+  .mode { display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; }
+  .mode button.on { background: var(--accent); color: #1a1300; }
+  .mem { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; max-width: 400px; margin: 0 auto; }
+  .tile {
+    aspect-ratio: 1;
+    border-radius: 12px;
+    border: none;
+    background: var(--panel-2);
+    font-size: 36px;
+    cursor: pointer;
+    transition: transform .2s, background .2s;
+    color: transparent;
+  }
+  .tile:hover { transform: scale(1.04); }
+  .tile.flip { background: #0a0b17; color: inherit; }
+  .tile.done { background: #1d3324; color: inherit; cursor: default; }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 36px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 onclick="show('home')">GAME ROOM</h1>
+    <p>Pick a game and have fun.</p>
+  </header>
+
+  <section id="home" class="screen active">
+    <div class="grid">
+      <button class="card" onclick="show('snake')">
+        <div class="icon">🐍</div>
+        <h2>Snake</h2>
+        <p>Eat the food, grow longer, and don't crash into yourself or the walls.</p>
+      </button>
+      <button class="card" onclick="show('ttt')">
+        <div class="icon">❌⭕</div>
+        <h2>Tic-Tac-Toe</h2>
+        <p>Play against the computer or a friend. Three in a row wins.</p>
+      </button>
+      <button class="card" onclick="show('memory')">
+        <div class="icon">🃏</div>
+        <h2>Memory Match</h2>
+        <p>Flip cards and find all the matching pairs in as few moves as you can.</p>
+      </button>
+    </div>
+  </section>
+
+  <section id="snake" class="screen">
+    <div class="game-box">
+      <div class="topbar">
+        <button class="btn ghost" onclick="show('home')">← Back</button>
+        <h2>🐍 Snake</h2>
+        <button class="btn" onclick="Snake.start()">New Game</button>
+      </div>
+      <div class="stats"><span>Score: <b id="snakeScore">0</b></span><span>Best: <b id="snakeBest">0</b></span></div>
+      <canvas id="snakeCanvas" width="400" height="400"></canvas>
+      <div class="msg" id="snakeMsg">Press New Game, then use arrow keys or WASD</div>
+      <div class="dpad">
+        <span class="blank"></span><button onclick="Snake.turn(0,-1)">▲</button><span class="blank"></span>
+        <button onclick="Snake.turn(-1,0)">◀</button><span class="blank"></span><button onclick="Snake.turn(1,0)">▶</button>
+        <span class="blank"></span><button onclick="Snake.turn(0,1)">▼</button><span class="blank"></span>
+      </div>
+    </div>
+  </section>
+
+  <section id="ttt" class="screen">
+    <div class="game-box">
+      <div class="topbar">
+        <button class="btn ghost" onclick="show('home')">← Back</button>
+        <h2>❌⭕ Tic-Tac-Toe</h2>
+        <button class="btn" onclick="TTT.reset()">Restart</button>
+      </div>
+      <div class="mode">
+        <button class="btn ghost on" id="modeCpu" onclick="TTT.setMode('cpu')">vs Computer</button>
+        <button class="btn ghost" id="modePvp" onclick="TTT.setMode('pvp')">2 Players</button>
+      </div>
+      <div class="stats"><span>X wins: <b id="tttX">0</b></span><span>O wins: <b id="tttO">0</b></span><span>Draws: <b id="tttD">0</b></span></div>
+      <div class="ttt" id="tttBoard"></div>
+      <div class="msg" id="tttMsg"></div>
+    </div>
+  </section>
+
+  <section id="memory" class="screen">
+    <div class="game-box">
+      <div class="topbar">
+        <button class="btn ghost" onclick="show('home')">← Back</button>
+        <h2>🃏 Memory Match</h2>
+        <button class="btn" onclick="Memory.start()">Shuffle</button>
+      </div>
+      <div class="stats"><span>Moves: <b id="memMoves">0</b></span><span>Time: <b id="memTime">0s</b></span><span>Best: <b id="memBest">–</b></span></div>
+      <div class="mem" id="memBoard"></div>
+      <div class="msg" id="memMsg"></div>
+    </div>
+  </section>
+
+  <footer>Made with HTML, CSS & JavaScript</footer>
+</div>
+
+<script>
+function save(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
+function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (id !== 'snake') Snake.pause();
+  if (id === 'memory' && !Memory.started) Memory.start();
+  window.scrollTo(0, 0);
+}
+
+const Snake = (() => {
+  const cv = document.getElementById('snakeCanvas');
+  const ctx = cv.getContext('2d');
+  const N = 20, S = cv.width / N;
+  let body, dir, nextDir, food, score, timer = null, alive = false;
+  let best = parseInt(load('snakeBest') || '0', 10);
+  document.getElementById('snakeBest').textContent = best;
+
+  function placeFood() {
+    do { food = { x: Math.floor(Math.random() * N), y: Math.floor(Math.random() * N) }; }
+    while (body.some(p => p.x === food.x && p.y === food.y));
+  }
+  function draw() {
+    ctx.fillStyle = '#0a0b17'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = '#f472b6';
+    ctx.beginPath(); ctx.arc(food.x * S + S / 2, food.y * S + S / 2, S / 2.4, 0, Math.PI * 2); ctx.fill();
+    body.forEach((p, i) => {
+      ctx.fillStyle = i === 0 ? '#86efac' : '#4ade80';
+      ctx.fillRect(p.x * S + 1, p.y * S + 1, S - 2, S - 2);
+    });
+  }
+  function step() {
+    dir = nextDir;
+    const head = { x: body[0].x + dir.x, y: body[0].y + dir.y };
+    if (head.x < 0 || head.y < 0 || head.x >= N || head.y >= N || body.some(p => p.x === head.x && p.y === head.y)) {
+      return over();
+    }
+    body.unshift(head);
+    if (head.x === food.x && head.y === food.y) {
+      score++;
+      document.getElementById('snakeScore').textContent = score;
+      placeFood();
+      if (score % 5 === 0) { clearInterval(timer); timer = setInterval(step, Math.max(60, 130 - score * 3)); }
+    } else body.pop();
+    draw();
+  }
+  function over() {
+    alive = false; clearInterval(timer); timer = null;
+    if (score > best) { best = score; save('snakeBest', best); document.getElementById('snakeBest').textContent = best; }
+    document.getElementById('snakeMsg').textContent = 'Game over! Score: ' + score;
+  }
+  function start() {
+    body = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+    dir = nextDir = { x: 1, y: 0 };
+    score = 0; alive = true;
+    document.getElementById('snakeScore').textContent = 0;
+    document.getElementById('snakeMsg').textContent = 'Go!';
+    placeFood(); draw();
+    clearInterval(timer); timer = setInterval(step, 130);
+  }
+  function turn(x, y) {
+    if (!alive) return;
+    if (x === -dir.x && y === -dir.y) return;
+    nextDir = { x, y };
+  }
+  function pause() { if (timer) { clearInterval(timer); timer = null; if (alive) document.getElementById('snakeMsg').textContent = 'Paused. Press New Game to restart.'; alive = false; } }
+
+  document.addEventListener('keydown', e => {
+    if (!document.getElementById('snake').classList.contains('active')) return;
+    const k = e.key.toLowerCase();
+    const map = { arrowup: [0, -1], w: [0, -1], arrowdown: [0, 1], s: [0, 1], arrowleft: [-1, 0], a: [-1, 0], arrowright: [1, 0], d: [1, 0] };
+    if (map[k]) { e.preventDefault(); turn(...map[k]); }
+    if (k === ' ' && !alive) { e.preventDefault(); start(); }
+  });
+
+  let tx = 0, ty = 0;
+  cv.addEventListener('touchstart', e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, { passive: true });
+  cv.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
+    Math.abs(dx) > Math.abs(dy) ? turn(Math.sign(dx), 0) : turn(0, Math.sign(dy));
+  });
+
+  body = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }]; food = { x: 15, y: 10 }; draw();
+  return { start, turn, pause };
+})();
+
+const TTT = (() => {
+  const boardEl = document.getElementById('tttBoard');
+  const msg = document.getElementById('tttMsg');
+  const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  let board, turn, done, mode = 'cpu';
+  const tally = { X: 0, O: 0, D: 0 };
+  const cells = [];
+  for (let i = 0; i < 9; i++) {
+    const b = document.createElement('button');
+    b.onclick = () => play(i);
+    boardEl.appendChild(b); cells.push(b);
+  }
+  function winner(bd) {
+    for (const l of lines) if (bd[l[0]] && bd[l[0]] === bd[l[1]] && bd[l[1]] === bd[l[2]]) return { p: bd[l[0]], line: l };
+    return bd.every(Boolean) ? { p: 'D' } : null;
+  }
+  function render() {
+    cells.forEach((c, i) => { c.textContent = board[i] || ''; c.className = board[i] ? board[i].toLowerCase() : ''; });
+  }
+  function finish(w) {
+    done = true;
+    if (w.p === 'D') { tally.D++; msg.textContent = "It's a draw!"; }
+    else {
+      tally[w.p]++; w.line.forEach(i => cells[i].classList.add('win'));
+      msg.textContent = mode === 'cpu' ? (w.p === 'X' ? 'You win! 🎉' : 'Computer wins!') : w.p + ' wins! 🎉';
+    }
+    document.getElementById('tttX').textContent = tally.X;
+    document.getElementById('tttO').textContent = tally.O;
+    document.getElementById('tttD').textContent = tally.D;
+  }
+  function minimax(bd, player) {
+    const w = winner(bd);
+    if (w) return { score: w.p === 'O' ? 10 : w.p === 'X' ? -10 : 0 };
+    const moves = [];
+    bd.forEach((v, i) => {
+      if (v) return;
+      bd[i] = player;
+      moves.push({ i, score: minimax(bd, player === 'O' ? 'X' : 'O').score });
+      bd[i] = null;
+    });
+    return moves.reduce((best, m) => (player === 'O' ? m.score > best.score : m.score < best.score) ? m : best);
+  }
+  function cpuMove() {
+    const empty = board.map((v, i) => v ? null : i).filter(v => v !== null);
+    const pick = Math.random() < 0.2 ? empty[Math.floor(Math.random() * empty.length)] : minimax(board.slice(), 'O').i;
+    board[pick] = 'O'; render();
+    const w = winner(board); if (w) return finish(w);
+    turn = 'X'; msg.textContent = 'Your turn (X)';
+  }
+  function play(i) {
+    if (done || board[i] || (mode === 'cpu' && turn === 'O')) return;
+    board[i] = turn; render();
+    const w = winner(board); if (w) return finish(w);
+    turn = turn === 'X' ? 'O' : 'X';
+    if (mode === 'cpu') { msg.textContent = 'Computer is thinking...'; setTimeout(cpuMove, 350); }
+    else msg.textContent = turn + "'s turn";
+  }
+  function reset() {
+    board = Array(9).fill(null); turn = 'X'; done = false; render();
+    msg.textContent = mode === 'cpu' ? 'Your turn (X)' : "X's turn";
+  }
+  function setMode(m) {
+    mode = m; tally.X = tally.O = tally.D = 0;
+    ['tttX','tttO','tttD'].forEach(id => document.getElementById(id).textContent = 0);
+    document.getElementById('modeCpu').classList.toggle('on', m === 'cpu');
+    document.getElementById('modePvp').classList.toggle('on', m === 'pvp');
+    reset();
+  }
+  reset();
+  return { reset, setMode };
+})();
+
+const Memory = (() => {
+  const boardEl = document.getElementById('memBoard');
+  const msg = document.getElementById('memMsg');
+  const emojis = ['🍕','🚀','🐶','🎸','🌈','⚽','🍩','👾'];
+  let first = null, lock = false, moves = 0, matched = 0, secs = 0, clock = null;
+  let best = load('memBest');
+  if (best) document.getElementById('memBest').textContent = best + ' moves';
+
+  function start() {
+    Memory.started = true;
+    clearInterval(clock); clock = null;
+    first = null; lock = false; moves = 0; matched = 0; secs = 0;
+    document.getElementById('memMoves').textContent = 0;
+    document.getElementById('memTime').textContent = '0s';
+    msg.textContent = '';
+    const deck = [...emojis, ...emojis].sort(() => Math.random() - 0.5);
+    boardEl.innerHTML = '';
+    deck.forEach(e => {
+      const t = document.createElement('button');
+      t.className = 'tile'; t.textContent = e; t.dataset.v = e;
+      t.onclick = () => flip(t);
+      boardEl.appendChild(t);
+    });
+  }
+  function flip(t) {
+    if (lock || t === first || t.classList.contains('done')) return;
+    if (!clock) clock = setInterval(() => { secs++; document.getElementById('memTime').textContent = secs + 's'; }, 1000);
+    t.classList.add('flip');
+    if (!first) { first = t; return; }
+    moves++; document.getElementById('memMoves').textContent = moves;
+    if (first.dataset.v === t.dataset.v) {
+      first.classList.add('done'); t.classList.add('done'); first = null; matched++;
+      if (matched === emojis.length) win();
+    } else {
+      lock = true;
+      const a = first; first = null;
+      setTimeout(() => { a.classList.remove('flip'); t.classList.remove('flip'); lock = false; }, 800);
+    }
+  }
+  function win() {
+    clearInterval(clock); clock = null;
+    msg.textContent = 'You found them all in ' + moves + ' moves and ' + secs + 's! 🎉';
+    if (!best || moves < parseInt(best, 10)) { best = moves; save('memBest', moves); document.getElementById('memBest').textContent = moves + ' moves'; }
+  }
+  return { start, started: false };
+})();
+</script>
+</body>
+</html>
