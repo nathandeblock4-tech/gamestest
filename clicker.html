@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demetrius Clicker · Game Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1020; color: #f2f3ff; font-family: 'Rubik', system-ui, sans-serif; min-height: 100vh; padding: 16px 12px 32px; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  a.back { color: #f2f3ff; background: #24274a; padding: 8px 14px; border-radius: 10px; text-decoration: none; font-weight: 700; }
+  h1 { font-family: 'Press Start 2P', monospace; font-size: 14px; color: #ffcc33; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: #1a1c35; border: 2px solid #24274a; border-radius: 16px; padding: 18px; text-align: center; position: relative; overflow: hidden; }
+  .count { font-family: 'Press Start 2P', monospace; font-size: clamp(16px, 4vw, 26px); color: #ffcc33; margin-bottom: 6px; word-break: break-all; }
+  .rate { color: #9aa0c7; font-weight: 700; margin-bottom: 14px; }
+  #face { width: min(260px, 70vw); aspect-ratio: 1; border-radius: 50%; border: 6px solid #ff4fa3; background: #7a3a14 center/cover; cursor: pointer; user-select: none; transition: transform .06s; box-shadow: 0 0 40px rgba(255,79,163,.35); margin: 0 auto; display: block; font-size: 90px; line-height: 1; }
+  #face:active { transform: scale(.93); }
+  .float { position: absolute; font: 800 22px Rubik; color: #ffcc33; pointer-events: none; animation: up 0.9s forwards; text-shadow: 2px 2px 0 #2b0a3d; }
+  @keyframes up { to { transform: translateY(-80px); opacity: 0; } }
+  .shop h2 { font-size: 18px; margin-bottom: 10px; text-align: left; }
+  .item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #24274a; border-radius: 12px; margin-bottom: 8px; cursor: pointer; text-align: left; border: 2px solid transparent; width: 100%; color: #f2f3ff; font: inherit; }
+  .item:hover:not(:disabled) { border-color: #ffcc33; }
+  .item:disabled { opacity: .45; cursor: default; }
+  .item .ic { font-size: 28px; }
+  .item .nm { flex: 1; min-width: 0; }
+  .item .nm b { display: block; }
+  .item .nm small { color: #9aa0c7; }
+  .item .cost { font-weight: 800; color: #ffcc33; white-space: nowrap; }
+  .item .own { font-weight: 800; font-size: 20px; color: #9aa0c7; min-width: 30px; text-align: right; }
+  .golden { position: fixed; width: 70px; height: 70px; border-radius: 50%; background: #ffd34a center/cover; border: 4px solid #fff; box-shadow: 0 0 30px #ffd34a; cursor: pointer; z-index: 10; animation: wob 1s infinite; }
+  @keyframes wob { 50% { transform: scale(1.12) rotate(10deg); } }
+  .msg { min-height: 22px; color: #9be29b; font-weight: 700; margin-top: 10px; }
+  .reset { background: none; border: none; color: #666; font: 600 12px Rubik; cursor: pointer; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar"><a class="back" href="index.html">← Back</a><h1>DEMETRIUS CLICKER</h1><span></span></div>
+  <div class="grid">
+    <div class="panel">
+      <div class="count" id="count">0 shocks</div>
+      <div class="rate" id="rate">0 per second</div>
+      <button id="face" aria-label="Click Demetrius"></button>
+      <div class="msg" id="msg">Click Demetrius to shock him!</div>
+      <button class="reset" id="reset">reset progress</button>
+    </div>
+    <div class="panel shop"><h2>Shop</h2><div id="shop"></div></div>
+  </div>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  save('gr_plays_clicker', String(parseInt(load('gr_plays_clicker') || '0', 10) + 1));
+  const face = $('face');
+  const img = new Image(); img.onload = () => { face.style.backgroundImage = 'url(' + img.src + ')'; }; img.onerror = () => { face.textContent = '🐒'; }; img.src = 'demetrius.jpg';
+  const ITEMS = [
+    { id: 'click', ic: '👆', name: 'Louder Clap', desc: '+1 per click', base: 15, click: 1 },
+    { id: 'banana', ic: '🍌', name: 'Surprise Banana', desc: '+0.5 per second', base: 25, rate: 0.5 },
+    { id: 'mirror', ic: '🪞', name: 'Mirror', desc: 'He sees himself. +3/s', base: 120, rate: 3 },
+    { id: 'clone', ic: '🐒', name: 'Second Demetrius', desc: '+10/s', base: 600, rate: 10 },
+    { id: 'jump', ic: '👻', name: 'Jumpscare Booth', desc: '+40/s', base: 3000, rate: 40 },
+    { id: 'zoo', ic: '🏛️', name: 'Shock Zoo', desc: '+150/s', base: 15000, rate: 150 },
+    { id: 'tv', ic: '📺', name: 'Shocking News Channel', desc: '+600/s', base: 80000, rate: 600 },
+    { id: 'planet', ic: '🪐', name: 'Planet Demetrius', desc: '+3000/s', base: 500000, rate: 3000 },
+    { id: 'mega', ic: '💥', name: 'MEGA CLAP', desc: 'Clicks x2', base: 10000, mult: 2, max: 3 }
+  ];
+  let S = { n: 0, total: 0, own: {} };
+  try { const s = JSON.parse(load('clickerSave') || 'null'); if (s) S = s; } catch (e) {}
+  const own = id => S.own[id] || 0;
+  const cost = it => Math.ceil(it.base * Math.pow(1.15, own(it.id)));
+  const perClick = () => (1 + ITEMS.filter(i => i.click).reduce((a, i) => a + i.click * own(i.id), 0)) * Math.pow(2, own('mega'));
+  const perSec = () => ITEMS.filter(i => i.rate).reduce((a, i) => a + i.rate * own(i.id), 0);
+  function fmt(n) {
+    if (n < 1000) return (Math.round(n * 10) / 10).toString();
+    const u = ['K', 'M', 'B', 'T', 'Qa', 'Qi']; let i = -1; while (n >= 1000 && i < u.length - 1) { n /= 1000; i++; }
+    return n.toFixed(n < 10 ? 2 : n < 100 ? 1 : 0) + u[i];
+  }
+  const shop = $('shop'); const btns = {};
+  ITEMS.forEach(it => {
+    const b = document.createElement('button'); b.className = 'item';
+    b.innerHTML = '<span class="ic">' + it.ic + '</span><span class="nm"><b>' + it.name + '</b><small>' + it.desc + '</small></span><span class="cost"></span><span class="own"></span>';
+    b.onclick = () => { const c = cost(it); if (S.n >= c && !(it.max && own(it.id) >= it.max)) { S.n -= c; S.own[it.id] = own(it.id) + 1; ding(); $('msg').textContent = 'Bought ' + it.name + '!'; ui(); } };
+    shop.appendChild(b); btns[it.id] = b;
+  });
+  let ac = null;
+  function snd(f, d, type, vol) { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 1.6, t + d); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02); } catch (e) {} }
+  const ding = () => snd(660, 0.15, 'triangle', 0.1);
+  function float(x, y, txt) { const p = document.createElement('div'); p.className = 'float'; p.textContent = txt; const r = face.parentElement.getBoundingClientRect(); p.style.left = (x - r.left - 10) + 'px'; p.style.top = (y - r.top - 20) + 'px'; face.parentElement.appendChild(p); setTimeout(() => p.remove(), 900); }
+  face.addEventListener('click', e => {
+    const g = perClick(); S.n += g; S.total += g;
+    float(e.clientX || face.getBoundingClientRect().left + 120, e.clientY || face.getBoundingClientRect().top + 120, '+' + fmt(g));
+    snd(300 + Math.random() * 200, 0.06, 'square', 0.04); ui();
+  });
+  const milestones = [[100, 'He is mildly shocked.'], [1000, 'He is VERY shocked.'], [10000, 'Scientists are concerned.'], [100000, 'The zoo is famous now.'], [1e6, 'Demetrius has become a legend.'], [1e8, 'The universe is shocked.']];
+  function ui() {
+    $('count').textContent = fmt(S.n) + ' shocks';
+    $('rate').textContent = fmt(perSec()) + ' per second · ' + fmt(perClick()) + ' per click';
+    ITEMS.forEach(it => { const b = btns[it.id]; const maxed = it.max && own(it.id) >= it.max; b.disabled = maxed || S.n < cost(it); b.querySelector('.cost').textContent = maxed ? 'MAX' : fmt(cost(it)); b.querySelector('.own').textContent = own(it.id) || ''; });
+    const m = milestones.filter(([n]) => S.total >= n).pop(); if (m && !S['m' + m[0]]) { S['m' + m[0]] = 1; $('msg').textContent = '🏆 ' + m[1]; }
+  }
+  let last = performance.now();
+  setInterval(() => { const now = performance.now(); const g = perSec() * (now - last) / 1000; last = now; S.n += g; S.total += g; ui(); }, 100);
+  setInterval(() => save('clickerSave', JSON.stringify(S)), 3000);
+  window.addEventListener('beforeunload', () => save('clickerSave', JSON.stringify(S)));
+  // golden Demetrius: click for a big bonus
+  function golden() {
+    const g = document.createElement('div'); g.className = 'golden';
+    if (img.complete && img.naturalWidth) g.style.backgroundImage = 'url(' + img.src + ')';
+    g.style.left = (20 + Math.random() * (innerWidth - 110)) + 'px'; g.style.top = (80 + Math.random() * (innerHeight - 180)) + 'px';
+    g.onclick = () => { const bonus = Math.max(50, perSec() * 30 + perClick() * 20); S.n += bonus; S.total += bonus; $('msg').textContent = '✨ GOLDEN DEMETRIUS! +' + fmt(bonus); snd(880, 0.3, 'triangle', 0.12); g.remove(); ui(); };
+    document.body.appendChild(g); setTimeout(() => g.remove(), 7000);
+    setTimeout(golden, 40000 + Math.random() * 50000);
+  }
+  setTimeout(golden, 25000);
+  $('reset').onclick = () => { if ($('reset').dataset.c) { S = { n: 0, total: 0, own: {} }; save('clickerSave', JSON.stringify(S)); $('reset').textContent = 'reset progress'; delete $('reset').dataset.c; ui(); } else { $('reset').dataset.c = 1; $('reset').textContent = 'click again to really reset'; } };
+  ui();
+})();
+</script>
+</body>
+</html>
