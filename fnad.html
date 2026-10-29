@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Five Nights at Demetrius</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #000; color: #9a9a9a; font-family: 'VT323', monospace; min-height: 100vh; padding: 12px; }
+  .wrap { max-width: 1280px; margin: 0 auto; }
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 18px; flex-wrap: wrap; }
+  .bar a { color: #ddd; background: #1b1b1b; border: 1px solid #333; padding: 6px 14px; border-radius: 8px; text-decoration: none; font-size: 20px; }
+  .bar a:focus-visible { outline: 2px solid #c33; }
+  canvas { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; border: 1px solid #1a1a1a; touch-action: none; cursor: pointer; }
+  .keys { margin-top: 10px; font-size: 18px; text-align: center; color: #666; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <a href="index.html">← Back</a>
+    <span>Turn your sound up. Turn the lights off. Phones: play sideways.</span>
+  </div>
+  <canvas id="c" width="1280" height="720"></canvas>
+  <p class="keys">Q / E: left / right door &nbsp;·&nbsp; A / D: left / right light &nbsp;·&nbsp; Space: cameras &nbsp;·&nbsp; 1–8: switch camera</p>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('c');
+  const ctx = cv.getContext('2d');
+  const W = 1280, H = 720;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+  // ================= THE FACE (photo if uploaded, drawn fallback otherwise) =================
+  const photo = new Image();
+  let photoOK = false;
+  const photoTries = ['demetrius.jpg', 'demetrius.png', 'demetrius.jpeg', 'Demetrius.jpg', 'Demetrius.png'];
+  let photoTry = 0;
+  photo.onload = () => { photoOK = true; };
+  photo.onerror = () => { photoTry++; if (photoTry < photoTries.length) photo.src = photoTries[photoTry]; };
+  photo.src = photoTries[0];
+
+  function drawFaceArt(g, cx, cy, r) {
+    g.save();
+    g.fillStyle = '#6e3410';
+    for (let i = 0; i < 70; i++) {
+      const a = i / 70 * Math.PI * 2;
+      g.beginPath();
+      g.ellipse(cx + Math.cos(a) * r * 0.82, cy + Math.sin(a) * r * 0.88 - r * 0.1, r * 0.34, r * 0.16, a, 0, Math.PI * 2);
+      g.fill();
+    }
+    const fur = g.createRadialGradient(cx, cy - r * 0.2, r * 0.2, cx, cy, r * 1.2);
+    fur.addColorStop(0, '#b5652a'); fur.addColorStop(1, '#4a220a');
+    g.fillStyle = fur; g.beginPath(); g.ellipse(cx, cy - r * 0.1, r, r * 1.1, 0, 0, Math.PI * 2); g.fill();
+    const sk = g.createRadialGradient(cx, cy, r * 0.1, cx, cy + r * 0.1, r * 0.9);
+    sk.addColorStop(0, '#cdb8aa'); sk.addColorStop(0.7, '#8f7a70'); sk.addColorStop(1, '#4f3e38');
+    g.fillStyle = sk; g.beginPath(); g.ellipse(cx, cy + r * 0.1, r * 0.78, r * 0.86, 0, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(55,35,30,.55)'; g.lineWidth = r * 0.015;
+    for (let i = 0; i < 4; i++) { g.beginPath(); g.arc(cx, cy - r * 0.22 - i * r * 0.07, r * 0.38, Math.PI * 1.2, Math.PI * 1.8); g.stroke(); }
+    [-1, 1].forEach(s => {
+      const ex = cx + s * r * 0.3, ey = cy - r * 0.02;
+      g.fillStyle = '#3c2a24'; g.beginPath(); g.ellipse(ex, ey, r * 0.25, r * 0.28, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#efe6d6'; g.beginPath(); g.ellipse(ex, ey, r * 0.2, r * 0.22, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#2a1a10'; g.beginPath(); g.arc(ex, ey + r * 0.02, r * 0.1, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#000'; g.beginPath(); g.arc(ex, ey + r * 0.02, r * 0.055, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(ex + r * 0.035, ey - r * 0.03, r * 0.022, 0, Math.PI * 2); g.fill();
+    });
+    g.fillStyle = '#2e1e19';
+    [-1, 1].forEach(s => { g.beginPath(); g.ellipse(cx + s * r * 0.075, cy + r * 0.3, r * 0.05, r * 0.03, s * 0.4, 0, Math.PI * 2); g.fill(); });
+    g.fillStyle = '#5a3c34'; g.beginPath(); g.ellipse(cx, cy + r * 0.6, r * 0.36, r * 0.3, 0, 0, Math.PI * 2); g.fill();
+    const mg = g.createRadialGradient(cx, cy + r * 0.62, r * 0.03, cx, cy + r * 0.6, r * 0.3);
+    mg.addColorStop(0, '#0d0202'); mg.addColorStop(1, '#4a1212');
+    g.fillStyle = mg; g.beginPath(); g.ellipse(cx, cy + r * 0.6, r * 0.29, r * 0.24, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#d6c6a4'; g.beginPath(); g.ellipse(cx, cy + r * 0.4, r * 0.18, r * 0.045, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#b05656'; g.beginPath(); g.ellipse(cx, cy + r * 0.74, r * 0.15, r * 0.07, 0, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+  // pre-render the drawn face once
+  const faceArt = document.createElement('canvas'); faceArt.width = faceArt.height = 512;
+  drawFaceArt(faceArt.getContext('2d'), 256, 250, 200);
+  const ART_EYES = [[0.383, 0.484], [0.617, 0.484]];
+  const PHOTO_EYES = [[0.36, 0.40], [0.64, 0.40]];
+
+  // draws the head centered at cx,cy with width w; returns the eye positions
+  function drawHead(g, cx, cy, w, filter) {
+    const h = w * 1.18;
+    g.save();
+    if (filter) g.filter = filter;
+    let eyes;
+    if (photoOK) {
+      g.beginPath(); g.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2); g.clip();
+      const ar = photo.width / photo.height;
+      let dw = w * 1.1, dh = dw / ar;
+      if (dh < h * 1.1) { dh = h * 1.1; dw = dh * ar; }
+      const x0 = cx - dw / 2, y0 = cy - dh / 2;
+      g.drawImage(photo, x0, y0, dw, dh);
+      eyes = PHOTO_EYES.map(([ex, ey]) => [x0 + ex * dw, y0 + ey * dh]);
+    } else {
+      const s = w * 1.3;
+      g.drawImage(faceArt, cx - s / 2, cy - s * 0.49, s, s);
+      eyes = ART_EYES.map(([ex, ey]) => [cx - s / 2 + ex * s, cy - s * 0.49 + ey * s]);
+    }
+    g.restore();
+    return eyes;
+  }
+  const hair = Array.from({ length: 90 }, () => [Math.random() * 2 - 1, Math.random(), Math.random() * 0.4 + 0.2]);
+  // a whole Demetrius: shaggy dark body with the face on top
+  function drawDem(g, hx, hy, hs, o) {
+    o = o || {};
+    g.save();
+    g.fillStyle = o.body || '#2b1306';
+    g.beginPath(); g.ellipse(hx, hy + hs * 1.05, hs * 1.25, hs * 0.65, 0, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.ellipse(hx, hy + hs * 1.9, hs * 0.95, hs * 1.1, 0, 0, Math.PI * 2); g.fill();
+    g.lineCap = 'round'; g.strokeStyle = o.body || '#2b1306'; g.lineWidth = hs * 0.38;
+    [-1, 1].forEach(s => { g.beginPath(); g.moveTo(hx + s * hs * 1.0, hy + hs * 1.0); g.quadraticCurveTo(hx + s * hs * 1.55, hy + hs * 2.0, hx + s * hs * 1.3, hy + hs * 3.0); g.stroke(); });
+    g.strokeStyle = o.hair || '#4a210b'; g.lineWidth = Math.max(1, hs * 0.03);
+    hair.forEach(([x, y, l]) => { const px = hx + x * hs * 1.2, py = hy + hs * (0.8 + y * 2.2); g.beginPath(); g.moveTo(px, py); g.lineTo(px + x * hs * 0.15, py + l * hs * 0.5); g.stroke(); });
+    g.restore();
+    const eyes = drawHead(g, hx, hy, hs, o.filter);
+    if (o.glow) glowEyes(g, eyes, hs * 0.09, o.glow);
+    return eyes;
+  }
+  function glowEyes(g, eyes, r, a) {
+    g.save(); g.globalCompositeOperation = 'lighter';
+    eyes.forEach(([x, y]) => {
+      const gr = g.createRadialGradient(x, y, 0, x, y, r * 4);
+      gr.addColorStop(0, 'rgba(255,255,230,' + a + ')'); gr.addColorStop(0.25, 'rgba(255,230,160,' + a * 0.6 + ')'); gr.addColorStop(1, 'rgba(255,200,120,0)');
+      g.fillStyle = gr; g.beginPath(); g.arc(x, y, r * 4, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,255,255,' + a + ')'; g.beginPath(); g.arc(x, y, r * 0.6, 0, Math.PI * 2); g.fill();
+    });
+    g.restore();
+  }
+
+  // ================= AUDIO (all synthesized) =================
+  let ac = null, master = null, noiseBuf = null;
+  function A() {
+    if (!ac) {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+      ac = new AC();
+      const comp = ac.createDynamicsCompressor();
+      master = ac.createGain(); master.gain.value = 0.9;
+      master.connect(comp); comp.connect(ac.destination);
+    }
+    if (ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function noiseSrc() {
+    if (!noiseBuf) { const len = ac.sampleRate * 2; noiseBuf = ac.createBuffer(1, len, ac.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1; }
+    const s = ac.createBufferSource(); s.buffer = noiseBuf; s.loop = true; return s;
+  }
+  function out(node, pan) {
+    if (pan !== undefined && ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = pan; node.connect(p); p.connect(master); }
+    else node.connect(master);
+  }
+  function env(g, t, a, peak, d) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); }
+  function thump(pan, vol) {
+    if (!A()) return; const t = ac.currentTime;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(35, t + 0.25);
+    env(g, t, 0.01, vol, 0.3); o.connect(g); out(g, pan); o.start(t); o.stop(t + 0.4);
+    const n = noiseSrc(), f = ac.createBiquadFilter(), ng = ac.createGain();
+    f.type = 'lowpass'; f.frequency.value = 320; env(ng, t, 0.005, vol * 0.6, 0.15);
+    n.connect(f); f.connect(ng); out(ng, pan); n.start(t); n.stop(t + 0.3);
+  }
+  function footsteps(pan, vol) { for (let i = 0; i < 3; i++) setTimeout(() => thump(pan, vol), i * 420); }
+  function slam(pan) {
+    if (!A()) return; const t = ac.currentTime;
+    const n = noiseSrc(), f = ac.createBiquadFilter(), g = ac.createGain();
+    f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.7; env(g, t, 0.005, 0.6, 0.35);
+    n.connect(f); f.connect(g); out(g, pan); n.start(t); n.stop(t + 0.5); thump(pan, 0.8);
+  }
+  function knock(pan) { for (let i = 0; i < 3; i++) setTimeout(() => { thump(pan, 1); slam(pan); }, i * 260); }
+  function blip() {
+    if (!A()) return; const t = ac.currentTime; const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'square'; o.frequency.value = 1400; env(g, t, 0.005, 0.06, 0.06); o.connect(g); out(g); o.start(t); o.stop(t + 0.1);
+  }
+  function staticBurst(dur, vol) {
+    if (!A()) return; const t = ac.currentTime; const n = noiseSrc(), f = ac.createBiquadFilter(), g = ac.createGain();
+    f.type = 'highpass'; f.frequency.value = 1500; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    n.connect(f); f.connect(g); out(g); n.start(t); n.stop(t + dur + 0.05);
+  }
+  function sting() {
+    if (!A()) return; const t = ac.currentTime;
+    [233, 247, 349, 370].forEach(fq => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sawtooth'; o.frequency.value = fq; env(g, t, 0.01, 0.1, 1.2); o.connect(g); out(g); o.start(t); o.stop(t + 1.3); });
+    staticBurst(0.6, 0.3);
+  }
+  function scream() {
+    if (!A()) return; const t = ac.currentTime;
+    const shaper = ac.createWaveShaper(); const curve = new Float32Array(1024);
+    for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 6); }
+    shaper.curve = curve;
+    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1, t + 0.02); g.gain.setValueAtTime(1, t + 1.15); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.7);
+    shaper.connect(g); out(g);
+    [310, 333, 470, 620, 905].forEach((fq, i) => {
+      const o = ac.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(fq * 0.6, t); o.frequency.exponentialRampToValueAtTime(fq * 1.5, t + 0.2); o.frequency.exponentialRampToValueAtTime(fq * 0.9, t + 1.6);
+      const l = ac.createOscillator(), lg = ac.createGain(); l.frequency.value = 9 + i * 3; lg.gain.value = fq * 0.09; l.connect(lg); lg.connect(o.frequency);
+      const og = ac.createGain(); og.gain.value = 0.22; o.connect(og); og.connect(shaper);
+      o.start(t); l.start(t); o.stop(t + 1.8); l.stop(t + 1.8);
+    });
+    const n = noiseSrc(), ng = ac.createGain(); ng.gain.value = 0.5; n.connect(ng); ng.connect(shaper); n.start(t); n.stop(t + 1.8);
+  }
+  function chime() {
+    if (!A()) return; const t = ac.currentTime;
+    [523, 659, 784, 1047, 784, 1047].forEach((fq, i) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.value = fq; env(g, t + i * 0.35, 0.01, 0.25, 1.4); o.connect(g); out(g); o.start(t + i * 0.35); o.stop(t + i * 0.35 + 1.6); });
+  }
+  function powerDown() {
+    if (!A()) return; const t = ac.currentTime; const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(220, t); o.frequency.exponentialRampToValueAtTime(30, t + 1.5);
+    g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6); o.connect(g); out(g); o.start(t); o.stop(t + 1.7);
+  }
+  function ring() {
+    if (!A()) return; const t = ac.currentTime;
+    for (let k = 0; k < 2; k++) [440, 480].forEach(fq => { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = fq; g.gain.setValueAtTime(0.0001, t + k * 1.2); g.gain.exponentialRampToValueAtTime(0.08, t + k * 1.2 + 0.02); g.gain.setValueAtTime(0.08, t + k * 1.2 + 0.7); g.gain.exponentialRampToValueAtTime(0.0001, t + k * 1.2 + 0.75); o.connect(g); out(g); o.start(t + k * 1.2); o.stop(t + k * 1.2 + 0.8); });
+  }
+  let amb = null;
+  function startAmb() {
+    if (!A() || amb) return; const t = ac.currentTime;
+    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1, t + 2); out(g);
+    const o1 = ac.createOscillator(), o2 = ac.createOscillator(); o1.frequency.value = 55; o2.frequency.value = 58.3;
+    const og = ac.createGain(); og.gain.value = 0.07; o1.connect(og); o2.connect(og); og.connect(g);
+    const n = noiseSrc(), f = ac.createBiquadFilter(), ng = ac.createGain(); f.type = 'bandpass'; f.frequency.value = 170; f.Q.value = 1.5; ng.gain.value = 0.06;
+    n.connect(f); f.connect(ng); ng.connect(g);
+    o1.start(); o2.start(); n.start();
+    amb = { g, nodes: [o1, o2, n] };
+  }
+  function stopAmb() { if (!amb) return; amb.nodes.forEach(n => { try { n.stop(); } catch (e) {} }); amb.g.disconnect(); amb = null; }
+  let buzz = null, breath = null;
+  function ensureLoops() {
+    if (!A()) return;
+    if (!buzz) {
+      const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 120;
+      const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2400;
+      const g = ac.createGain(); g.gain.value = 0; o.connect(f); f.connect(g); out(g); o.start(); buzz = { g };
+    }
+    if (!breath) {
+      const n = noiseSrc(); const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 650; f.Q.value = 2;
+      const g = ac.createGain(); g.gain.value = 0;
+      const lfo = ac.createOscillator(); lfo.frequency.value = 0.38; const lg = ac.createGain(); lg.gain.value = 0;
+      lfo.connect(lg); lg.connect(g.gain); n.connect(f); f.connect(g);
+      const p = ac.createStereoPanner ? ac.createStereoPanner() : null;
+      if (p) { g.connect(p); p.connect(master); } else g.connect(master);
+      n.start(); lfo.start(); breath = { g, lg, p };
+    }
+  }
+  function setLoops(buzzOn, breathLevel, breathPan) {
+    if (!ac || !buzz) return; const t = ac.currentTime;
+    buzz.g.gain.setTargetAtTime(buzzOn ? 0.03 : 0, t, 0.03);
+    breath.g.gain.setTargetAtTime(breathLevel * 0.45, t, 0.25); breath.lg.gain.setTargetAtTime(breathLevel * 0.45, t, 0.25);
+    if (breath.p) breath.p.pan.setTargetAtTime(breathPan, t, 0.1);
+  }
+  let mbTimer = null;
+  function musicBox(on) {
+    clearInterval(mbTimer); mbTimer = null;
+    if (!on || !A()) return;
+    const mel = [659, 587, 523, 587, 659, 659, 659, 0, 587, 587, 587, 0, 659, 784, 784, 0, 659, 587, 523, 587, 659, 659, 659, 659, 587, 587, 659, 587, 523, 0, 0, 0];
+    let i = 0;
+    mbTimer = setInterval(() => {
+      const f = mel[i++ % mel.length]; if (!f) return;
+      const t = ac.currentTime; const o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'triangle'; o.frequency.value = f * (1 + (Math.random() - 0.5) * 0.015);
+      env(g, t, 0.005, 0.13, 0.5); o.connect(g); out(g, -0.6); o.start(t); o.stop(t + 0.6);
+    }, 340);
+  }
+
+  // ================= VISUAL HELPERS =================
+  const noiseFrames = [];
+  for (let k = 0; k < 6; k++) {
+    const c = document.createElement('canvas'); c.width = 320; c.height = 180;
+    const g = c.getContext('2d'); const id = g.createImageData(320, 180);
+    for (let i = 0; i < id.data.length; i += 4) { const v = Math.random() * 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 255; }
+    g.putImageData(id, 0, 0); noiseFrames.push(c);
+  }
+  function drawNoise(alpha) { ctx.save(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false; ctx.drawImage(noiseFrames[Math.floor(Math.random() * noiseFrames.length)], 0, 0, W, H); ctx.restore(); }
+  function vignette(strength) {
+    const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.22, W / 2, H / 2, H * 0.9);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,' + strength + ')');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  function scanlines(a) { ctx.fillStyle = 'rgba(0,0,0,' + a + ')'; for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 2); }
+  function text(str, x, y, size, color, align, font) {
+    ctx.font = size + 'px ' + (font || "'VT323', monospace"); ctx.fillStyle = color; ctx.textAlign = align || 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillText(str, x, y);
+  }
+  function grime(g, n) {
+    for (let i = 0; i < (n || 40); i++) {
+      const x = Math.random() * W, y = Math.random() * H, r = 20 + Math.random() * 90;
+      const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(0,0,0,.28)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+  }
+  function shell(g, o) {
+    const b = o.b || [340, 170, 940, 470];
+    g.fillStyle = o.ceil; g.beginPath(); g.moveTo(0, 0); g.lineTo(W, 0); g.lineTo(b[2], b[1]); g.lineTo(b[0], b[1]); g.fill();
+    g.fillStyle = o.side;
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(b[0], b[1]); g.lineTo(b[0], b[3]); g.lineTo(0, H); g.fill();
+    g.beginPath(); g.moveTo(W, 0); g.lineTo(b[2], b[1]); g.lineTo(b[2], b[3]); g.lineTo(W, H); g.fill();
+    g.fillStyle = o.wall; g.fillRect(b[0], b[1], b[2] - b[0], b[3] - b[1]);
+    g.fillStyle = o.floor; g.beginPath(); g.moveTo(0, H); g.lineTo(W, H); g.lineTo(b[2], b[3]); g.lineTo(b[0], b[3]); g.fill();
+    if (o.tiles) {
+      g.strokeStyle = 'rgba(0,0,0,.4)'; g.lineWidth = 2;
+      for (let i = 0; i <= 12; i++) { const t = i / 12; g.beginPath(); g.moveTo(b[0] + (b[2] - b[0]) * t, b[3]); g.lineTo(W * t, H); g.stroke(); }
+      for (let j = 1; j < 8; j++) { const t = Math.pow(j / 8, 1.8); const y = b[3] + (H - b[3]) * t; g.beginPath(); g.moveTo(b[0] * (1 - t), y); g.lineTo(b[2] + (W - b[2]) * t, y); g.stroke(); }
+    }
+    return b;
+  }
+  function layer(fn) { const c = document.createElement('canvas'); c.width = W; c.height = H; fn(c.getContext('2d')); return c; }
+  function sign(g, str, x, y, w, h, bg, fg, size) {
+    g.fillStyle = bg; g.fillRect(x, y, w, h); g.strokeStyle = 'rgba(0,0,0,.6)'; g.lineWidth = 4; g.strokeRect(x, y, w, h);
+    g.font = 'bold ' + size + 'px Impact, sans-serif'; g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(str, x + w / 2, y + h / 2 + 2);
+  }
+
+  // ================= ROOMS =================
+  const ROOMS = {
+    stage: { cam: 1, name: 'PRIMATE STAGE', pan: 0, near: 0.15 },
+    gift: { cam: 2, name: 'GIFT SHOP', pan: -0.3, near: 0.25 },
+    feed: { cam: 3, name: 'FEEDING ROOM', pan: 0.3, near: 0.25 },
+    whall: { cam: 4, name: 'WEST HALL', pan: -0.6, near: 0.45 },
+    closet: { cam: 5, name: 'SUPPLY CLOSET', pan: -0.7, near: 0.4 },
+    ehall: { cam: 6, name: 'EAST HALL', pan: 0.6, near: 0.45 },
+    wcorner: { cam: 7, name: 'WEST CORNER', pan: -0.85, near: 0.75 },
+    ecorner: { cam: 8, name: 'EAST CORNER', pan: 0.85, near: 0.75 }
+  };
+  const CAM_ORDER = ['stage', 'gift', 'feed', 'whall', 'closet', 'ehall', 'wcorner', 'ecorner'];
+  const PATHS = {
+    stage: ['gift', 'feed'], gift: ['whall', 'feed'], feed: ['ehall', 'gift'],
+    whall: ['wcorner', 'closet'], closet: ['wcorner', 'whall'], ehall: ['ecorner'],
+    wcorner: ['LDOOR'], ecorner: ['RDOOR']
+  };
+
+  // stage
+  ROOMS.stage.bg = layer(g => {
+    shell(g, { wall: '#33242c', side: '#241820', floor: '#2a2220', ceil: '#100b0e', tiles: true });
+    g.fillStyle = '#5e3a24'; g.fillRect(360, 360, 560, 30); g.fillStyle = '#3e2416'; g.fillRect(360, 390, 560, 80);
+    for (const [x0, x1] of [[340, 480], [800, 940]]) {
+      for (let x = x0; x < x1; x += 20) { const gr = g.createLinearGradient(x, 0, x + 20, 0); gr.addColorStop(0, '#4a0c10'); gr.addColorStop(0.5, '#7a1a20'); gr.addColorStop(1, '#3a080c'); g.fillStyle = gr; g.fillRect(x, 170, 20, 300); }
+    }
+    sign(g, '★ DEMETRIUS ★', 470, 190, 340, 60, '#3b1a4a', '#e8c040', 42);
+    g.fillStyle = 'rgba(255,240,200,.06)'; g.beginPath(); g.moveTo(600, 170); g.lineTo(680, 170); g.lineTo(800, 470); g.lineTo(480, 470); g.fill();
+    grime(g, 50);
+  });
+  // gift shop
+  ROOMS.gift.bg = layer(g => {
+    const b = shell(g, { wall: '#26302f', side: '#1a2221', floor: '#262420', ceil: '#0d1110' });
+    sign(g, 'GIFT SHOP', 520, 190, 240, 50, '#c2a53a', '#2b1a10', 34);
+    for (let s = 0; s < 3; s++) {
+      const y = 260 + s * 70;
+      g.fillStyle = '#3b2a1c'; g.fillRect(40, y + 40, 260, 10);
+      for (let i = 0; i < 6; i++) { const x = 60 + i * 40; g.fillStyle = ['#7a4a2a', '#8a5a30', '#6a3a1a'][i % 3]; g.beginPath(); g.arc(x, y + 22, 16, 0, Math.PI * 2); g.fill(); g.fillStyle = '#ddd'; g.beginPath(); g.arc(x - 5, y + 18, 4, 0, Math.PI * 2); g.arc(x + 5, y + 18, 4, 0, Math.PI * 2); g.fill(); g.fillStyle = '#111'; g.beginPath(); g.arc(x, y + 30, 4, 0, Math.PI * 2); g.fill(); }
+    }
+    grime(g, 50);
+  });
+  ROOMS.gift.fg = layer(g => {
+    g.fillStyle = '#2e2116'; g.fillRect(900, 220, 300, 420);
+    for (let s = 0; s < 5; s++) { g.fillStyle = '#1c140d'; g.fillRect(900, 230 + s * 82, 300, 10); for (let i = 0; i < 6; i++) { g.fillStyle = ['#4a3a6a', '#6a2a2a', '#2a5a3a'][(i + s) % 3]; g.fillRect(912 + i * 47, 250 + s * 82, 36, 58); } }
+    g.fillStyle = '#20180f'; g.fillRect(380, 520, 360, 200); g.fillStyle = '#3a2a1a'; g.fillRect(380, 510, 360, 18);
+  });
+  // feeding room
+  ROOMS.feed.bg = layer(g => {
+    shell(g, { wall: '#34342a', side: '#25251d', floor: '#302d27', ceil: '#0f0f0b', tiles: true });
+    sign(g, 'DO NOT FEED AFTER DARK', 450, 185, 380, 44, '#8a1a1a', '#f0e0c0', 28);
+    for (let i = 0; i < 4; i++) { g.fillStyle = '#6a4a22'; g.fillRect(820 + i * 30, 400 + (i % 2) * 20, 70, 60); g.fillStyle = '#d8c040'; g.font = 'bold 14px Impact'; g.fillText('BANANAS', 825 + i * 30, 435 + (i % 2) * 20); }
+    g.fillStyle = '#555'; g.fillRect(380, 420, 40, 50); g.fillRect(430, 430, 40, 40);
+    grime(g, 50);
+  });
+  ROOMS.feed.fg = layer(g => {
+    g.fillStyle = '#1a1a1a';
+    for (let x = 300; x < 760; x += 34) { g.fillRect(x, 150, 10, 480); }
+    g.fillRect(290, 150, 480, 14); g.fillRect(290, 600, 480, 14);
+    g.fillStyle = 'rgba(255,255,255,.08)'; for (let x = 300; x < 760; x += 34) g.fillRect(x + 2, 150, 2, 480);
+  });
+  // halls
+  function hall(g, mirror) {
+    const b = shell(g, { wall: '#1c1c22', side: '#2a2a30', floor: '#24221f', ceil: '#0c0c0e', tiles: true, b: [560, 250, 720, 420] });
+    for (let i = 0; i < 4; i++) {
+      const t = i / 4, x0 = 40 + t * 480, y0 = 120 + t * 120, w = 70 * (1 - t * 0.7), h = 300 * (1 - t * 0.55);
+      g.fillStyle = '#3a2f26'; g.fillRect(x0, y0, w, h); g.fillRect(W - x0 - w, y0, w, h);
+      g.fillStyle = '#c8b840'; g.fillRect(x0 + w * 0.75, y0 + h * 0.5, 5, 5); g.fillRect(W - x0 - w * 0.25, y0 + h * 0.5, 5, 5);
+    }
+    for (let i = 0; i < 4; i++) { const t = i / 4, y = 20 + t * 220, w = 260 * (1 - t * 0.8); g.fillStyle = i === 1 ? '#555' : '#ddd8b0'; g.fillRect(W / 2 - w / 2, y, w, 14 * (1 - t * 0.6)); }
+    sign(g, mirror ? 'EXIT →' : '← EXIT', 600, 262, 80, 24, '#0a3a12', '#3aff6a', 18);
+    g.fillStyle = '#5a2a3a'; g.fillRect(mirror ? 980 : 180, 200, 90, 120); g.fillStyle = '#e8c040'; g.font = 'bold 16px Impact'; g.textAlign = 'center'; g.fillText('SMILE!', mirror ? 1025 : 225, 230);
+    g.textAlign = 'left';
+    grime(g, 60);
+  }
+  ROOMS.whall.bg = layer(g => hall(g, false));
+  ROOMS.ehall.bg = layer(g => hall(g, true));
+  // closet
+  ROOMS.closet.bg = layer(g => {
+    shell(g, { wall: '#2a241c', side: '#1d1913', floor: '#25211b', ceil: '#0c0a08', b: [420, 200, 860, 460] });
+    for (let s = 0; s < 3; s++) { g.fillStyle = '#3a2e20'; g.fillRect(430, 260 + s * 70, 420, 8); for (let i = 0; i < 5; i++) { g.fillStyle = ['#8a7050', '#6a5038', '#a08060'][(i + s) % 3]; g.fillRect(440 + i * 82, 222 + s * 70, 64, 38); } }
+    g.strokeStyle = '#111'; g.lineWidth = 2; g.beginPath(); g.moveTo(640, 0); g.lineTo(640, 90); g.stroke();
+    g.fillStyle = '#e8d890'; g.beginPath(); g.arc(640, 100, 12, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,240,180,.07)'; g.beginPath(); g.moveTo(630, 100); g.lineTo(650, 100); g.lineTo(900, 720); g.lineTo(380, 720); g.fill();
+    grime(g, 50);
+  });
+  ROOMS.closet.fg = layer(g => {
+    g.fillStyle = '#4a4a50'; g.fillRect(140, 520, 160, 200); g.fillStyle = '#2a2a30'; g.fillRect(140, 520, 160, 16);
+    g.fillStyle = '#7a6040'; g.fillRect(860, 560, 260, 160); g.fillRect(900, 470, 180, 100);
+  });
+  // corners
+  function corner(g, mirror) {
+    g.save(); if (mirror) { g.translate(W, 0); g.scale(-1, 1); }
+    shell(g, { wall: '#16161a', side: '#222228', floor: '#1e1c1a', ceil: '#09090b', b: [720, 140, 1040, 560] });
+    g.fillStyle = '#3a3a3e'; for (let i = 0; i < 3; i++) g.fillRect(760 + i * 40, 140, 16, 420);
+    g.fillStyle = '#2a221c'; g.fillRect(1100, 120, 180, 600);
+    g.fillStyle = '#8a1010'; g.font = 'bold 22px Impact'; g.fillText('STAFF ONLY', 1110, 170);
+    g.restore();
+    grime(g, 70);
+  }
+  ROOMS.wcorner.bg = layer(g => corner(g, false));
+  ROOMS.ecorner.bg = layer(g => corner(g, true));
+
+  // where Demetrius stands in each camera
+  const POSE = {
+    stage: { x: 640, y: 255, s: 80 },
+    gift: { x: 880, y: 300, s: 110 },
+    feed: { x: 520, y: 300, s: 105 },
+    whall: { x: 640, y: 300, s: 48 },
+    ehall: { x: 640, y: 300, s: 48 },
+    closet: { x: 640, y: 330, s: 120 },
+    wcorner: { x: 300, y: 330, s: 270 },
+    ecorner: { x: 980, y: 330, s: 270 }
+  };
+
+  // ================= GAME STATE =================
+  const HOUR = 45;
+  const AI = [0, 4, 7, 10, 13, 16];
+  const CALLS = [
+    '',
+    "Hey! Uh, hi. Welcome to your first night at Demetrius's Primate Paradise. Easy job, really. Watch the cameras, save power, and if he comes to your door... close it. Demetrius used to be the star of the show. Then the zoo shut down, and he just kept making that face. Like he's SHOCKED you're here. Don't let him get close to your face. See you at six. Probably.",
+    "Night two! You made it. Okay so, he moves faster once he knows you're there. Check the corners. He really likes the corners. And if you hear breathing at a door, that's him. That's not me. I'm at home.",
+    "Hey, so the cameras might act up tonight. That's not a glitch. Or it is, but it's HIS glitch. Keep an eye on your power. When the power goes out... you'll hear a little song. Don't love that part.",
+    "I, uh... I don't think I'm coming in tomorrow. Listen, if you shine the light and he's there, close that door FAST. He doesn't like being looked at. Or he likes it way too much. I can't tell anymore.",
+    "...hello? ...he's not on the stage anymore. He's never on the stage anymore. Close the doors. Close the doors. Clo-"
+  ];
+  let state = 'menu', night = parseInt(load('fnadNight') || '1', 10);
+  if (!(night >= 1 && night <= 5)) night = 1;
+  let G = null;     // current night state
+  let stateT = 0;   // time in current state
+  let flash = 0;    // hallucination flash
+  let posterFlash = 0;
+
+  function newNight(n) {
+    G = {
+      n, time: 0, power: 100, doors: { L: false, R: false }, anim: { L: 0, R: 0 }, lights: { L: false, R: false },
+      camUp: false, camAnim: 0, cam: 'stage', glitch: 0,
+      dem: { room: 'stage', moveT: 0, doorT: 0 },
+      powerOut: null, call: CALLS[n], callT: 0, callMuted: false, seenAtDoor: false, bright: 1
+    };
+  }
+  function goto(s) { state = s; stateT = 0; }
+  function startNight(n) {
+    A(); ensureLoops(); newNight(n); goto('card');
+  }
+
+  function demMove() {
+    const d = G.dem;
+    const opts = PATHS[d.room]; if (!opts) return;
+    const next = opts[Math.floor(Math.random() * opts.length)];
+    const was = d.room;
+    if (G.camUp && (G.cam === was || G.cam === next)) { G.glitch = 1.4; staticBurst(0.5, 0.18); }
+    d.room = next;
+    if (next === 'LDOOR' || next === 'RDOOR') {
+      d.doorT = Math.max(3.5, 7.4 - G.n * 0.65) + Math.random() * 2;
+      thump(next === 'LDOOR' ? -0.9 : 0.9, 0.9);
+    } else {
+      footsteps(ROOMS[next].pan, ROOMS[next].near);
+    }
+  }
+  function demRetreat(side) {
+    const d = G.dem;
+    d.room = side === 'L' ? (Math.random() < 0.5 ? 'gift' : 'whall') : (Math.random() < 0.5 ? 'feed' : 'ehall');
+    footsteps(side === 'L' ? -0.5 : 0.5, 0.35);
+  }
+  function aggression() {
+    const h = Math.floor(G.time / HOUR);
+    return AI[G.n] + (h >= 2 ? 1 : 0) + (h >= 3 ? 1 : 0) + (h >= 4 ? 2 : 0);
+  }
+  function jumpscare() {
+    G.camUp = false; setLoops(false, 0, 0); musicBox(false); stopAmb();
+    scream(); staticBurst(1.6, 0.5);
+    goto('scare');
+  }
+
+  // ================= UPDATE =================
+  function update(dt) {
+    stateT += dt;
+    flash = Math.max(0, flash - dt); posterFlash = Math.max(0, posterFlash - dt);
+    if (state === 'card' && stateT > 3) { goto('night'); startAmb(); if (G.call) { ring(); } }
+    if (state === 'scare' && stateT > 1.6) { goto('dead'); staticBurst(2.5, 0.25); }
+    if (state === 'six' && stateT > 6) {
+      if (G.n >= 5) { goto('win'); save('fnadNight', '5'); }
+      else { night = G.n + 1; save('fnadNight', String(night)); startNight(night); }
+    }
+    if (state !== 'night') return;
+
+    G.time += dt;
+    if (G.call && !G.callMuted) G.callT += dt;
+    if (G.time >= HOUR * 6) { // 6 AM!
+      setLoops(false, 0, 0); musicBox(false); stopAmb(); chime(); goto('six'); return;
+    }
+    // door + camera animation
+    ['L', 'R'].forEach(s => { G.anim[s] += ((G.doors[s] ? 1 : 0) - G.anim[s]) * Math.min(1, dt * 12); });
+    G.camAnim += ((G.camUp ? 1 : 0) - G.camAnim) * Math.min(1, dt * 10);
+    G.glitch = Math.max(0, G.glitch - dt);
+    G.bright = Math.random() < 0.03 ? rnd(0.55, 0.85) : Math.min(1, G.bright + dt * 3);
+
+    // ---- power out sequence ----
+    if (G.powerOut) {
+      const p = G.powerOut; p.t += dt;
+      if (p.phase === 0 && p.t > p.wait) { p.phase = 1; p.t = 0; p.wait = rnd(5, 14); musicBox(true); }
+      else if (p.phase === 1 && p.t > p.wait) { p.phase = 2; p.t = 0; p.wait = rnd(1, 3); musicBox(false); }
+      else if (p.phase === 2 && p.t > p.wait) { jumpscare(); }
+      return;
+    }
+
+    // ---- power drain ----
+    const usage = 1 + (G.doors.L ? 1 : 0) + (G.doors.R ? 1 : 0) + (G.lights.L ? 1 : 0) + (G.lights.R ? 1 : 0) + (G.camUp ? 1 : 0);
+    G.usage = usage;
+    G.power -= 0.1 * usage * (1 + (G.n - 1) * 0.08) * dt;
+    if (G.power <= 0) {
+      G.power = 0; G.doors.L = G.doors.R = false; G.lights.L = G.lights.R = false; G.camUp = false;
+      setLoops(false, 0, 0); stopAmb(); powerDown(); slam(-0.7); slam(0.7);
+      G.powerOut = { t: 0, phase: 0, wait: rnd(3, 8) };
+      return;
+    }
+
+    // ---- Demetrius AI ----
+    const d = G.dem;
+    if (d.room === 'LDOOR' || d.room === 'RDOOR') {
+      const side = d.room === 'LDOOR' ? 'L' : 'R';
+      d.doorT -= dt;
+      if (d.doorT <= 0) {
+        if (G.doors[side]) { knock(side === 'L' ? -0.9 : 0.9); demRetreat(side); }
+        else jumpscare();
+      }
+    } else {
+      d.moveT += dt;
+      const every = 5 - G.n * 0.28;
+      if (d.moveT >= every) {
+        d.moveT = 0;
+        let a = aggression();
+        if (G.camUp && G.cam === d.room) a *= 0.5;
+        if (Math.random() * 20 < a) demMove();
+      }
+    }
+    // breathing when he's at a door (louder if the door is open)
+    const atL = d.room === 'LDOOR', atR = d.room === 'RDOOR';
+    const br = atL ? (G.doors.L ? 0.25 : 1) : atR ? (G.doors.R ? 0.25 : 1) : 0;
+    setLoops(G.lights.L || G.lights.R, br, atL ? -0.9 : 0.9);
+
+    // hallucinations get worse each night
+    if (G.n >= 2 && Math.random() < 0.0035 * G.n * dt * 60 / 60) {
+      if (G.camUp) { flash = 0.18; sting(); } else { posterFlash = 0.35; }
+    }
+    if (G.n >= 3 && G.camUp && Math.random() < 0.002 * dt * 60) { G.glitch = 2; staticBurst(0.8, 0.15); }
+  }
+
+  // ================= DRAW: OFFICE =================
+  const fanT = { a: 0 };
+  function drawDoorway(cx, side) {
+    const x0 = side === 'L' ? 60 : 1030, y0 = 120, w = 190, h = 520;
+    ctx.fillStyle = '#050505'; ctx.fillRect(x0, y0, w, h);
+    const lit = G.lights[side] && !G.powerOut;
+    const demHere = G.dem.room === (side === 'L' ? 'LDOOR' : 'RDOOR');
+    if (lit) {
+      const flick = demHere ? (Math.random() < 0.25 ? 0.25 : 1) : (Math.random() < 0.04 ? 0.5 : 1);
+      const gr = ctx.createLinearGradient(0, y0, 0, y0 + h);
+      gr.addColorStop(0, 'rgba(170,155,110,' + 0.75 * flick + ')'); gr.addColorStop(1, 'rgba(90,80,55,' + 0.95 * flick + ')');
+      ctx.fillStyle = gr; ctx.fillRect(x0, y0, w, h);
+      ctx.fillStyle = 'rgba(30,25,20,' + 0.8 * flick + ')'; ctx.fillRect(x0, y0 + h * 0.75, w, h * 0.25);
+      if (demHere) {
+        ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, w, h); ctx.clip();
+        ctx.globalAlpha = flick;
+        drawDem(ctx, x0 + w / 2, y0 + 170, 150, { filter: 'brightness(1.05) contrast(1.3)', glow: 0.5 });
+        ctx.restore();
+        if (!G.seenAtDoor) { G.seenAtDoor = true; sting(); }
+      }
+    } else if (demHere && Math.random() < 0.4) {
+      // faint eyes in the dark, even without the light
+      const eyes = side === 'L' ? [[130, 285], [178, 285]] : [[1100, 285], [1148, 285]];
+      glowEyes(ctx, eyes, 5, 0.35);
+    }
+    // the shutter door
+    const dh = h * G.anim[side];
+    if (dh > 1) {
+      const gr = ctx.createLinearGradient(x0, 0, x0 + w, 0);
+      gr.addColorStop(0, '#3a3c40'); gr.addColorStop(0.5, '#5a5c62'); gr.addColorStop(1, '#2e3034');
+      ctx.fillStyle = gr; ctx.fillRect(x0, y0, w, dh);
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; for (let y = y0 + 20; y < y0 + dh; y += 26) ctx.fillRect(x0, y, w, 3);
+      for (let i = 0; i < w; i += 24) { ctx.fillStyle = (i / 24) % 2 ? '#d8b020' : '#111'; ctx.fillRect(x0 + i, y0 + dh - 16, 24, 16); }
+    }
+    // door frame
+    ctx.strokeStyle = '#2a2b30'; ctx.lineWidth = 14; ctx.strokeRect(x0 - 7, y0 - 7, w + 14, h + 14);
+  }
+  function button(x, y, on, color, label) {
+    ctx.fillStyle = '#16171a'; ctx.beginPath(); ctx.arc(x, y, 30, 0, Math.PI * 2); ctx.fill();
+    const c = on ? color : '#3a3a3a';
+    const gr = ctx.createRadialGradient(x - 6, y - 8, 2, x, y, 24); gr.addColorStop(0, on ? '#fff' : '#666'); gr.addColorStop(0.4, c); gr.addColorStop(1, '#111');
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI * 2); ctx.fill();
+    if (on) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = color; ctx.globalAlpha = 0.25; ctx.beginPath(); ctx.arc(x, y, 38, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+    text(label, x, y + 50, 22, '#888', 'center');
+  }
+  function drawOffice(dt) {
+    const out = !!G.powerOut;
+    // back wall
+    const wall = ctx.createLinearGradient(0, 0, 0, H);
+    wall.addColorStop(0, '#15171b'); wall.addColorStop(1, '#22252b');
+    ctx.fillStyle = wall; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#1b1d22'; for (let x = 0; x < W; x += 80) ctx.fillRect(x, 0, 2, H);
+    // posters
+    ctx.save(); ctx.translate(380, 150); ctx.rotate(-0.03);
+    ctx.fillStyle = '#d8c890'; ctx.fillRect(0, 0, 200, 260);
+    if (posterFlash > 0) { drawHead(ctx, 100, 130, 170, 'contrast(1.4)'); }
+    else {
+      ctx.fillStyle = '#3b1a4a'; ctx.font = 'bold 30px Impact'; ctx.textAlign = 'center'; ctx.fillText('SMILE!', 100, 45);
+      ctx.save(); ctx.beginPath(); ctx.rect(20, 60, 160, 160); ctx.clip(); drawHead(ctx, 100, 140, 120, 'sepia(0.8) contrast(1.1)'); ctx.restore();
+      ctx.fillStyle = '#3b1a4a'; ctx.font = 'bold 16px Impact'; ctx.fillText('DEMETRIUS IS WATCHING', 100, 245);
+    }
+    ctx.restore();
+    ctx.save(); ctx.translate(700, 170); ctx.rotate(0.05);
+    ctx.fillStyle = '#f2f0e8'; ctx.fillRect(0, 0, 150, 120);
+    ctx.strokeStyle = '#b05a20'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(75, 55, 32, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(62, 48, 6, 0, Math.PI * 2); ctx.arc(88, 48, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(75, 72, 10, 8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c03030'; ctx.font = '14px "Special Elite", serif'; ctx.textAlign = 'center'; ctx.fillText('he is coming', 75, 108);
+    ctx.restore();
+    // doors
+    drawDoorway(0, 'L'); drawDoorway(0, 'R');
+    if (!out) {
+      button(290, 330, G.doors.L, '#ff2a2a', 'DOOR'); button(290, 440, G.lights.L, '#fff6c0', 'LIGHT');
+      button(990, 330, G.doors.R, '#ff2a2a', 'DOOR'); button(990, 440, G.lights.R, '#fff6c0', 'LIGHT');
+    }
+    // desk
+    ctx.fillStyle = '#2a221d'; ctx.beginPath(); ctx.moveTo(180, 560); ctx.lineTo(1100, 560); ctx.lineTo(1280, 720); ctx.lineTo(0, 720); ctx.fill();
+    ctx.fillStyle = '#3a2e26'; ctx.fillRect(180, 552, 920, 12);
+    // monitor
+    ctx.fillStyle = '#1e1f22'; ctx.fillRect(470, 420, 250, 170); ctx.fillStyle = out ? '#050505' : '#0e1a12'; ctx.fillRect(488, 436, 214, 130);
+    if (!out) { ctx.fillStyle = 'rgba(80,255,120,.25)'; ctx.font = '20px VT323'; ctx.textAlign = 'left'; ctx.fillText('> CAM SYSTEM OK', 500, 470); ctx.fillText('> NIGHT ' + G.n, 500, 495); }
+    // fan
+    fanT.a += out ? 0 : dt * 25;
+    ctx.save(); ctx.translate(880, 470);
+    ctx.fillStyle = '#2b2d30'; ctx.fillRect(-8, 20, 16, 90); ctx.fillRect(-40, 100, 80, 14);
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, 60, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#6a6c70';
+    for (let i = 0; i < 3; i++) { ctx.save(); ctx.rotate(fanT.a + i * Math.PI * 2 / 3); ctx.beginPath(); ctx.ellipse(28, 0, 28, 12, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+    ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // cup + papers
+    ctx.fillStyle = '#8a8478'; ctx.fillRect(1040, 610, 110, 60); ctx.fillStyle = '#9a9488'; ctx.fillRect(1056, 600, 100, 60);
+    ctx.fillStyle = '#8a2a2a'; ctx.fillRect(760, 590, 44, 56); ctx.fillStyle = '#3a1a0a'; ctx.fillRect(764, 590, 36, 8);
+
+    // lighting: flicker + darkness
+    ctx.fillStyle = 'rgba(0,0,0,' + (out ? 0.88 : (1 - G.bright) * 0.6 + 0.15) + ')'; ctx.fillRect(0, 0, W, H);
+    // light spilling from an open lit doorway stays bright
+    ['L', 'R'].forEach(sd => { if (G.lights[sd] && !out) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(70,60,35,.35)'; ctx.fillRect(sd === 'L' ? 60 : 1030, 120, 190, 520 * (1 - G.anim[sd])); ctx.restore(); } });
+    // power-out: Demetrius appears in the left doorway with glowing eyes
+    if (out && G.powerOut.phase === 1) {
+      const on = Math.sin(stateT * 9) > -0.2 || Math.random() < 0.3;
+      if (on) {
+        ctx.save(); ctx.beginPath(); ctx.rect(60, 120, 190, 520); ctx.clip();
+        ctx.globalAlpha = 0.55; drawDem(ctx, 155, 290, 150, { filter: 'brightness(0.4) contrast(1.5)' }); ctx.restore();
+        glowEyes(ctx, photoOK ? [[155 - 150 * 0.14, 290 - 150 * 0.12], [155 + 150 * 0.14, 290 - 150 * 0.12]] : [[155 - 150 * 0.15, 290 - 150 * 0.02], [155 + 150 * 0.15, 290 - 150 * 0.02]], 9, 0.9);
+      }
+    }
+    vignette(0.65);
+    drawNoise(0.04);
+  }
+
+  // ================= DRAW: CAMERAS =================
+  const MAP = {
+    stage: [1080, 432], gift: [990, 486], feed: [1170, 486], whall: [1010, 560], closet: [930, 560],
+    ehall: [1150, 560], wcorner: [1020, 636], ecorner: [1140, 636]
+  };
+  function drawCams() {
+    const room = ROOMS[G.cam];
+    ctx.drawImage(room.bg, 0, 0);
+    if (G.dem.room === G.cam && G.glitch <= 0) {
+      const p = POSE[G.cam];
+      const close = G.cam === 'wcorner' || G.cam === 'ecorner';
+      drawDem(ctx, p.x + (close ? Math.sin(stateT * 2) * 4 : 0), p.y, p.s, { filter: 'grayscale(0.5) brightness(0.8) contrast(1.35)', glow: close ? 0.35 : 0.6 });
+    }
+    if (room.fg) ctx.drawImage(room.fg, 0, 0);
+    // night-vision tint
+    ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#8fb39a'; ctx.fillRect(0, 0, W, H); ctx.restore();
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, W, H);
+    if (G.glitch > 0) { drawNoise(0.85); text('. . .', W / 2, H / 2, 60, '#ddd', 'center'); }
+    else drawNoise(0.13);
+    if (flash > 0) {
+      ctx.save(); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); drawHead(ctx, W / 2, H / 2, 640, 'contrast(1.6) brightness(1.2)'); ctx.restore();
+      text('IT SEES YOU', W / 2, H - 60, 70, '#ff2020', 'center', "'Special Elite', serif");
+    }
+    scanlines(0.22); vignette(0.9);
+    // HUD
+    text('CAM ' + room.cam + '  ' + room.name, 40, 70, 44, '#e8e8e8');
+    if (Math.floor(stateT * 2) % 2 === 0) { ctx.fillStyle = '#ff2020'; ctx.beginPath(); ctx.arc(52, 104, 10, 0, Math.PI * 2); ctx.fill(); }
+    text('REC', 72, 112, 32, '#ff4040');
+    // map
+    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(900, 400, 360, 300);
+    ctx.strokeStyle = 'rgba(200,200,200,.5)'; ctx.lineWidth = 3;
+    const lines = [['stage', 'gift'], ['stage', 'feed'], ['gift', 'whall'], ['feed', 'ehall'], ['whall', 'closet'], ['whall', 'wcorner'], ['ehall', 'ecorner'], ['gift', 'feed']];
+    lines.forEach(([a, b]) => { ctx.beginPath(); ctx.moveTo(MAP[a][0], MAP[a][1]); ctx.lineTo(MAP[b][0], MAP[b][1]); ctx.stroke(); });
+    ctx.strokeRect(1050, 650, 60, 38); text('YOU', 1080, 678, 24, '#ccc', 'center');
+    CAM_ORDER.forEach(k => {
+      const [x, y] = MAP[k]; const sel = k === G.cam;
+      ctx.fillStyle = sel ? '#9be29b' : '#3a3a3a'; ctx.fillRect(x - 32, y - 15, 64, 30);
+      ctx.strokeStyle = '#ddd'; ctx.lineWidth = 2; ctx.strokeRect(x - 32, y - 15, 64, 30);
+      text('CAM ' + ROOMS[k].cam, x, y + 8, 22, sel ? '#000' : '#ddd', 'center');
+    });
+  }
+
+  // ================= DRAW: HUD + SCREENS =================
+  function hud() {
+    const h = Math.floor(G.time / HOUR);
+    text((h === 0 ? 12 : h) + ' AM', W - 40, 70, 60, '#eee', 'right');
+    text('Night ' + G.n, W - 40, 104, 32, '#aaa', 'right');
+    if (!G.powerOut) {
+      text('Power left: ' + Math.ceil(G.power) + '%', 40, H - 80, 36, '#eee');
+      text('Usage:', 40, H - 44, 32, '#eee');
+      for (let i = 0; i < Math.min(5, G.usage || 1); i++) { ctx.fillStyle = i < 2 ? '#3fcf4f' : i < 4 ? '#e8c020' : '#e82020'; ctx.fillRect(130 + i * 26, H - 68, 20, 30); }
+      // camera bar
+      ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(440, H - 44, 400, 36);
+      ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2; ctx.strokeRect(440, H - 44, 400, 36);
+      text((G.camUp ? '▼ CLOSE CAMERA' : '▲ CAMERAS') + '  [SPACE]', 640, H - 17, 30, '#ddd', 'center');
+    }
+    // phone call subtitles
+    if (G.call && !G.callMuted && G.callT > 0.5) {
+      const chars = Math.floor((G.callT - 0.5) * 22);
+      const shown = G.call.slice(0, chars);
+      if (chars < G.call.length + 60) {
+        const words = shown.split(' '); const linesArr = []; let line = '';
+        words.forEach(w => { if ((line + w).length > 52) { linesArr.push(line); line = ''; } line += w + ' '; });
+        linesArr.push(line);
+        const last = linesArr.slice(-4);
+        ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(30, 125, 560, 40 + last.length * 30);
+        text('📞 PHONE GUY', 46, 155, 26, '#9be29b');
+        last.forEach((l, i) => text(l, 46, 186 + i * 30, 26, '#ddd'));
+        ctx.strokeStyle = '#666'; ctx.strokeRect(470, 133, 110, 30); text('MUTE CALL', 525, 156, 22, '#ccc', 'center');
+      }
+    }
+  }
+  function button2(x, y, w, h, label, hot) {
+    ctx.fillStyle = hot ? 'rgba(180,20,20,.5)' : 'rgba(255,255,255,.06)'; ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = hot ? '#e33' : '#555'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
+    text(label, x + 20, y + h - 14, 40, '#eee');
+  }
+  let mouse = { x: -1, y: -1 };
+  function inRect(x, y, r) { return x >= r[0] && x <= r[0] + r[2] && y >= r[1] && y <= r[1] + r[3]; }
+  const MENU_NEW = [90, 420, 360, 56], MENU_CONT = [90, 492, 360, 56], DEAD_RETRY = [490, 470, 300, 56], DEAD_MENU = [490, 540, 300, 56];
+
+  function drawMenu() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    // the face slowly emerging on the right
+    const a = 0.25 + Math.sin(stateT * 0.7) * 0.12 + (Math.random() < 0.05 ? 0.3 : 0);
+    ctx.save(); ctx.globalAlpha = a;
+    drawHead(ctx, 960 + Math.sin(stateT * 0.5) * 6, 340, 460, 'grayscale(1) contrast(1.5) brightness(0.8)');
+    ctx.restore();
+    if (Math.random() < 0.02) { ctx.save(); ctx.globalAlpha = 0.7; drawHead(ctx, 960, 340, 520, 'contrast(1.8)'); ctx.restore(); }
+    drawNoise(0.12); scanlines(0.25);
+    const jit = Math.random() < 0.1 ? rnd(-4, 4) : 0;
+    text('FIVE', 90 + jit, 170, 90, '#ddd', 'left', "'Special Elite', serif");
+    text('NIGHTS', 90 - jit, 255, 90, '#ddd', 'left', "'Special Elite', serif");
+    text('AT DEMETRIUS', 90, 335, 70, '#b01818', 'left', "'Special Elite', serif");
+    button2(...MENU_NEW, 'New Game', inRect(mouse.x, mouse.y, MENU_NEW));
+    if (night > 1) button2(...MENU_CONT, 'Continue  Night ' + night, inRect(mouse.x, mouse.y, MENU_CONT));
+    text('Survive from 12 AM to 6 AM. Watch the cameras. Close the doors when he comes.', 90, 610, 26, '#888');
+    text("Don't run out of power.", 90, 640, 26, '#888');
+    vignette(0.9);
+  }
+  function drawCard() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    const a = Math.min(1, stateT, 3 - stateT);
+    ctx.globalAlpha = Math.max(0, a);
+    text('12:00 AM', W / 2, H / 2 - 20, 80, '#eee', 'center');
+    text('Night ' + G.n, W / 2, H / 2 + 50, 50, '#ccc', 'center');
+    ctx.globalAlpha = 1; drawNoise(0.06);
+  }
+  function drawScare() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    const t = stateT;
+    const s = 1 + t * 0.7;
+    const shake = 40 * (1 - Math.min(1, t / 1.6) * 0.4);
+    const sx = rnd(-shake, shake), sy = rnd(-shake, shake);
+    const size = W * 0.85 * s;
+    if (photoOK) {
+      ctx.save(); ctx.filter = 'contrast(1.5) saturate(1.3)';
+      const ar = photo.width / photo.height; const dh = size / ar > H * 1.4 * s ? H * 1.4 * s : size / ar;
+      const dw = dh * ar; ctx.drawImage(photo, W / 2 - dw / 2 + sx, H / 2 - dh / 2 + sy + 40, dw, dh); ctx.restore();
+    } else {
+      ctx.drawImage(faceArt, W / 2 - size / 2 + sx, H / 2 - size * 0.47 + sy, size, size);
+    }
+    if (Math.floor(t * 18) % 3 === 0) { ctx.fillStyle = 'rgba(200,0,0,.28)'; ctx.fillRect(0, 0, W, H); }
+    drawNoise(0.2); scanlines(0.2);
+  }
+  function drawDead() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    drawNoise(stateT < 2 ? 0.7 - stateT * 0.3 : 0.12);
+    ctx.save(); ctx.globalAlpha = 0.18; drawHead(ctx, W / 2, 300, 380, 'grayscale(1)'); ctx.restore();
+    text('GAME OVER', W / 2, 200, 110, '#c01818', 'center', "'Special Elite', serif");
+    text('Demetrius got you on Night ' + G.n + '.', W / 2, 260, 34, '#aaa', 'center');
+    button2(...DEAD_RETRY, 'Try Again', inRect(mouse.x, mouse.y, DEAD_RETRY));
+    button2(...DEAD_MENU, 'Menu', inRect(mouse.x, mouse.y, DEAD_MENU));
+    scanlines(0.25); vignette(0.9);
+  }
+  function drawSix() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    const roll = Math.min(1, Math.max(0, (stateT - 1) / 1.2));
+    ctx.save(); ctx.beginPath(); ctx.rect(0, H / 2 - 70, W, 100); ctx.clip();
+    text('5', W / 2 - 60, H / 2 + 10 - roll * 100, 110, '#eee', 'right');
+    text('6', W / 2 - 60, H / 2 + 110 - roll * 100, 110, '#eee', 'right');
+    ctx.restore();
+    text('AM', W / 2 - 30, H / 2 + 10, 110, '#eee', 'left');
+    if (stateT > 2.5) text(G.n >= 5 ? 'You survived the week.' : 'Night ' + G.n + ' complete', W / 2, H / 2 + 110, 40, '#9be29b', 'center');
+    drawNoise(0.05);
+  }
+  function drawWin() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    text('YOU SURVIVED', W / 2, 230, 90, '#ddd', 'center', "'Special Elite', serif");
+    text('FIVE NIGHTS AT DEMETRIUS', W / 2, 310, 54, '#b01818', 'center', "'Special Elite', serif");
+    text('★ ★ ★ ★ ★', W / 2, 390, 60, '#e8c040', 'center');
+    text('Click to return to the menu', W / 2, 470, 30, '#888', 'center');
+    if (stateT > 4 && stateT < 4.25) { drawHead(ctx, W / 2, H / 2, 700, 'contrast(1.6)'); if (!G.winScare) { G.winScare = true; sting(); } }
+    drawNoise(0.08); vignette(0.8);
+  }
+
+  // ================= INPUT =================
+  function toggleCam() {
+    if (G.powerOut) return;
+    G.camUp = !G.camUp; blip(); staticBurst(0.25, 0.12);
+    if (G.camUp) { G.lights.L = G.lights.R = false; }
+  }
+  function toggleDoor(s) { if (G.powerOut) return; G.doors[s] = !G.doors[s]; slam(s === 'L' ? -0.8 : 0.8); }
+  function toggleLight(s) {
+    if (G.powerOut || G.camUp) return;
+    const other = s === 'L' ? 'R' : 'L';
+    G.lights[s] = !G.lights[s]; G.lights[other] = false; blip();
+  }
+  function switchCam(k) { if (k !== G.cam) { G.cam = k; blip(); staticBurst(0.3, 0.12); G.glitch = Math.max(G.glitch, 0.15); } }
+  function click(x, y) {
+    A();
+    if (state === 'menu') {
+      if (inRect(x, y, MENU_NEW)) { night = 1; save('fnadNight', '1'); startNight(1); }
+      else if (night > 1 && inRect(x, y, MENU_CONT)) startNight(night);
+      return;
+    }
+    if (state === 'dead') {
+      if (inRect(x, y, DEAD_RETRY)) startNight(G.n);
+      else if (inRect(x, y, DEAD_MENU)) goto('menu');
+      return;
+    }
+    if (state === 'win') { if (stateT > 1) goto('menu'); return; }
+    if (state !== 'night') return;
+    if (G.call && !G.callMuted && inRect(x, y, [470, 133, 110, 30])) { G.callMuted = true; return; }
+    if (inRect(x, y, [440, H - 44, 400, 36])) { toggleCam(); return; }
+    if (G.camUp) {
+      for (const k of CAM_ORDER) { const [mx, my] = MAP[k]; if (inRect(x, y, [mx - 32, my - 15, 64, 30])) { switchCam(k); return; } }
+      return;
+    }
+    const hit = (bx, by) => (x - bx) * (x - bx) + (y - by) * (y - by) < 40 * 40;
+    if (hit(290, 330)) toggleDoor('L'); else if (hit(290, 440)) toggleLight('L');
+    else if (hit(990, 330)) toggleDoor('R'); else if (hit(990, 440)) toggleLight('R');
+  }
+  function canvasXY(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; }
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); const [x, y] = canvasXY(e); click(x, y); });
+  cv.addEventListener('pointermove', e => { const [x, y] = canvasXY(e); mouse.x = x; mouse.y = y; });
+  document.addEventListener('keydown', e => {
+    if (state !== 'night') { if ((e.key === ' ' || e.key === 'Enter') && state === 'menu') { e.preventDefault(); startNight(night); } return; }
+    const k = e.key.toLowerCase();
+    if (k === ' ' || k === 's') { e.preventDefault(); if (!e.repeat) toggleCam(); }
+    else if (k === 'q' && !e.repeat) toggleDoor('L');
+    else if (k === 'e' && !e.repeat) toggleDoor('R');
+    else if (k === 'a' && !e.repeat) toggleLight('L');
+    else if (k === 'd' && !e.repeat) toggleLight('R');
+    else if (G.camUp && k >= '1' && k <= '8') switchCam(CAM_ORDER[parseInt(k, 10) - 1]);
+  });
+
+  // ================= LOOP =================
+  let last = 0;
+  function frame(t) {
+    const dt = last ? Math.min(0.05, (t - last) / 1000) : 0.016; last = t;
+    update(dt);
+    if (state === 'menu') drawMenu();
+    else if (state === 'card') drawCard();
+    else if (state === 'night') {
+      if (G.camAnim > 0.5 && G.camUp) drawCams(); else drawOffice(dt);
+      if (G.camUp !== (G.camAnim > 0.5)) drawNoise(0.5); // flip transition
+      hud();
+    }
+    else if (state === 'scare') drawScare();
+    else if (state === 'dead') drawDead();
+    else if (state === 'six') drawSix();
+    else if (state === 'win') drawWin();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
