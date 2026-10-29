@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Five Nights at Demetrius 2</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #000; color: #9a9a9a; font-family: 'VT323', monospace; min-height: 100vh; padding: 12px; }
+  .wrap { max-width: 1280px; margin: 0 auto; }
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 18px; flex-wrap: wrap; }
+  .bar a { color: #ddd; background: #1b1b1b; border: 1px solid #333; padding: 6px 14px; border-radius: 8px; text-decoration: none; font-size: 20px; }
+  .bar a:focus-visible { outline: 2px solid #c33; }
+  canvas { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; border: 1px solid #1a1a1a; touch-action: none; cursor: pointer; }
+  .keys { margin-top: 10px; font-size: 18px; text-align: center; color: #666; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <a href="index.html">← Back</a>
+    <span>Turn your sound up. Turn the lights off. Phones: play sideways.</span>
+  </div>
+  <canvas id="c" width="1280" height="720"></canvas>
+  <p class="keys">Q / E: seal door / vent &nbsp;·&nbsp; A / D: lights &nbsp;·&nbsp; Space: cameras &nbsp;·&nbsp; F: play sound &nbsp;·&nbsp; R: systems</p>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('c');
+  const ctx = cv.getContext('2d');
+  const W = 1280, H = 720;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+  // ================= THE FACE (photo if uploaded, drawn fallback otherwise) =================
+  const photo = new Image();
+  let photoOK = false;
+  const photoTries = ['demetrius.jpg', 'demetrius.png', 'demetrius.jpeg', 'Demetrius.jpg', 'Demetrius.png'];
+  let photoTry = 0;
+  photo.onload = () => { photoOK = true; };
+  photo.onerror = () => { photoTry++; if (photoTry < photoTries.length) photo.src = photoTries[photoTry]; };
+  photo.src = photoTries[0];
+
+  function drawFaceArt(g, cx, cy, r) {
+    g.save();
+    g.fillStyle = '#6e3410';
+    for (let i = 0; i < 70; i++) {
+      const a = i / 70 * Math.PI * 2;
+      g.beginPath();
+      g.ellipse(cx + Math.cos(a) * r * 0.82, cy + Math.sin(a) * r * 0.88 - r * 0.1, r * 0.34, r * 0.16, a, 0, Math.PI * 2);
+      g.fill();
+    }
+    const fur = g.createRadialGradient(cx, cy - r * 0.2, r * 0.2, cx, cy, r * 1.2);
+    fur.addColorStop(0, '#b5652a'); fur.addColorStop(1, '#4a220a');
+    g.fillStyle = fur; g.beginPath(); g.ellipse(cx, cy - r * 0.1, r, r * 1.1, 0, 0, Math.PI * 2); g.fill();
+    const sk = g.createRadialGradient(cx, cy, r * 0.1, cx, cy + r * 0.1, r * 0.9);
+    sk.addColorStop(0, '#cdb8aa'); sk.addColorStop(0.7, '#8f7a70'); sk.addColorStop(1, '#4f3e38');
+    g.fillStyle = sk; g.beginPath(); g.ellipse(cx, cy + r * 0.1, r * 0.78, r * 0.86, 0, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(55,35,30,.55)'; g.lineWidth = r * 0.015;
+    for (let i = 0; i < 4; i++) { g.beginPath(); g.arc(cx, cy - r * 0.22 - i * r * 0.07, r * 0.38, Math.PI * 1.2, Math.PI * 1.8); g.stroke(); }
+    [-1, 1].forEach(s => {
+      const ex = cx + s * r * 0.3, ey = cy - r * 0.02;
+      g.fillStyle = '#3c2a24'; g.beginPath(); g.ellipse(ex, ey, r * 0.25, r * 0.28, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#efe6d6'; g.beginPath(); g.ellipse(ex, ey, r * 0.2, r * 0.22, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#2a1a10'; g.beginPath(); g.arc(ex, ey + r * 0.02, r * 0.1, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#000'; g.beginPath(); g.arc(ex, ey + r * 0.02, r * 0.055, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(ex + r * 0.035, ey - r * 0.03, r * 0.022, 0, Math.PI * 2); g.fill();
+    });
+    g.fillStyle = '#2e1e19';
+    [-1, 1].forEach(s => { g.beginPath(); g.ellipse(cx + s * r * 0.075, cy + r * 0.3, r * 0.05, r * 0.03, s * 0.4, 0, Math.PI * 2); g.fill(); });
+    g.fillStyle = '#5a3c34'; g.beginPath(); g.ellipse(cx, cy + r * 0.6, r * 0.36, r * 0.3, 0, 0, Math.PI * 2); g.fill();
+    const mg = g.createRadialGradient(cx, cy + r * 0.62, r * 0.03, cx, cy + r * 0.6, r * 0.3);
+    mg.addColorStop(0, '#0d0202'); mg.addColorStop(1, '#4a1212');
+    g.fillStyle = mg; g.beginPath(); g.ellipse(cx, cy + r * 0.6, r * 0.29, r * 0.24, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#d6c6a4'; g.beginPath(); g.ellipse(cx, cy + r * 0.4, r * 0.18, r * 0.045, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#b05656'; g.beginPath(); g.ellipse(cx, cy + r * 0.74, r * 0.15, r * 0.07, 0, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+  // pre-render the drawn face once
+  const faceArt = document.createElement('canvas'); faceArt.width = faceArt.height = 512;
+  drawFaceArt(faceArt.getContext('2d'), 256, 250, 200);
+  const ART_EYES = [[0.383, 0.484], [0.617, 0.484]];
+  const PHOTO_EYES = [[0.36, 0.40], [0.64, 0.40]];
+
+  // draws the head centered at cx,cy with width w; returns the eye positions
+  function drawHead(g, cx, cy, w, filter) {
+    const h = w * 1.18;
+    g.save();
+    if (filter) g.filter = filter;
+    let eyes;
+    if (photoOK) {
+      g.beginPath(); g.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2); g.clip();
+      const ar = photo.width / photo.height;
+      let dw = w * 1.1, dh = dw / ar;
+      if (dh < h * 1.1) { dh = h * 1.1; dw = dh * ar; }
+      const x0 = cx - dw / 2, y0 = cy - dh / 2;
+      g.drawImage(photo, x0, y0, dw, dh);
+      eyes = PHOTO_EYES.map(([ex, ey]) => [x0 + ex * dw, y0 + ey * dh]);
+    } else {
+      const s = w * 1.3;
+      g.drawImage(faceArt, cx - s / 2, cy - s * 0.49, s, s);
+      eyes = ART_EYES.map(([ex, ey]) => [cx - s / 2 + ex * s, cy - s * 0.49 + ey * s]);
+    }
+    g.restore();
+    return eyes;
+  }
+  const hair = Array.from({ length: 90 }, () => [Math.random() * 2 - 1, Math.random(), Math.random() * 0.4 + 0.2]);
+  // a whole Demetrius: shaggy dark body with the face on top
+  function drawDem(g, hx, hy, hs, o) {
+    o = o || {};
+    g.save();
+    g.fillStyle = o.body || '#2b1306';
+    g.beginPath(); g.ellipse(hx, hy + hs * 1.05, hs * 1.25, hs * 0.65, 0, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.ellipse(hx, hy + hs * 1.9, hs * 0.95, hs * 1.1, 0, 0, Math.PI * 2); g.fill();
+    g.lineCap = 'round'; g.strokeStyle = o.body || '#2b1306'; g.lineWidth = hs * 0.38;
+    [-1, 1].forEach(s => { g.beginPath(); g.moveTo(hx + s * hs * 1.0, hy + hs * 1.0); g.quadraticCurveTo(hx + s * hs * 1.55, hy + hs * 2.0, hx + s * hs * 1.3, hy + hs * 3.0); g.stroke(); });
+    g.strokeStyle = o.hair || '#4a210b'; g.lineWidth = Math.max(1, hs * 0.03);
+    hair.forEach(([x, y, l]) => { const px = hx + x * hs * 1.2, py = hy + hs * (0.8 + y * 2.2); g.beginPath(); g.moveTo(px, py); g.lineTo(px + x * hs * 0.15, py + l * hs * 0.5); g.stroke(); });
+    g.restore();
+    const eyes = drawHead(g, hx, hy, hs, o.filter);
+    if (o.glow) glowEyes(g, eyes, hs * 0.09, o.glow);
+    return eyes;
+  }
+  function glowEyes(g, eyes, r, a) {
+    g.save(); g.globalCompositeOperation = 'lighter';
+    eyes.forEach(([x, y]) => {
+      const gr = g.createRadialGradient(x, y, 0, x, y, r * 4);
+      gr.addColorStop(0, 'rgba(255,255,230,' + a + ')'); gr.addColorStop(0.25, 'rgba(255,230,160,' + a * 0.6 + ')'); gr.addColorStop(1, 'rgba(255,200,120,0)');
+      g.fillStyle = gr; g.beginPath(); g.arc(x, y, r * 4, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,255,255,' + a + ')'; g.beginPath(); g.arc(x, y, r * 0.6, 0, Math.PI * 2); g.fill();
+    });
+    g.restore();
+  }
+
+  // ================= AUDIO (all synthesized) =================
+  let ac = null, master = null, noiseBuf = null;
+  function A() {
+    if (!ac) {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+      ac = new AC();
+      const comp = ac.createDynamicsCompressor();
+      master = ac.createGain(); master.gain.value = 0.9;
+      master.connect(comp); comp.connect(ac.destination);
+    }
+    if (ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function noiseSrc() {
+    if (!noiseBuf) { const len = ac.sampleRate * 2; noiseBuf = ac.createBuffer(1, len, ac.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1; }
+    const s = ac.createBufferSource(); s.buffer = noiseBuf; s.loop = true; return s;
+  }
+  function out(node, pan) {
+    if (pan !== undefined && ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = pan; node.connect(p); p.connect(master); }
+    else node.connect(master);
+  }
+  function env(g, t, a, peak, d) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); }
+  function thump(pan, vol) {
+    if (!A()) return; const t = ac.currentTime;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(35, t + 0.25);
+    env(g, t, 0.01, vol, 0.3); o.connect(g); out(g, pan); o.start(t); o.stop(t + 0.4);
+    const n = noiseSrc(), f = ac.createBiquadFilter(), ng = ac.createGain();
+    f.type = 'lowpass'; f.frequency.value = 320; env(ng, t, 0.005, vol * 0.6, 0.15);
+    n.connect(f); f.connect(ng); out(ng, pan); n.start(t); n.stop(t + 0.3);
+  }
+  function footsteps(pan, vol) { for (let i = 0; i < 3; i++) setTimeout(() => thump(pan, vol), i * 420); }
+  function slam(pan) {
+    if (!A()) return; const t = ac.currentTime;
+    const n = noiseSrc(), f = ac.createBiquadFilter(), g = ac.createGain();
+    f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.7; env(g, t, 0.005, 0.6, 0.35);
+    n.connect(f); f.connect(g); out(g, pan); n.start(t); n.stop(t + 0.5); thump(pan, 0.8);
+  }
+  function knock(pan) { for (let i = 0; i < 3; i++) setTimeout(() => { thump(pan, 1); slam(pan); }, i * 260); }
+  function blip() {
+    if (!A()) return; const t = ac.currentTime; const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'square'; o.frequency.value = 1400; env(g, t, 0.005, 0.06, 0.06); o.connect(g); out(g); o.start(t); o.stop(t + 0.1);
+  }
+  function staticBurst(dur, vol) {
+    if (!A()) return; const t = ac.currentTime; const n = noiseSrc(), f = ac.createBiquadFilter(), g = ac.createGain();
+    f.type = 'highpass'; f.frequency.value = 1500; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    n.connect(f); f.connect(g); out(g); n.start(t); n.stop(t + dur + 0.05);
+  }
+  function sting() {
+    if (!A()) return; const t = ac.currentTime;
+    [233, 247, 349, 370].forEach(fq => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sawtooth'; o.frequency.value = fq; env(g, t, 0.01, 0.1, 1.2); o.connect(g); out(g); o.start(t); o.stop(t + 1.3); });
+    staticBurst(0.6, 0.3);
+  }
+  function scream() {
+    if (!A()) return; const t = ac.currentTime;
+    const shaper = ac.createWaveShaper(); const curve = new Float32Array(1024);
+    for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 6); }
+    shaper.curve = curve;
+    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1, t + 0.02); g.gain.setValueAtTime(1, t + 1.15); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.7);
+    shaper.connect(g); out(g);
+    [310, 333, 470, 620, 905].forEach((fq, i) => {
+      const o = ac.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(fq * 0.6, t); o.frequency.exponentialRampToValueAtTime(fq * 1.5, t + 0.2); o.frequency.exponentialRampToValueAtTime(fq * 0.9, t + 1.6);
+      const l = ac.createOscillator(), lg = ac.createGain(); l.frequency.value = 9 + i * 3; lg.gain.value = fq * 0.09; l.connect(lg); lg.connect(o.frequency);
+      const og = ac.createGain(); og.gain.value = 0.22; o.connect(og); og.connect(shaper);
+      o.start(t); l.start(t); o.stop(t + 1.8); l.stop(t + 1.8);
+    });
+    const n = noiseSrc(), ng = ac.createGain(); ng.gain.value = 0.5; n.connect(ng); ng.connect(shaper); n.start(t); n.stop(t + 1.8);
+  }
+  function chime() {
+    if (!A()) return; const t = ac.currentTime;
+    [523, 659, 784, 1047, 784, 1047].forEach((fq, i) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.value = fq; env(g, t + i * 0.35, 0.01, 0.25, 1.4); o.connect(g); out(g); o.start(t + i * 0.35); o.stop(t + i * 0.35 + 1.6); });
+  }
+  function powerDown() {
+    if (!A()) return; const t = ac.currentTime; const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(220, t); o.frequency.exponentialRampToValueAtTime(30, t + 1.5);
+    g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6); o.connect(g); out(g); o.start(t); o.stop(t + 1.7);
+  }
+  function ring() {
+    if (!A()) return; const t = ac.currentTime;
+    for (let k = 0; k < 2; k++) [440, 480].forEach(fq => { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = fq; g.gain.setValueAtTime(0.0001, t + k * 1.2); g.gain.exponentialRampToValueAtTime(0.08, t + k * 1.2 + 0.02); g.gain.setValueAtTime(0.08, t + k * 1.2 + 0.7); g.gain.exponentialRampToValueAtTime(0.0001, t + k * 1.2 + 0.75); o.connect(g); out(g); o.start(t + k * 1.2); o.stop(t + k * 1.2 + 0.8); });
+  }
+  let amb = null;
+  function startAmb() {
+    if (!A() || amb) return; const t = ac.currentTime;
+    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1, t + 2); out(g);
+    const o1 = ac.createOscillator(), o2 = ac.createOscillator(); o1.frequency.value = 55; o2.frequency.value = 58.3;
+    const og = ac.createGain(); og.gain.value = 0.07; o1.connect(og); o2.connect(og); og.connect(g);
+    const n = noiseSrc(), f = ac.createBiquadFilter(), ng = ac.createGain(); f.type = 'bandpass'; f.frequency.value = 170; f.Q.value = 1.5; ng.gain.value = 0.06;
+    n.connect(f); f.connect(ng); ng.connect(g);
+    o1.start(); o2.start(); n.start();
+    amb = { g, nodes: [o1, o2, n] };
+  }
+  function stopAmb() { if (!amb) return; amb.nodes.forEach(n => { try { n.stop(); } catch (e) {} }); amb.g.disconnect(); amb = null; }
+  let buzz = null, breath = null;
+  function ensureLoops() {
+    if (!A()) return;
+    if (!buzz) {
+      const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 120;
+      const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2400;
+      const g = ac.createGain(); g.gain.value = 0; o.connect(f); f.connect(g); out(g); o.start(); buzz = { g };
+    }
+    if (!breath) {
+      const n = noiseSrc(); const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 650; f.Q.value = 2;
+      const g = ac.createGain(); g.gain.value = 0;
+      const lfo = ac.createOscillator(); lfo.frequency.value = 0.38; const lg = ac.createGain(); lg.gain.value = 0;
+      lfo.connect(lg); lg.connect(g.gain); n.connect(f); f.connect(g);
+      const p = ac.createStereoPanner ? ac.createStereoPanner() : null;
+      if (p) { g.connect(p); p.connect(master); } else g.connect(master);
+      n.start(); lfo.start(); breath = { g, lg, p };
+    }
+  }
+  function setLoops(buzzOn, breathLevel, breathPan) {
+    if (!ac || !buzz) return; const t = ac.currentTime;
+    buzz.g.gain.setTargetAtTime(buzzOn ? 0.03 : 0, t, 0.03);
+    breath.g.gain.setTargetAtTime(breathLevel * 0.45, t, 0.25); breath.lg.gain.setTargetAtTime(breathLevel * 0.45, t, 0.25);
+    if (breath.p) breath.p.pan.setTargetAtTime(breathPan, t, 0.1);
+  }
+  let mbTimer = null;
+  function musicBox(on) {
+    clearInterval(mbTimer); mbTimer = null;
+    if (!on || !A()) return;
+    const mel = [659, 587, 523, 587, 659, 659, 659, 0, 587, 587, 587, 0, 659, 784, 784, 0, 659, 587, 523, 587, 659, 659, 659, 659, 587, 587, 659, 587, 523, 0, 0, 0];
+    let i = 0;
+    mbTimer = setInterval(() => {
+      const f = mel[i++ % mel.length]; if (!f) return;
+      const t = ac.currentTime; const o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'triangle'; o.frequency.value = f * (1 + (Math.random() - 0.5) * 0.015);
+      env(g, t, 0.005, 0.13, 0.5); o.connect(g); out(g, -0.6); o.start(t); o.stop(t + 0.6);
+    }, 340);
+  }
+
+  // ================= VISUAL HELPERS =================
+  const noiseFrames = [];
+  for (let k = 0; k < 6; k++) {
+    const c = document.createElement('canvas'); c.width = 320; c.height = 180;
+    const g = c.getContext('2d'); const id = g.createImageData(320, 180);
+    for (let i = 0; i < id.data.length; i += 4) { const v = Math.random() * 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 255; }
+    g.putImageData(id, 0, 0); noiseFrames.push(c);
+  }
+  function drawNoise(alpha) { ctx.save(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false; ctx.drawImage(noiseFrames[Math.floor(Math.random() * noiseFrames.length)], 0, 0, W, H); ctx.restore(); }
+  function vignette(strength) {
+    const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.22, W / 2, H / 2, H * 0.9);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,' + strength + ')');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  function scanlines(a) { ctx.fillStyle = 'rgba(0,0,0,' + a + ')'; for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 2); }
+  function text(str, x, y, size, color, align, font) {
+    ctx.font = size + 'px ' + (font || "'VT323', monospace"); ctx.fillStyle = color; ctx.textAlign = align || 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillText(str, x, y);
+  }
+  function grime(g, n) {
+    for (let i = 0; i < (n || 40); i++) {
+      const x = Math.random() * W, y = Math.random() * H, r = 20 + Math.random() * 90;
+      const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(0,0,0,.28)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+  }
+  function shell(g, o) {
+    const b = o.b || [340, 170, 940, 470];
+    g.fillStyle = o.ceil; g.beginPath(); g.moveTo(0, 0); g.lineTo(W, 0); g.lineTo(b[2], b[1]); g.lineTo(b[0], b[1]); g.fill();
+    g.fillStyle = o.side;
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(b[0], b[1]); g.lineTo(b[0], b[3]); g.lineTo(0, H); g.fill();
+    g.beginPath(); g.moveTo(W, 0); g.lineTo(b[2], b[1]); g.lineTo(b[2], b[3]); g.lineTo(W, H); g.fill();
+    g.fillStyle = o.wall; g.fillRect(b[0], b[1], b[2] - b[0], b[3] - b[1]);
+    g.fillStyle = o.floor; g.beginPath(); g.moveTo(0, H); g.lineTo(W, H); g.lineTo(b[2], b[3]); g.lineTo(b[0], b[3]); g.fill();
+    if (o.tiles) {
+      g.strokeStyle = 'rgba(0,0,0,.4)'; g.lineWidth = 2;
+      for (let i = 0; i <= 12; i++) { const t = i / 12; g.beginPath(); g.moveTo(b[0] + (b[2] - b[0]) * t, b[3]); g.lineTo(W * t, H); g.stroke(); }
+      for (let j = 1; j < 8; j++) { const t = Math.pow(j / 8, 1.8); const y = b[3] + (H - b[3]) * t; g.beginPath(); g.moveTo(b[0] * (1 - t), y); g.lineTo(b[2] + (W - b[2]) * t, y); g.stroke(); }
+    }
+    return b;
+  }
+  function layer(fn) { const c = document.createElement('canvas'); c.width = W; c.height = H; fn(c.getContext('2d')); return c; }
+  function sign(g, str, x, y, w, h, bg, fg, size) {
+    g.fillStyle = bg; g.fillRect(x, y, w, h); g.strokeStyle = 'rgba(0,0,0,.6)'; g.lineWidth = 4; g.strokeRect(x, y, w, h);
+    g.font = 'bold ' + size + 'px Impact, sans-serif'; g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(str, x + w / 2, y + h / 2 + 2);
+  }
+
+  // ================= ROOMS =================
+  const ROOMS = {
+    stage: { cam: 1, name: 'PRIMATE STAGE', pan: 0, near: 0.12 },
+    gift: { cam: 2, name: 'GIFT SHOP', pan: -0.4, near: 0.2 },
+    feed: { cam: 3, name: 'FEEDING ROOM', pan: 0.4, near: 0.2 },
+    rest: { cam: 4, name: 'RESTROOMS', pan: -0.6, near: 0.3 },
+    whall: { cam: 5, name: 'WEST HALL', pan: -0.5, near: 0.45 },
+    ehall: { cam: 6, name: 'EAST HALL', pan: 0.5, near: 0.45 },
+    venta: { cam: 7, name: 'VENT A', pan: 0.6, near: 0.6, vent: true },
+    ventb: { cam: 8, name: 'VENT B', pan: 0.8, near: 0.6, vent: true },
+    ohall: { cam: 9, name: 'OFFICE HALL', pan: -0.8, near: 0.8 }
+  };
+  const ORDER = ['stage', 'gift', 'feed', 'rest', 'whall', 'ehall', 'venta', 'ventb', 'ohall'];
+  const ADJ = {
+    stage: ['gift', 'feed'], gift: ['stage', 'whall', 'rest'], feed: ['stage', 'ehall', 'ventb'],
+    rest: ['gift', 'venta'], whall: ['gift', 'ohall'], ehall: ['feed', 'ohall'],
+    venta: ['rest', 'VENT'], ventb: ['feed', 'VENT'], ohall: ['whall', 'ehall', 'DOOR']
+  };
+  // distance to the office (lower = closer)
+  const DIST = { DOOR: 0, VENT: 0, ohall: 1, venta: 1, ventb: 1, whall: 2, ehall: 2, rest: 2, gift: 3, feed: 2, stage: 4 };
+
+  ROOMS.stage.bg = layer(g => {
+    shell(g, { wall: '#33242c', side: '#241820', floor: '#2a2220', ceil: '#100b0e', tiles: true });
+    g.fillStyle = '#5e3a24'; g.fillRect(360, 360, 560, 30); g.fillStyle = '#3e2416'; g.fillRect(360, 390, 560, 80);
+    for (const [x0, x1] of [[340, 480], [800, 940]]) for (let x = x0; x < x1; x += 20) { const gr = g.createLinearGradient(x, 0, x + 20, 0); gr.addColorStop(0, '#4a0c10'); gr.addColorStop(0.5, '#7a1a20'); gr.addColorStop(1, '#3a080c'); g.fillStyle = gr; g.fillRect(x, 170, 20, 300); }
+    sign(g, '★ DEMETRIUS ★', 470, 190, 340, 60, '#3b1a4a', '#e8c040', 42); grime(g, 50);
+  });
+  ROOMS.gift.bg = layer(g => {
+    shell(g, { wall: '#26302f', side: '#1a2221', floor: '#262420', ceil: '#0d1110' });
+    sign(g, 'GIFT SHOP', 520, 190, 240, 50, '#c2a53a', '#2b1a10', 34);
+    for (let s = 0; s < 3; s++) for (let i = 0; i < 6; i++) { const x = 60 + i * 40, y = 260 + s * 70; g.fillStyle = '#7a4a2a'; g.beginPath(); g.arc(x, y + 22, 16, 0, Math.PI * 2); g.fill(); g.fillStyle = '#ddd'; g.beginPath(); g.arc(x - 5, y + 18, 4, 0, Math.PI * 2); g.arc(x + 5, y + 18, 4, 0, Math.PI * 2); g.fill(); }
+    grime(g, 50);
+  });
+  ROOMS.feed.bg = layer(g => {
+    shell(g, { wall: '#34342a', side: '#25251d', floor: '#302d27', ceil: '#0f0f0b', tiles: true });
+    sign(g, 'DO NOT FEED AFTER DARK', 450, 185, 380, 44, '#8a1a1a', '#f0e0c0', 28);
+    for (let i = 0; i < 4; i++) { g.fillStyle = '#6a4a22'; g.fillRect(820 + i * 30, 400 + (i % 2) * 20, 70, 60); }
+    grime(g, 50);
+  });
+  ROOMS.rest.bg = layer(g => {
+    shell(g, { wall: '#3a4448', side: '#2a3236', floor: '#2c3436', ceil: '#0e1214', tiles: true });
+    for (let i = 0; i < 4; i++) { g.fillStyle = '#4a565c'; g.fillRect(380 + i * 140, 220, 110, 250); g.fillStyle = '#222'; g.fillRect(470 + i * 140, 340, 8, 8); }
+    sign(g, 'RESTROOMS', 540, 180, 200, 34, '#1a3a5a', '#cfe', 24);
+    g.fillStyle = '#1a1a1a'; g.fillRect(150, 120, 80, 50); g.fillStyle = '#555'; for (let x = 156; x < 230; x += 10) g.fillRect(x, 124, 4, 42);
+    grime(g, 60);
+  });
+  function hall(g, mirror) {
+    shell(g, { wall: '#1c1c22', side: '#2a2a30', floor: '#24221f', ceil: '#0c0c0e', tiles: true, b: [560, 250, 720, 420] });
+    for (let i = 0; i < 4; i++) { const t = i / 4, x0 = 40 + t * 480, y0 = 120 + t * 120, w = 70 * (1 - t * 0.7), h = 300 * (1 - t * 0.55); g.fillStyle = '#3a2f26'; g.fillRect(x0, y0, w, h); g.fillRect(W - x0 - w, y0, w, h); }
+    for (let i = 0; i < 4; i++) { const t = i / 4, y = 20 + t * 220, w = 260 * (1 - t * 0.8); g.fillStyle = i === 2 ? '#555' : '#ddd8b0'; g.fillRect(W / 2 - w / 2, y, w, 14 * (1 - t * 0.6)); }
+    g.fillStyle = '#5a2a3a'; g.fillRect(mirror ? 980 : 180, 200, 90, 120); grime(g, 60);
+  }
+  ROOMS.whall.bg = layer(g => hall(g, false));
+  ROOMS.ehall.bg = layer(g => hall(g, true));
+  ROOMS.ohall.bg = layer(g => {
+    shell(g, { wall: '#141418', side: '#202026', floor: '#1c1a18', ceil: '#08080a', tiles: true, b: [520, 200, 760, 470] });
+    g.fillStyle = '#3a3c40'; g.fillRect(560, 230, 160, 240); g.fillStyle = '#d8b020'; g.fillRect(560, 452, 160, 18);
+    sign(g, 'SECURITY', 575, 250, 130, 28, '#111', '#e33', 20);
+    grime(g, 70);
+  });
+  function vent(g) {
+    g.fillStyle = '#0a0a0c'; g.fillRect(0, 0, W, H);
+    for (let i = 0; i < 9; i++) { const t = i / 9, w = W * (1 - t * 0.85), h = H * (1 - t * 0.85); g.strokeStyle = 'rgba(120,125,135,' + (0.5 - t * 0.4) + ')'; g.lineWidth = 6 - t * 5; g.strokeRect(W / 2 - w / 2, H / 2 - h / 2, w, h); }
+    g.strokeStyle = 'rgba(90,95,105,.35)'; g.lineWidth = 3;
+    [[0, 0], [W, 0], [0, H], [W, H]].forEach(([x, y]) => { g.beginPath(); g.moveTo(x, y); g.lineTo(W / 2 + (x ? 1 : -1) * 90, H / 2 + (y ? 1 : -1) * 55); g.stroke(); });
+    grime(g, 40);
+  }
+  ROOMS.venta.bg = layer(vent);
+  ROOMS.ventb.bg = layer(vent);
+  const POSE = {
+    stage: { x: 640, y: 255, s: 80 }, gift: { x: 880, y: 300, s: 110 }, feed: { x: 520, y: 300, s: 105 },
+    rest: { x: 660, y: 300, s: 100 }, whall: { x: 640, y: 300, s: 48 }, ehall: { x: 640, y: 300, s: 48 },
+    venta: { x: 640, y: 420, s: 230, head: true }, ventb: { x: 640, y: 420, s: 230, head: true }, ohall: { x: 640, y: 290, s: 120 }
+  };
+
+  // ================= GAME STATE =================
+  const HOUR = 45;
+  const AI = [0, 5, 8, 11, 14, 17];
+  const CALLS = ['',
+    "Hey, welcome back! Management fixed the doors... sort of. They overheat if you keep them shut too long. The good news? Every camera has a speaker now. Hit PLAY SOUND and Demetrius goes to check it out. Lead him AWAY from you. Just don't spam the same room. He catches on.",
+    "The speakers break sometimes. If the audio goes out, open SYSTEMS and reboot it. Same with the cameras. And remember, he can crawl through the vents now. Yeah. The vents.",
+    "Okay, the air system. If ventilation fails you'll start seeing things. Things that aren't there. Probably. Reboot it fast or you'll pass out, and he does NOT wait for you to wake up.",
+    "Keep him busy with the sounds. He loves the sounds. He loves them a little too much. Sometimes I hear them at home.",
+    "...he figured out the speakers. He knows it's you. He knows where you are. ...keep playing the sounds anyway. It's all you've got."
+  ];
+  let state = 'menu', stateT = 0, night = parseInt(load('fn2Night') || '1', 10);
+  if (!(night >= 1 && night <= 5)) night = 1;
+  let G = null, flash = 0;
+
+  function newNight(n) {
+    G = {
+      n, time: 0, power: 100, cam: 'stage', camUp: false, panel: false,
+      seal: { D: false, V: false }, heat: { D: 0, V: 0 }, cool: { D: 0, V: 0 }, anim: { D: 0, V: 0 }, light: { D: false, V: false },
+      sys: { audio: true, cams: true, vent: true }, reboot: null, ventBadT: 0, faint: 0,
+      dem: { room: 'stage', moveT: 0, atT: 0, lureRoom: null, lureT: 0 },
+      lureHist: [], lureCD: 0, glitch: 0, powerOut: null, call: CALLS[n], callT: 0, callMuted: false, bright: 1,
+      ventFailT: rnd(40, 70), hallT: 0
+    };
+  }
+  function goto(s) { state = s; stateT = 0; }
+  function startNight(n) { A(); ensureLoops(); newNight(n); goto('card'); }
+
+  function scrape() {
+    if (!A()) return; const t = ac.currentTime; const n = noiseSrc(), f = ac.createBiquadFilter(), gn = ac.createGain();
+    f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = 6; env(gn, t, 0.05, 0.25, 0.5);
+    n.connect(f); f.connect(gn); out(gn, 0.7); n.start(t); n.stop(t + 0.6);
+  }
+  function lureSound(pan) {
+    if (!A()) return; const t = ac.currentTime;
+    [0, 0.18, 0.36].forEach((d, i) => { const o = ac.createOscillator(), gn = ac.createGain(); o.type = 'square'; o.frequency.setValueAtTime(500 + i * 120, t + d); o.frequency.exponentialRampToValueAtTime(900 + i * 140, t + d + 0.12); env(gn, t + d, 0.01, 0.05, 0.14); o.connect(gn); out(gn, pan * 0.5); o.start(t + d); o.stop(t + d + 0.2); });
+  }
+
+  function moveDem(to) {
+    const d = G.dem, was = d.room;
+    if (G.camUp && G.sys.cams && (G.cam === was || G.cam === to)) { G.glitch = 1.2; staticBurst(0.4, 0.15); if (G.n >= 2 && Math.random() < 0.1) { G.sys.cams = false; } }
+    d.room = to;
+    if (to === 'DOOR' || to === 'VENT') { d.atT = Math.max(3.2, 7 - G.n * 0.6) + Math.random() * 2; thump(to === 'DOOR' ? -0.9 : 0.9, 0.9); if (to === 'VENT') scrape(); }
+    else if (ROOMS[to].vent) { scrape(); }
+    else footsteps(ROOMS[to].pan, ROOMS[to].near);
+  }
+  function demTick() {
+    const d = G.dem;
+    // the lure: if a sound is playing next to him (or in his room), he goes to it
+    if (d.lureT > 0 && d.lureRoom) {
+      if (d.room === d.lureRoom) return; // he's busy investigating
+      if (ADJ[d.room] && ADJ[d.room].includes(d.lureRoom)) {
+        const repeats = G.lureHist.slice(-4).filter(r => r === d.lureRoom).length;
+        const chance = Math.max(0.15, (G.n >= 5 ? 0.7 : 0.9) - repeats * 0.22);
+        if (Math.random() < chance) { moveDem(d.lureRoom); return; }
+      }
+    }
+    let a = AI[G.n] + Math.floor(G.time / HOUR / 2);
+    if (Math.random() * 20 >= a) return;
+    const opts = ADJ[d.room];
+    const best = Math.min(...opts.map(o => DIST[o]));
+    const closer = opts.filter(o => DIST[o] === best);
+    const pick = Math.random() < 0.8 ? closer[Math.floor(Math.random() * closer.length)] : opts[Math.floor(Math.random() * opts.length)];
+    moveDem(pick);
+  }
+  function retreat(side) {
+    G.dem.room = side === 'D' ? (Math.random() < 0.5 ? 'whall' : 'ehall') : (Math.random() < 0.5 ? 'rest' : 'feed');
+    footsteps(side === 'D' ? -0.6 : 0.6, 0.35);
+  }
+  function jumpscare() {
+    G.camUp = false; G.panel = false; setLoops(false, 0, 0); musicBox(false); stopAmb();
+    scream(); staticBurst(1.6, 0.5); goto('scare');
+  }
+  function playLure() {
+    if (!G.sys.audio || G.lureCD > 0 || G.powerOut) return;
+    G.dem.lureRoom = G.cam; G.dem.lureT = 7; G.dem.moveT = Math.max(G.dem.moveT, 5 - G.n * 0.28 - 1.1); G.lureCD = 2.5; G.lureHist.push(G.cam);
+    G.power -= 1.5; lureSound(ROOMS[G.cam].pan);
+    if (Math.random() < 0.1 + G.n * 0.025) { G.sys.audio = false; staticBurst(0.6, 0.2); }
+  }
+
+  // ================= UPDATE =================
+  function update(dt) {
+    stateT += dt; flash = Math.max(0, flash - dt);
+    if (state === 'card' && stateT > 3) { goto('night'); startAmb(); if (G.call) ring(); }
+    if (state === 'scare' && stateT > 1.6) { goto('dead'); staticBurst(2.5, 0.25); }
+    if (state === 'six' && stateT > 6) {
+      if (G.n >= 5) { goto('win'); save('fn2Night', '5'); }
+      else { night = G.n + 1; save('fn2Night', String(night)); startNight(night); }
+    }
+    if (state !== 'night') return;
+    G.time += dt;
+    if (G.call && !G.callMuted) G.callT += dt;
+    if (G.time >= HOUR * 6) { setLoops(false, 0, 0); musicBox(false); stopAmb(); chime(); goto('six'); return; }
+    ['D', 'V'].forEach(s => { G.anim[s] += ((G.seal[s] ? 1 : 0) - G.anim[s]) * Math.min(1, dt * 12); });
+    G.glitch = Math.max(0, G.glitch - dt);
+    G.bright = Math.random() < 0.03 ? rnd(0.55, 0.85) : Math.min(1, G.bright + dt * 3);
+    G.lureCD = Math.max(0, G.lureCD - dt);
+    G.dem.lureT = Math.max(0, G.dem.lureT - dt);
+
+    if (G.powerOut) {
+      const p = G.powerOut; p.t += dt;
+      if (p.phase === 0 && p.t > p.wait) { p.phase = 1; p.t = 0; p.wait = rnd(5, 14); musicBox(true); }
+      else if (p.phase === 1 && p.t > p.wait) { p.phase = 2; p.t = 0; p.wait = rnd(1, 3); musicBox(false); }
+      else if (p.phase === 2 && p.t > p.wait) jumpscare();
+      return;
+    }
+    // reboots
+    if (G.reboot) {
+      G.reboot.t += dt;
+      if (G.reboot.t >= G.reboot.dur) { G.reboot.what.forEach(w => { G.sys[w] = true; }); if (G.reboot.what.includes('vent')) G.ventBadT = 0; G.reboot = null; blip(); }
+    }
+    // door/vent seals overheat
+    ['D', 'V'].forEach(s => {
+      if (G.seal[s]) { G.heat[s] += dt / 8; if (G.heat[s] >= 1) { G.seal[s] = false; G.cool[s] = 4; slam(s === 'D' ? -0.8 : 0.8); } }
+      else G.heat[s] = Math.max(0, G.heat[s] - dt / 6);
+      G.cool[s] = Math.max(0, G.cool[s] - dt);
+    });
+    // power
+    const usage = 1 + (G.seal.D ? 1 : 0) + (G.seal.V ? 1 : 0) + (G.light.D || G.light.V ? 1 : 0) + (G.camUp ? 1 : 0);
+    G.usage = usage;
+    G.power -= 0.085 * usage * (1 + (G.n - 1) * 0.07) * dt;
+    if (G.power <= 0) {
+      G.power = 0; G.seal.D = G.seal.V = false; G.light.D = G.light.V = false; G.camUp = false; G.panel = false;
+      setLoops(false, 0, 0); stopAmb(); powerDown();
+      G.powerOut = { t: 0, phase: 0, wait: rnd(3, 8) }; return;
+    }
+    // ventilation failures + hallucinations
+    if (G.n >= 2 && G.sys.vent) { G.ventFailT -= dt; if (G.ventFailT <= 0) { G.sys.vent = false; G.ventFailT = rnd(45, 80) - G.n * 4; staticBurst(0.4, 0.15); } }
+    if (!G.sys.vent) {
+      G.ventBadT += dt;
+      if (Math.random() < 0.012) { flash = 0.15; sting(); }
+      if (Math.random() < 0.01) footsteps(rnd(-1, 1), 0.5);
+      if (G.ventBadT > 25 && G.faint <= 0) { G.faint = 3; G.ventBadT = 15; demTick(); demTick(); demTick(); }
+    }
+    if (G.faint > 0) { G.faint -= dt; G.camUp = false; G.panel = false; }
+
+    // Demetrius
+    const d = G.dem;
+    if (d.room === 'DOOR' || d.room === 'VENT') {
+      const side = d.room === 'DOOR' ? 'D' : 'V';
+      d.atT -= dt;
+      if (d.atT <= 0) { if (G.seal[side]) { knock(side === 'D' ? -0.9 : 0.9); retreat(side); } else jumpscare(); }
+    } else {
+      d.moveT += dt;
+      if (d.moveT >= 5 - G.n * 0.28) { d.moveT = 0; demTick(); }
+    }
+    const atD = d.room === 'DOOR', atV = d.room === 'VENT';
+    const br = atD ? (G.seal.D ? 0.25 : 1) : atV ? (G.seal.V ? 0.25 : 1) : 0;
+    setLoops(G.light.D || G.light.V, br, atD ? -0.9 : 0.9);
+  }
+
+  // ================= DRAW: OFFICE =================
+  const fanT = { a: 0 };
+  function button(x, y, on, color, label, disabled) {
+    ctx.fillStyle = '#16171a'; ctx.beginPath(); ctx.arc(x, y, 30, 0, Math.PI * 2); ctx.fill();
+    const c = disabled ? '#222' : on ? color : '#3a3a3a';
+    const gr = ctx.createRadialGradient(x - 6, y - 8, 2, x, y, 24); gr.addColorStop(0, on ? '#fff' : '#666'); gr.addColorStop(0.4, c); gr.addColorStop(1, '#111');
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI * 2); ctx.fill();
+    if (on) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = color; ctx.globalAlpha = 0.25; ctx.beginPath(); ctx.arc(x, y, 38, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+    text(label, x, y + 50, 22, disabled ? '#a33' : '#888', 'center');
+  }
+  function heatBar(x, y, s) {
+    ctx.fillStyle = '#222'; ctx.fillRect(x - 30, y, 60, 8);
+    ctx.fillStyle = G.cool[s] > 0 ? '#a33' : G.heat[s] > 0.7 ? '#e83' : '#4c4'; ctx.fillRect(x - 30, y, 60 * (G.cool[s] > 0 ? G.cool[s] / 4 : G.heat[s]), 8);
+  }
+  function drawOffice(dt) {
+    const out = !!G.powerOut;
+    const wall = ctx.createLinearGradient(0, 0, 0, H); wall.addColorStop(0, '#15171b'); wall.addColorStop(1, '#22252b');
+    ctx.fillStyle = wall; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#1b1d22'; for (let x = 0; x < W; x += 80) ctx.fillRect(x, 0, 2, H);
+    // poster
+    ctx.save(); ctx.translate(470, 140); ctx.rotate(-0.03);
+    ctx.fillStyle = '#d8c890'; ctx.fillRect(0, 0, 180, 230);
+    ctx.fillStyle = '#3b1a4a'; ctx.font = 'bold 26px Impact'; ctx.textAlign = 'center'; ctx.fillText('HE HEARS YOU', 90, 38);
+    ctx.save(); ctx.beginPath(); ctx.rect(15, 50, 150, 160); ctx.clip(); drawHead(ctx, 90, 130, 115, 'sepia(0.8) contrast(1.1)'); ctx.restore();
+    ctx.restore();
+    // door (left)
+    const dx0 = 60, dy0 = 120, dw = 190, dh = 520;
+    ctx.fillStyle = '#050505'; ctx.fillRect(dx0, dy0, dw, dh);
+    if (G.light.D && !out) {
+      const flick = G.dem.room === 'DOOR' ? (Math.random() < 0.25 ? 0.25 : 1) : 1;
+      ctx.fillStyle = 'rgba(160,145,100,' + 0.7 * flick + ')'; ctx.fillRect(dx0, dy0, dw, dh);
+      if (G.dem.room === 'DOOR') { ctx.save(); ctx.beginPath(); ctx.rect(dx0, dy0, dw, dh); ctx.clip(); ctx.globalAlpha = flick; drawDem(ctx, dx0 + dw / 2, dy0 + 170, 150, { filter: 'brightness(1.05) contrast(1.3)', glow: 0.5 }); ctx.restore(); }
+    }
+    const sh = dh * G.anim.D;
+    if (sh > 1) { ctx.fillStyle = '#4a4c52'; ctx.fillRect(dx0, dy0, dw, sh); ctx.fillStyle = 'rgba(0,0,0,.35)'; for (let y = dy0 + 20; y < dy0 + sh; y += 26) ctx.fillRect(dx0, y, dw, 3); for (let i = 0; i < dw; i += 24) { ctx.fillStyle = (i / 24) % 2 ? '#d8b020' : '#111'; ctx.fillRect(dx0 + i, dy0 + sh - 16, 24, 16); } }
+    ctx.strokeStyle = '#2a2b30'; ctx.lineWidth = 14; ctx.strokeRect(dx0 - 7, dy0 - 7, dw + 14, dh + 14);
+    // vent (right, low on the wall)
+    const vx0 = 1010, vy0 = 380, vw = 220, vh = 170;
+    ctx.fillStyle = '#050505'; ctx.fillRect(vx0, vy0, vw, vh);
+    if (G.light.V && !out) {
+      ctx.fillStyle = 'rgba(160,145,100,.55)'; ctx.fillRect(vx0, vy0, vw, vh);
+      if (G.dem.room === 'VENT') { ctx.save(); ctx.beginPath(); ctx.rect(vx0, vy0, vw, vh); ctx.clip(); drawHead(ctx, vx0 + vw / 2, vy0 + vh / 2 + 10, 150, 'brightness(1) contrast(1.3)'); ctx.restore(); }
+    }
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 4; for (let x = vx0 + 14; x < vx0 + vw; x += 22) { ctx.beginPath(); ctx.moveTo(x, vy0); ctx.lineTo(x, vy0 + vh); ctx.stroke(); }
+    const vs = vh * G.anim.V; if (vs > 1) { ctx.fillStyle = '#4a4c52'; ctx.fillRect(vx0, vy0, vw, vs); }
+    ctx.strokeStyle = '#2a2b30'; ctx.lineWidth = 10; ctx.strokeRect(vx0 - 5, vy0 - 5, vw + 10, vh + 10);
+    if (!out) {
+      button(300, 300, G.seal.D, '#ff2a2a', 'DOOR', G.cool.D > 0); heatBar(300, 360, 'D');
+      button(300, 430, G.light.D, '#fff6c0', 'LIGHT');
+      button(940, 300, G.seal.V, '#ff2a2a', 'VENT', G.cool.V > 0); heatBar(940, 360, 'V');
+      button(940, 430, G.light.V, '#fff6c0', 'LIGHT');
+      // systems button
+      ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(40, 30, 200, 48); ctx.strokeStyle = '#666'; ctx.lineWidth = 2; ctx.strokeRect(40, 30, 200, 48);
+      const bad = !G.sys.audio || !G.sys.cams || !G.sys.vent;
+      text('SYSTEMS', 140, 64, 34, bad ? (Math.floor(stateT * 4) % 2 ? '#ff4040' : '#ffaaaa') : '#ddd', 'center');
+    }
+    // desk + fan
+    ctx.fillStyle = '#2a221d'; ctx.beginPath(); ctx.moveTo(180, 560); ctx.lineTo(1100, 560); ctx.lineTo(1280, 720); ctx.lineTo(0, 720); ctx.fill();
+    ctx.fillStyle = '#1e1f22'; ctx.fillRect(500, 420, 230, 150); ctx.fillStyle = out ? '#050505' : '#0e1a12'; ctx.fillRect(516, 434, 198, 118);
+    fanT.a += out ? 0 : dt * 25;
+    ctx.save(); ctx.translate(840, 480); ctx.fillStyle = '#2b2d30'; ctx.fillRect(-8, 20, 16, 80); ctx.fillStyle = '#6a6c70';
+    for (let i = 0; i < 3; i++) { ctx.save(); ctx.rotate(fanT.a + i * 2.094); ctx.beginPath(); ctx.ellipse(24, 0, 24, 10, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+    ctx.restore();
+    ctx.fillStyle = 'rgba(0,0,0,' + (out ? 0.88 : (1 - G.bright) * 0.6 + 0.15) + ')'; ctx.fillRect(0, 0, W, H);
+    if (out && G.powerOut.phase === 1 && (Math.sin(stateT * 9) > -0.2 || Math.random() < 0.3)) {
+      ctx.save(); ctx.beginPath(); ctx.rect(dx0, dy0, dw, dh); ctx.clip(); ctx.globalAlpha = 0.55; drawDem(ctx, 155, 290, 150, { filter: 'brightness(0.4) contrast(1.5)', glow: 0.9 }); ctx.restore();
+    }
+    // ventilation failure: creeping darkness + hallucinations
+    if (!G.sys.vent && !out) {
+      ctx.fillStyle = 'rgba(0,0,0,' + Math.min(0.75, G.ventBadT / 30) + ')'; ctx.fillRect(0, 0, W, H);
+      if (Math.floor(stateT * 2) % 2) text('VENTILATION ERROR', W / 2, 120, 44, '#ff3030', 'center');
+    }
+    vignette(0.65); drawNoise(0.04);
+  }
+
+  // ================= DRAW: CAMERAS =================
+  const MAP = { stage: [1080, 405], gift: [985, 455], feed: [1175, 455], rest: [930, 515], whall: [1020, 560], ehall: [1140, 560], venta: [960, 640], ventb: [1215, 540], ohall: [1080, 610] };
+  function drawCams() {
+    const room = ROOMS[G.cam];
+    if (!G.sys.cams) {
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); drawNoise(0.8);
+      text('CAMERA SYSTEM ERROR', W / 2, H / 2 - 20, 56, '#ff3030', 'center'); text('Reboot it from SYSTEMS', W / 2, H / 2 + 30, 32, '#ddd', 'center');
+    } else {
+      ctx.drawImage(room.bg, 0, 0);
+      if (G.dem.room === G.cam && G.glitch <= 0) {
+        const p = POSE[G.cam];
+        if (p.head) { drawHead(ctx, p.x, p.y, p.s, 'grayscale(0.5) brightness(0.8) contrast(1.35)'); }
+        else drawDem(ctx, p.x, p.y, p.s, { filter: 'grayscale(0.5) brightness(0.8) contrast(1.35)', glow: 0.6 });
+      }
+      ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#8fb39a'; ctx.fillRect(0, 0, W, H); ctx.restore();
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, W, H);
+      if (G.glitch > 0) { drawNoise(0.85); text('. . .', W / 2, H / 2, 60, '#ddd', 'center'); } else drawNoise(0.13);
+      // sound waves where the lure is playing
+      if (G.dem.lureT > 0 && G.dem.lureRoom === G.cam) { ctx.strokeStyle = 'rgba(155,226,155,.5)'; ctx.lineWidth = 3; for (let i = 0; i < 3; i++) { const r = ((stateT * 120 + i * 60) % 180) + 20; ctx.beginPath(); ctx.arc(W / 2, H / 2, r, 0, Math.PI * 2); ctx.stroke(); } }
+      scanlines(0.22); vignette(0.9);
+    }
+    text('CAM ' + room.cam + '  ' + room.name, 40, 70, 44, '#e8e8e8');
+    // lure button
+    const ok = G.sys.audio && G.lureCD <= 0;
+    ctx.fillStyle = ok ? 'rgba(60,160,80,.35)' : 'rgba(120,30,30,.35)'; ctx.fillRect(40, 470, 330, 60);
+    ctx.strokeStyle = ok ? '#9be29b' : '#a33'; ctx.lineWidth = 2; ctx.strokeRect(40, 470, 330, 60);
+    text(!G.sys.audio ? 'AUDIO ERROR' : G.lureCD > 0 ? 'RECHARGING...' : '🔊 PLAY SOUND', 205, 512, 34, '#eee', 'center');
+    const reps = G.lureHist.slice(-4).filter(r => r === G.cam).length;
+    if (reps >= 2) text("He's getting used to this room...", 40, 456, 24, '#e8c020');
+    // map
+    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(895, 380, 365, 320);
+    ctx.lineWidth = 3;
+    const lines = [['stage', 'gift'], ['stage', 'feed'], ['gift', 'whall'], ['gift', 'rest'], ['feed', 'ehall'], ['feed', 'ventb'], ['rest', 'venta'], ['whall', 'ohall'], ['ehall', 'ohall']];
+    ctx.strokeStyle = 'rgba(200,200,200,.5)';
+    lines.forEach(([a, b]) => { ctx.setLineDash(ROOMS[a].vent || ROOMS[b].vent ? [6, 6] : []); ctx.beginPath(); ctx.moveTo(MAP[a][0], MAP[a][1]); ctx.lineTo(MAP[b][0], MAP[b][1]); ctx.stroke(); });
+    ctx.setLineDash([6, 6]); [['venta'], ['ventb']].forEach(([a]) => { ctx.beginPath(); ctx.moveTo(MAP[a][0], MAP[a][1]); ctx.lineTo(1080, 668); ctx.stroke(); });
+    ctx.setLineDash([]); ctx.beginPath(); ctx.moveTo(1080, 610); ctx.lineTo(1080, 655); ctx.stroke();
+    ctx.strokeRect(1050, 655, 60, 34); text('YOU', 1080, 681, 24, '#ccc', 'center');
+    ORDER.forEach(k => {
+      const [x, y] = MAP[k]; const sel = k === G.cam;
+      ctx.fillStyle = sel ? '#9be29b' : '#3a3a3a'; ctx.fillRect(x - 30, y - 14, 60, 28);
+      ctx.strokeStyle = '#ddd'; ctx.lineWidth = 2; ctx.strokeRect(x - 30, y - 14, 60, 28);
+      text('CAM ' + ROOMS[k].cam, x, y + 7, 21, sel ? '#000' : '#ddd', 'center');
+    });
+  }
+
+  // ================= DRAW: SYSTEMS PANEL =================
+  const SYS_ROWS = [['audio', 'Audio Devices'], ['cams', 'Camera System'], ['vent', 'Ventilation'], ['all', 'Reboot All']];
+  function drawPanel() {
+    ctx.fillStyle = '#020403'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#2f6a3a'; ctx.lineWidth = 3; ctx.strokeRect(300, 120, 680, 470);
+    text('MAINTENANCE PANEL', 640, 180, 48, '#9be29b', 'center');
+    SYS_ROWS.forEach(([k, label], i) => {
+      const y = 230 + i * 80;
+      ctx.fillStyle = 'rgba(155,226,155,.07)'; ctx.fillRect(340, y, 600, 60);
+      text(label, 360, y + 42, 36, '#cfe');
+      if (k !== 'all') text(G.sys[k] ? 'OK' : 'ERROR', 900, y + 42, 36, G.sys[k] ? '#9be29b' : '#ff3030', 'right');
+      if (G.reboot && (G.reboot.key === k)) { ctx.fillStyle = '#9be29b'; ctx.fillRect(340, y + 52, 600 * (G.reboot.t / G.reboot.dur), 8); text('rebooting...', 640, y + 42, 28, '#9be29b', 'center'); }
+    });
+    text('Click a system to reboot it. ' + (G.reboot ? '' : 'Rebooting takes a few seconds.'), 640, 570, 26, '#7a9', 'center');
+    drawNoise(0.06); scanlines(0.2);
+  }
+
+  // ================= HUD + SCREENS =================
+  function hud() {
+    const h = Math.floor(G.time / HOUR);
+    text((h === 0 ? 12 : h) + ' AM', W - 40, 70, 60, '#eee', 'right');
+    text('Night ' + G.n, W - 40, 104, 32, '#aaa', 'right');
+    if (!G.powerOut) {
+      text('Power left: ' + Math.ceil(G.power) + '%', 40, H - 80, 36, '#eee');
+      text('Usage:', 40, H - 44, 32, '#eee');
+      for (let i = 0; i < Math.min(5, G.usage || 1); i++) { ctx.fillStyle = i < 2 ? '#3fcf4f' : i < 4 ? '#e8c020' : '#e82020'; ctx.fillRect(130 + i * 26, H - 68, 20, 30); }
+      ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(440, H - 44, 400, 36);
+      ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2; ctx.strokeRect(440, H - 44, 400, 36);
+      text(G.panel ? '▼ CLOSE PANEL' : G.camUp ? '▼ CLOSE CAMERA  [SPACE]' : '▲ CAMERAS  [SPACE]', 640, H - 17, 30, '#ddd', 'center');
+    }
+    if (G.call && !G.callMuted && G.callT > 0.5) {
+      const chars = Math.floor((G.callT - 0.5) * 22);
+      if (chars < G.call.length + 60) {
+        const words = G.call.slice(0, chars).split(' '); const ls = []; let line = '';
+        words.forEach(w => { if ((line + w).length > 52) { ls.push(line); line = ''; } line += w + ' '; }); ls.push(line);
+        const last = ls.slice(-4);
+        ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(30, 125, 560, 40 + last.length * 30);
+        text('📞 PHONE GUY', 46, 155, 26, '#9be29b'); last.forEach((l, i) => text(l, 46, 186 + i * 30, 26, '#ddd'));
+        ctx.strokeStyle = '#666'; ctx.strokeRect(470, 133, 110, 30); text('MUTE CALL', 525, 156, 22, '#ccc', 'center');
+      }
+    }
+    if (flash > 0) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); drawHead(ctx, W / 2, H / 2, 600, 'contrast(1.6)'); }
+    if (G.faint > 0) { ctx.fillStyle = 'rgba(0,0,0,' + Math.min(1, G.faint) + ')'; ctx.fillRect(0, 0, W, H); text('you passed out...', W / 2, H / 2, 40, '#888', 'center'); }
+  }
+  function button2(x, y, w, h, label, hot) {
+    ctx.fillStyle = hot ? 'rgba(180,20,20,.5)' : 'rgba(255,255,255,.06)'; ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = hot ? '#e33' : '#555'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
+    text(label, x + 20, y + h - 14, 40, '#eee');
+  }
+  let mouse = { x: -1, y: -1 };
+  function inRect(x, y, r) { return x >= r[0] && x <= r[0] + r[2] && y >= r[1] && y <= r[1] + r[3]; }
+  const MENU_NEW = [90, 430, 360, 56], MENU_CONT = [90, 502, 360, 56], DEAD_RETRY = [490, 470, 300, 56], DEAD_MENU = [490, 540, 300, 56];
+  function drawMenu() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    ctx.save(); ctx.globalAlpha = 0.25 + Math.sin(stateT * 0.7) * 0.12 + (Math.random() < 0.05 ? 0.3 : 0);
+    drawHead(ctx, 960, 340, 460, 'grayscale(1) contrast(1.5) brightness(0.8)'); ctx.restore();
+    drawNoise(0.12); scanlines(0.25);
+    text('FIVE NIGHTS', 90, 170, 86, '#ddd', 'left', "'Special Elite', serif");
+    text('AT DEMETRIUS', 90, 250, 70, '#b01818', 'left', "'Special Elite', serif");
+    text('2: THE LURE', 90, 330, 64, '#9be29b', 'left', "'Special Elite', serif");
+    button2(...MENU_NEW, 'New Game', inRect(mouse.x, mouse.y, MENU_NEW));
+    if (night > 1) button2(...MENU_CONT, 'Continue  Night ' + night, inRect(mouse.x, mouse.y, MENU_CONT));
+    text('Use sounds on the cameras to lure him away. Doors overheat. Systems break.', 90, 620, 26, '#888');
+    vignette(0.9);
+  }
+  function drawCard() { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = Math.max(0, Math.min(1, stateT, 3 - stateT)); text('12:00 AM', W / 2, H / 2 - 20, 80, '#eee', 'center'); text('Night ' + G.n, W / 2, H / 2 + 50, 50, '#ccc', 'center'); ctx.globalAlpha = 1; drawNoise(0.06); }
+  function drawScare() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    const t = stateT, s = 1 + t * 0.7, sh = 40 * (1 - Math.min(1, t / 1.6) * 0.4), size = W * 0.85 * s;
+    if (photoOK) { ctx.save(); ctx.filter = 'contrast(1.5) saturate(1.3)'; const ar = photo.width / photo.height; const dh = Math.min(H * 1.4 * s, size / ar); ctx.drawImage(photo, W / 2 - dh * ar / 2 + rnd(-sh, sh), H / 2 - dh / 2 + rnd(-sh, sh) + 40, dh * ar, dh); ctx.restore(); }
+    else ctx.drawImage(faceArt, W / 2 - size / 2 + rnd(-sh, sh), H / 2 - size * 0.47 + rnd(-sh, sh), size, size);
+    if (Math.floor(t * 18) % 3 === 0) { ctx.fillStyle = 'rgba(200,0,0,.28)'; ctx.fillRect(0, 0, W, H); }
+    drawNoise(0.2); scanlines(0.2);
+  }
+  function drawDead() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); drawNoise(stateT < 2 ? 0.7 - stateT * 0.3 : 0.12);
+    ctx.save(); ctx.globalAlpha = 0.18; drawHead(ctx, W / 2, 300, 380, 'grayscale(1)'); ctx.restore();
+    text('GAME OVER', W / 2, 200, 110, '#c01818', 'center', "'Special Elite', serif");
+    text('He followed the sound... to you. Night ' + G.n + '.', W / 2, 260, 34, '#aaa', 'center');
+    button2(...DEAD_RETRY, 'Try Again', inRect(mouse.x, mouse.y, DEAD_RETRY)); button2(...DEAD_MENU, 'Menu', inRect(mouse.x, mouse.y, DEAD_MENU));
+    scanlines(0.25); vignette(0.9);
+  }
+  function drawSix() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    const roll = Math.min(1, Math.max(0, (stateT - 1) / 1.2));
+    ctx.save(); ctx.beginPath(); ctx.rect(0, H / 2 - 70, W, 100); ctx.clip();
+    text('5', W / 2 - 60, H / 2 + 10 - roll * 100, 110, '#eee', 'right'); text('6', W / 2 - 60, H / 2 + 110 - roll * 100, 110, '#eee', 'right'); ctx.restore();
+    text('AM', W / 2 - 30, H / 2 + 10, 110, '#eee', 'left');
+    if (stateT > 2.5) text(G.n >= 5 ? 'You survived the lure.' : 'Night ' + G.n + ' complete', W / 2, H / 2 + 110, 40, '#9be29b', 'center');
+  }
+  function drawWin() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    text('YOU SURVIVED', W / 2, 230, 90, '#ddd', 'center', "'Special Elite', serif");
+    text('FIVE NIGHTS AT DEMETRIUS 2', W / 2, 310, 50, '#b01818', 'center', "'Special Elite', serif");
+    text('★ ★ ★ ★ ★', W / 2, 390, 60, '#e8c040', 'center'); text('Click to return to the menu', W / 2, 470, 30, '#888', 'center');
+    if (stateT > 4 && stateT < 4.25) drawHead(ctx, W / 2, H / 2, 700, 'contrast(1.6)');
+    drawNoise(0.08); vignette(0.8);
+  }
+
+  // ================= INPUT =================
+  function toggleCam() { if (G.powerOut || G.faint > 0) return; G.panel = false; G.camUp = !G.camUp; blip(); staticBurst(0.25, 0.12); if (G.camUp) G.light.D = G.light.V = false; }
+  function togglePanel() { if (G.powerOut || G.faint > 0) return; G.camUp = false; G.panel = !G.panel; blip(); }
+  function toggleSeal(s) { if (G.powerOut || G.cool[s] > 0) return; G.seal[s] = !G.seal[s]; slam(s === 'D' ? -0.8 : 0.8); }
+  function toggleLight(s) { if (G.powerOut) return; const o = s === 'D' ? 'V' : 'D'; G.light[s] = !G.light[s]; G.light[o] = false; blip(); }
+  function startReboot(k) {
+    if (G.reboot) return;
+    const what = k === 'all' ? ['audio', 'cams', 'vent'] : [k];
+    G.reboot = { key: k, what, t: 0, dur: k === 'all' ? 10 : 4 + G.n * 0.3 }; blip();
+  }
+  function click(x, y) {
+    A();
+    if (state === 'menu') { if (inRect(x, y, MENU_NEW)) { night = 1; save('fn2Night', '1'); startNight(1); } else if (night > 1 && inRect(x, y, MENU_CONT)) startNight(night); return; }
+    if (state === 'dead') { if (inRect(x, y, DEAD_RETRY)) startNight(G.n); else if (inRect(x, y, DEAD_MENU)) goto('menu'); return; }
+    if (state === 'win') { if (stateT > 1) goto('menu'); return; }
+    if (state !== 'night') return;
+    if (G.call && !G.callMuted && inRect(x, y, [470, 133, 110, 30])) { G.callMuted = true; return; }
+    if (inRect(x, y, [440, H - 44, 400, 36])) { if (G.panel) togglePanel(); else toggleCam(); return; }
+    if (G.panel) { SYS_ROWS.forEach(([k], i) => { if (inRect(x, y, [340, 230 + i * 80, 600, 60])) startReboot(k); }); return; }
+    if (G.camUp) {
+      if (inRect(x, y, [40, 470, 330, 60])) { playLure(); return; }
+      for (const k of ORDER) { const [mx, my] = MAP[k]; if (inRect(x, y, [mx - 30, my - 14, 60, 28])) { if (k !== G.cam) { G.cam = k; blip(); staticBurst(0.3, 0.12); G.glitch = Math.max(G.glitch, 0.15); } return; } }
+      return;
+    }
+    if (inRect(x, y, [40, 30, 200, 48])) { togglePanel(); return; }
+    const hit = (bx, by) => (x - bx) ** 2 + (y - by) ** 2 < 40 * 40;
+    if (hit(300, 300)) toggleSeal('D'); else if (hit(300, 430)) toggleLight('D');
+    else if (hit(940, 300)) toggleSeal('V'); else if (hit(940, 430)) toggleLight('V');
+  }
+  function canvasXY(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; }
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); const [x, y] = canvasXY(e); click(x, y); });
+  cv.addEventListener('pointermove', e => { const [x, y] = canvasXY(e); mouse.x = x; mouse.y = y; });
+  document.addEventListener('keydown', e => {
+    if (state !== 'night') { if ((e.key === ' ' || e.key === 'Enter') && state === 'menu') { e.preventDefault(); startNight(night); } return; }
+    const k = e.key.toLowerCase();
+    if (k === ' ') { e.preventDefault(); if (!e.repeat) toggleCam(); }
+    else if (k === 'q' && !e.repeat) toggleSeal('D');
+    else if (k === 'e' && !e.repeat) toggleSeal('V');
+    else if (k === 'a' && !e.repeat) toggleLight('D');
+    else if (k === 'd' && !e.repeat) toggleLight('V');
+    else if (k === 'r' && !e.repeat) togglePanel();
+    else if (k === 'f' && G.camUp) playLure();
+    else if (G.camUp && k >= '1' && k <= '9') { G.cam = ORDER[parseInt(k, 10) - 1]; blip(); staticBurst(0.3, 0.12); }
+  });
+
+  // ================= LOOP =================
+  let last = 0;
+  function frame(t) {
+    const dt = last ? Math.min(0.05, (t - last) / 1000) : 0.016; last = t;
+    update(dt);
+    if (state === 'menu') drawMenu();
+    else if (state === 'card') drawCard();
+    else if (state === 'night') { if (G.panel) drawPanel(); else if (G.camUp) drawCams(); else drawOffice(dt); hud(); }
+    else if (state === 'scare') drawScare();
+    else if (state === 'dead') drawDead();
+    else if (state === 'six') drawSix();
+    else if (state === 'win') drawWin();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
