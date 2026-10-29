@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shock Reflex · Game Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1020; color: #f2f3ff; font-family: 'Rubik', system-ui, sans-serif; min-height: 100vh; padding: 16px 12px 32px; }
+  .wrap { max-width: 640px; margin: 0 auto; text-align: center; }
+  .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  a.back { color: #f2f3ff; background: #24274a; padding: 8px 14px; border-radius: 10px; text-decoration: none; font-weight: 700; }
+  h1 { font-family: 'Press Start 2P', monospace; font-size: 15px; color: #4ade80; }
+  #pad { height: 420px; border-radius: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; cursor: pointer; user-select: none; transition: background .08s; padding: 20px; background: #24274a center/contain no-repeat; position: relative; overflow: hidden; }
+  #pad.wait { background-color: #8a1a1a; }
+  #pad.go { background-color: #1d7a3a; }
+  #pad.early { background-color: #6a4a10; }
+  #big { font-family: 'Press Start 2P', monospace; font-size: clamp(18px, 5vw, 34px); line-height: 1.4; text-shadow: 3px 3px 0 rgba(0,0,0,.4); }
+  #small { font-weight: 700; font-size: 18px; max-width: 420px; }
+  #face { width: 260px; height: 260px; border-radius: 50%; background: #7a3a14 center/cover; border: 6px solid #fff; display: none; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+  .stat { background: #1a1c35; border-radius: 12px; padding: 10px; }
+  .stat small { display: block; color: #9aa0c7; font-weight: 700; font-size: 12px; }
+  .stat b { font-size: 22px; color: #ffcc33; }
+  .help { color: #9aa0c7; font-size: 14px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar"><a class="back" href="index.html">← Back</a><h1>SHOCK REFLEX</h1><span></span></div>
+  <div id="pad"><div id="face"></div><div id="big">SHOCK REFLEX</div><div id="small">Wait for Demetrius to pop up, then click as FAST as you can. Click to start.</div></div>
+  <div class="stats"><div class="stat"><small>LAST</small><b id="last">–</b></div><div class="stat"><small>AVERAGE (5)</small><b id="avg">–</b></div><div class="stat"><small>BEST</small><b id="best">–</b></div></div>
+  <p class="help">Click, tap or press Space. Clicking too early doesn't count! Most people score around 250 ms.</p>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id), pad = $('pad');
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  let best = parseInt(load('reflexBest') || '0', 10); if (best) $('best').textContent = best + ' ms';
+  const img = new Image(); let url = null; img.onload = () => { url = img.src; $('face').style.backgroundImage = 'url(' + url + ')'; }; img.src = 'demetrius.jpg';
+  let state = 'idle', timer = null, t0 = 0, times = [];
+  let ac = null;
+  function snd(f, d, type, vol) { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'square'; o.frequency.setValueAtTime(f, t); g.gain.setValueAtTime(vol || 0.08, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02); } catch (e) {} }
+  function set(cls, big, small, face) { pad.className = cls; $('big').textContent = big; $('small').textContent = small; $('face').style.display = face ? 'block' : 'none'; }
+  function rank(ms) { return ms < 180 ? 'INHUMAN 🤖' : ms < 220 ? 'LIGHTNING ⚡' : ms < 270 ? 'FAST 🔥' : ms < 340 ? 'NOT BAD 👍' : ms < 450 ? 'SLEEPY 😴' : 'DEMETRIUS IS DISAPPOINTED'; }
+  function act() {
+    if (state === 'idle' || state === 'result' || state === 'early') {
+      state = 'wait'; set('wait', 'WAIT...', "Don't click yet...", false);
+      timer = setTimeout(() => { state = 'go'; t0 = performance.now(); set('go', 'CLICK!', '', true); snd(880, 0.12); }, 1200 + Math.random() * 2800);
+    } else if (state === 'wait') {
+      clearTimeout(timer); state = 'early'; set('early', 'TOO EARLY!', 'You clicked before he showed up. Click to try again.', false); snd(150, 0.3, 'sawtooth', 0.1);
+    } else if (state === 'go') {
+      const ms = Math.round(performance.now() - t0); state = 'result';
+      times.push(ms); if (times.length > 5) times.shift();
+      $('last').textContent = ms + ' ms'; $('avg').textContent = Math.round(times.reduce((a, b) => a + b, 0) / times.length) + ' ms';
+      if (!best || ms < best) { best = ms; save('reflexBest', best); $('best').textContent = best + ' ms'; }
+      set('', ms + ' ms', rank(ms) + ' · Click to go again', false); snd(520, 0.1, 'triangle');
+    }
+  }
+  pad.addEventListener('pointerdown', e => { e.preventDefault(); act(); });
+  document.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!e.repeat) act(); } });
+})();
+</script>
+</body>
+</html>
