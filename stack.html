@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Stack Tower · Game Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0e0f1c; color: #fff; font-family: 'Rubik', system-ui, sans-serif; min-height: 100vh; padding: 12px; }
+  .wrap { max-width: 520px; margin: 0 auto; }
+  .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  a.back { color: #fff; background: #24274a; padding: 8px 14px; border-radius: 10px; text-decoration: none; font-weight: 700; }
+  h1 { font-weight: 900; font-size: 18px; letter-spacing: 2px; color: #ffcc33; }
+  canvas { width: 100%; aspect-ratio: 5 / 8; display: block; border-radius: 16px; touch-action: none; cursor: pointer; }
+  p { color: #8f95c2; font-size: 14px; text-align: center; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar"><a class="back" href="index.html">← Back</a><h1>STACK TOWER</h1><span style="width:60px"></span></div>
+  <canvas id="c" width="500" height="800"></canvas>
+  <p>Tap, click or press Space to drop the block. Line it up perfectly for a bonus!</p>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('c'), g = cv.getContext('2d'), W = 500, H = 800, BH = 34;
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  let best = +(function () { try { return localStorage.getItem('stackBest') || 0; } catch (e) { return 0; } })();
+  let stack, cur, cam, state, score, combo, falls, parts, hue0, flash;
+  let ac = null;
+  function tone(f, d, vol, type) { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); const t = ac.currentTime, o = ac.createOscillator(), gn = ac.createGain(); o.type = type || 'triangle'; o.frequency.value = f; gn.gain.setValueAtTime(vol, t); gn.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(gn); gn.connect(ac.destination); o.start(t); o.stop(t + d + 0.02); } catch (e) {} }
+  const col = i => 'hsl(' + ((hue0 + i * 9) % 360) + ',75%,58%)';
+  function reset() {
+    hue0 = Math.random() * 360; stack = [{ x: 125, w: 250 }]; cam = 0; score = 0; combo = 0; falls = []; parts = []; flash = 0;
+    spawn(); state = 'ready';
+  }
+  function spawn() {
+    const top = stack[stack.length - 1], fromLeft = stack.length % 2 === 0;
+    cur = { x: fromLeft ? -top.w : W, w: top.w, dir: fromLeft ? 1 : -1, sp: Math.min(9, 3.2 + stack.length * 0.12) };
+  }
+  function drop() {
+    if (state === 'ready') { state = 'play'; return; }
+    if (state === 'over') { reset(); state = 'play'; return; }
+    const top = stack[stack.length - 1], i = stack.length;
+    const l = Math.max(cur.x, top.x), r = Math.min(cur.x + cur.w, top.x + top.w), w = r - l;
+    if (w <= 0) { falls.push({ x: cur.x, w: cur.w, y: i, vy: 0, i: i }); over(); return; }
+    if (Math.abs(cur.x - top.x) < 6) {
+      combo++; stack.push({ x: top.x, w: top.w }); flash = 1;
+      if (combo >= 3) { const grow = Math.min(20, W * 0.8 - top.w); stack[stack.length - 1].w += grow; stack[stack.length - 1].x -= grow / 2; }
+      tone(520 + combo * 60, 0.25, 0.12); score += 1;
+      for (let k = 0; k < 14; k++) parts.push({ x: top.x + Math.random() * top.w, y: i, vx: (Math.random() - 0.5) * 4, vy: -Math.random() * 3, life: 1 });
+    } else {
+      combo = 0; stack.push({ x: l, w: w });
+      const cutX = cur.x < top.x ? cur.x : r, cutW = cur.w - w;
+      falls.push({ x: cutX, w: cutW, y: i, vy: 0, i: i });
+      tone(300 + Math.min(stack.length, 40) * 8, 0.12, 0.1, 'square');
+    }
+    score++; spawn();
+  }
+  function over() { state = 'over'; if (score > best) { best = score; save('stackBest', best); } tone(160, 0.5, 0.15, 'sawtooth'); }
+  function update(dt) {
+    const k = dt * 60;
+    if (state === 'play') { cur.x += cur.dir * cur.sp * k; if (cur.x + cur.w > W + 40 && cur.dir > 0) cur.dir = -1; if (cur.x < -40 && cur.dir < 0) cur.dir = 1; }
+    const target = Math.max(0, stack.length - 12) * BH; cam += (target - cam) * Math.min(1, dt * 4);
+    for (const f of falls) { f.vy += 0.6 * k; f.y -= f.vy * k / BH; }
+    falls = falls.filter(f => f.y > -40);
+    for (const p of parts) { p.x += p.vx * k; p.y -= p.vy * k / BH; p.vy -= 0.2 * k; p.life -= dt * 1.5; }
+    parts = parts.filter(p => p.life > 0); flash = Math.max(0, flash - dt * 3);
+  }
+  const Y = i => H - 120 - i * BH + cam;
+  function block(x, i, w, c) { const y = Y(i); g.fillStyle = c; g.fillRect(x, y, w, BH); g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(x, y, w, 6); g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x, y + BH - 6, w, 6); }
+  function draw() {
+    const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, 'hsl(' + ((hue0 + stack.length * 9 + 180) % 360) + ',45%,18%)'); bg.addColorStop(1, 'hsl(' + ((hue0 + 200) % 360) + ',50%,8%)');
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    stack.forEach((b, i) => block(b.x, i, b.w, col(i)));
+    if (state !== 'over') block(cur.x, stack.length, cur.w, col(stack.length));
+    falls.forEach(f => block(f.x, f.y, f.w, col(f.i)));
+    if (flash > 0) { const t = stack[stack.length - 1]; g.strokeStyle = 'rgba(255,255,255,' + flash + ')'; g.lineWidth = 4; g.strokeRect(t.x - 6 * (1 - flash), Y(stack.length - 1) - 6 * (1 - flash), t.w + 12 * (1 - flash), BH + 12 * (1 - flash)); }
+    parts.forEach(p => { g.globalAlpha = p.life; g.fillStyle = '#fff'; g.fillRect(p.x, Y(p.y), 4, 4); }); g.globalAlpha = 1;
+    g.textAlign = 'center'; g.fillStyle = '#fff'; g.font = '900 72px Rubik, sans-serif'; g.fillText(score, W / 2, 110);
+    if (combo >= 2) { g.font = '900 24px Rubik, sans-serif'; g.fillStyle = '#ffcc33'; g.fillText('PERFECT x' + combo + '!', W / 2, 150); }
+    if (state !== 'play') {
+      g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(0, H / 2 - 90, W, 180); g.fillStyle = '#fff'; g.font = '900 40px Rubik, sans-serif';
+      g.fillText(state === 'over' ? 'GAME OVER' : 'STACK TOWER', W / 2, H / 2 - 20);
+      g.font = '700 22px Rubik, sans-serif'; g.fillStyle = '#ffcc33'; g.fillText(state === 'over' ? 'Score ' + score + '  ·  Best ' + best : 'Best ' + best, W / 2, H / 2 + 20);
+      g.fillStyle = '#ddd'; g.fillText('Tap to ' + (state === 'over' ? 'play again' : 'start'), W / 2, H / 2 + 60);
+    }
+  }
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); drop(); });
+  document.addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); if (!e.repeat) drop(); } });
+  reset();
+  let last = 0;
+  function frame(t) { const dt = last ? Math.min(0.05, (t - last) / 1000) : 0.016; last = t; update(dt); draw(); requestAnimationFrame(frame); }
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="presence.js" defer></script>
+</body>
+</html>
