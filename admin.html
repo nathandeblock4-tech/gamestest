@@ -42,6 +42,8 @@
   th { text-align: left; color: #8f95c2; font-weight: 700; padding: 6px; font-size: 12px; }
   td { padding: 8px 6px; border-top: 1px solid #22254a; }
   .hidden { display: none; }
+  select { background: #0e0f1c; border: 2px solid #2c3060; border-radius: 10px; color: #fff; font: 700 14px Rubik, sans-serif; padding: 10px; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #ef4444; color: #fff; font-weight: 800; padding: 12px 18px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.4); z-index: 50; }
 </style>
 </head>
 <body>
@@ -67,6 +69,16 @@
     <div class="card">
       <h2>🟢 Online now</h2>
       <div id="online"><div class="empty">Nobody else is on right now.</div></div>
+    </div>
+
+    <div class="card">
+      <h2>👻 Jumpscare</h2>
+      <div class="send" style="flex-wrap:wrap">
+        <select id="scareKind"><option value="face">😱 Instant: face + scream</option><option value="static">📺 TV static, then face</option><option value="creep">🫀 Creepy build-up, then face</option></select>
+        <select id="scareDelay"><option value="0">Right now</option><option value="3000">In 3 seconds</option><option value="random">Random (2–12 s)</option></select>
+        <button class="btn" id="scareAll" style="background:#ef4444;color:#fff">👻 Scare everyone</button>
+      </div>
+      <div class="muted" style="margin-top:8px">Or tap 👻 next to one person. Sound plays if they've clicked or tapped the page at least once.</div>
     </div>
 
     <div class="card">
@@ -129,6 +141,7 @@
   }
   function onState(c, d) {
     if (d && d.t === 'bye' && users[d.id]) { users[d.id].gone = true; render(); return; }
+    if (d && d.t === 'scared' && users[d.id]) { toast('👻 ' + users[d.id].name + ' just got jumpscared!'); return; }
     if (!d || d.t !== 'state' || typeof d.id !== 'string') return;
     const now = Date.now(), name = String(d.name || 'Guest').slice(0, 20), page = String(d.page || '?').slice(0, 40);
     const u = users[d.id] || (users[d.id] = { first: now });
@@ -164,7 +177,9 @@
       const g = document.createElement('div'); g.className = 'game'; g.textContent = '🎮 ' + u.page;
       const m = document.createElement('button'); m.className = 'mini'; m.textContent = '📣'; m.title = 'Message ' + u.name;
       m.onclick = () => { const t = prompt('Message to ' + u.name + ':'); if (t && u.conn && u.conn.open) u.conn.send({ t: 'msg', text: t.slice(0, 200) }); };
-      r.append(av, who, g, m); box.appendChild(r);
+      const sc = document.createElement('button'); sc.className = 'mini'; sc.textContent = '👻'; sc.title = 'Jumpscare ' + u.name;
+      sc.onclick = () => { if (scareOne(u)) { sc.textContent = '✔'; setTimeout(() => { sc.textContent = '👻'; }, 1500); } };
+      r.append(av, who, g, sc, m); box.appendChild(r);
     }
     const tb = $('log'); tb.innerHTML = '';
     Object.entries(log).sort((a, b) => b[1].last - a[1].last).slice(0, 60).forEach(([id, L]) => {
@@ -181,6 +196,10 @@
     let n = 0; for (const k in users) { const u = users[k]; if (!u.gone && u.conn && u.conn.open) { try { u.conn.send({ t: 'msg', text: t.slice(0, 200) }); n++; } catch (e) {} } }
     $('msg').value = ''; $('sendAll').textContent = n ? 'Sent to ' + n + '!' : 'Nobody online'; setTimeout(() => { $('sendAll').textContent = 'Send'; }, 1800);
   };
+  function scareMsg() { const dv = $('scareDelay').value; return { t: 'scare', kind: $('scareKind').value, delay: dv === 'random' ? 2000 + Math.random() * 10000 : +dv }; }
+  function scareOne(u) { if (!u.gone && u.conn && u.conn.open) { try { u.conn.send(scareMsg()); return true; } catch (e) {} } return false; }
+  $('scareAll').onclick = () => { let n = 0; for (const k in users) if (scareOne(users[k])) n++; $('scareAll').textContent = n ? '👻 Sent to ' + n + '!' : 'Nobody online'; setTimeout(() => { $('scareAll').textContent = '👻 Scare everyone'; }, 1800); };
+  function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 3000); }
   $('clearLog').onclick = () => { if (confirm('Clear the visitor history on this device?')) { log = {}; save('gr_admin_log', '{}'); render(); } };
 
   const saved = load('gr_admin_code');
