@@ -98,64 +98,157 @@
   if (load('fnac_pw')) tryPw(load('fnac_pw'), false); else setTimeout(() => $('pw').focus(), 100);
   const ITEMS = [
     { id: 'click', ic: '👆', name: 'Louder "Bruh"', desc: '+1 per click', base: 15, click: 1 },
-    { id: 'juice', ic: '🧃', name: 'Juice Box', desc: '+0.5 per second', base: 25, rate: 0.5 },
+    { id: 'juice', ic: '🧃', name: 'Juice Box', desc: '+0.5/s', base: 25, rate: 0.5 },
     { id: 'look', ic: '👀', name: 'Over-the-Shoulder Look', desc: 'He turns around. +3/s', base: 120, rate: 3 },
     { id: 'clone', ic: '🧍', name: 'Second Conner', desc: '+10/s', base: 600, rate: 10 },
     { id: 'water', ic: '💧', name: 'Water Bottle Collection', desc: '+40/s', base: 3000, rate: 40 },
     { id: 'class', ic: '🏫', name: 'Classroom 114', desc: '+150/s', base: 15000, rate: 150 },
     { id: 'tv', ic: '📺', name: 'Conner News Network', desc: '+600/s', base: 80000, rate: 600 },
-    { id: 'planet', ic: '🪐', name: 'Planet Conner', desc: '+3000/s', base: 500000, rate: 3000 },
-    { id: 'mega', ic: '💥', name: 'MEGA BRUH', desc: 'Clicks x2', base: 10000, mult: 2, max: 3 }
+    { id: 'planet', ic: '🪐', name: 'Planet Conner', desc: '+3,000/s', base: 500000, rate: 3000 },
+    { id: 'district', ic: '🚌', name: 'Conner School District', desc: '+15,000/s', base: 4e6, rate: 15000 },
+    { id: 'galaxy', ic: '🌌', name: 'Conner Galaxy', desc: '+90,000/s', base: 4e7, rate: 90000 },
+    { id: 'multi', ic: '🌀', name: 'The Conner-verse', desc: '+600,000/s', base: 5e8, rate: 600000 },
+    { id: 'mega', ic: '💥', name: 'MEGA BRUH', desc: 'Clicks x2', base: 10000, mult: 2, max: 3 },
+    { id: 'cps', ic: '🧠', name: 'Big Brain Clicks', desc: 'Clicks also earn 3% of your /s', base: 50000, max: 5 }
   ];
-  let S = { n: 0, total: 0, own: {} };
-  try { const s = JSON.parse(load('connerClickerSave') || 'null'); if (s) S = s; } catch (e) {}
+  const ACH = [
+    ['c100', '100 clicks', () => S.clicks >= 100], ['c1000', '1,000 clicks', () => S.clicks >= 1000], ['c10k', '10,000 clicks', () => S.clicks >= 10000],
+    ['t1k', 'Earn 1K stares', () => S.total >= 1e3], ['t1m', 'Earn 1M stares', () => S.total >= 1e6], ['t1b', 'Earn 1B stares', () => S.total >= 1e9], ['t1t', 'Earn 1T stares', () => S.total >= 1e12],
+    ['g1', 'Click a Golden Conner', () => S.golds >= 1], ['g10', 'Click 10 Golden Conners', () => S.golds >= 10],
+    ['f1', 'Start a Stare Frenzy', () => S.frenzies >= 1], ['crit', 'Land a critical stare', () => S.crits >= 1],
+    ['b10', 'Own 10 of anything', () => ITEMS.some(i => own(i.id) >= 10)], ['b50', 'Own 50 of anything', () => ITEMS.some(i => own(i.id) >= 50)],
+    ['all', 'Own every building', () => ITEMS.filter(i => i.rate).every(i => own(i.id) > 0)], ['reb', 'Rebirth once', () => (S.rebirths || 0) >= 1]
+  ];
+  const fresh = () => ({ n: 0, total: 0, own: {}, clicks: 0, golds: 0, frenzies: 0, crits: 0, ach: {}, coins: 0, rebirths: 0, runTotal: 0, t: Date.now() });
+  let S = fresh();
+  try { const s = JSON.parse(load('connerClickerSave') || 'null'); if (s) S = Object.assign(fresh(), s); } catch (e) {}
+  if (!S.runTotal) S.runTotal = S.total;
   const own = id => S.own[id] || 0;
-  const cost = it => Math.ceil(it.base * Math.pow(1.15, own(it.id)));
-  const perClick = () => (1 + ITEMS.filter(i => i.click).reduce((a, i) => a + i.click * own(i.id), 0)) * Math.pow(2, own('mega'));
-  const perSec = () => ITEMS.filter(i => i.rate).reduce((a, i) => a + i.rate * own(i.id), 0);
+  const mile = id => { const o = own(id); return Math.pow(2, [10, 25, 50, 100].filter(m => o >= m).length); };
+  const costN = (it, k) => { let c = 0, o = own(it.id); for (let i = 0; i < k; i++) c += Math.ceil(it.base * Math.pow(1.15, o + i)); return c; };
+  let buyMode = 1;
+  function buyCount(it) {
+    if (it.max) return 1;
+    if (buyMode !== 'max') return buyMode;
+    let k = 0, c = 0, o = own(it.id); while (k < 500) { const nx = Math.ceil(it.base * Math.pow(1.15, o + k)); if (c + nx > S.n) break; c += nx; k++; } return Math.max(1, k);
+  }
+  const coinMult = () => 1 + 0.1 * (S.coins || 0);
+  let frenzy = 0, meter = 0, boostT = 0, boostK = 1, boostKind = '';
+  const prodMult = () => coinMult() * (boostKind === 'prod' && boostT > 0 ? boostK : 1);
+  const perSec = () => ITEMS.filter(i => i.rate).reduce((a, i) => a + i.rate * own(i.id) * mile(i.id), 0) * prodMult();
+  const perClick = () => ((1 + ITEMS.filter(i => i.click).reduce((a, i) => a + i.click * own(i.id), 0)) * Math.pow(2, own('mega')) + perSec() * 0.03 * own('cps')) * coinMult()
+    * (frenzy > 0 ? 7 : 1) * (boostKind === 'click' && boostT > 0 ? boostK : 1);
   function fmt(n) {
     if (n < 1000) return (Math.round(n * 10) / 10).toString();
-    const u = ['K', 'M', 'B', 'T', 'Qa', 'Qi']; let i = -1; while (n >= 1000 && i < u.length - 1) { n /= 1000; i++; }
+    const u = ['K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp']; let i = -1; while (n >= 1000 && i < u.length - 1) { n /= 1000; i++; }
     return n.toFixed(n < 10 ? 2 : n < 100 ? 1 : 0) + u[i];
   }
+  // ---------- extra UI ----------
+  const css = document.createElement('style');
+  css.textContent = '.modes{display:flex;gap:6px;margin-bottom:10px}.modes button{flex:1;background:#24274a;color:#f2f3ff;border:2px solid transparent;border-radius:10px;padding:6px;font:800 13px Rubik;cursor:pointer}.modes button.on{border-color:#ffcc33;color:#ffcc33}' +
+    '.meter{height:14px;background:#24274a;border-radius:8px;overflow:hidden;margin:12px auto 4px;max-width:280px}.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2f7bff,#ff4fd8);transition:width .1s}.ml{font:800 12px Rubik;color:#9aa0c7}' +
+    '.item .nm small i{color:#9be29b;font-style:normal}.tabs{display:flex;gap:6px;margin-bottom:10px}.tabs button{flex:1;background:none;color:#9aa0c7;border:none;border-bottom:3px solid #24274a;padding:6px;font:800 15px Rubik;cursor:pointer}.tabs button.on{color:#ffcc33;border-color:#ffcc33}' +
+    '.ach{display:flex;gap:8px;align-items:center;background:#24274a;border-radius:10px;padding:8px 10px;margin-bottom:6px;text-align:left;font-weight:700}.ach.no{opacity:.35}.stat{display:flex;justify-content:space-between;padding:6px 2px;border-bottom:1px solid #24274a;font-weight:700}.stat span{color:#9aa0c7}' +
+    '.reb{width:100%;background:linear-gradient(90deg,#ff4fd8,#2f7bff);color:#fff;border:none;border-radius:12px;padding:12px;font:800 15px Rubik;cursor:pointer;margin-top:12px}.reb:disabled{opacity:.4;cursor:default}' +
+    '.spark{position:absolute;pointer-events:none;font-size:22px;animation:sp .8s forwards}@keyframes sp{to{transform:translate(var(--dx),var(--dy)) rotate(200deg);opacity:0}}' +
+    '#face.hit{animation:squish .15s}@keyframes squish{40%{transform:scale(.88,1.06) rotate(-4deg)}80%{transform:scale(1.05,.95)}}#face.fz{border-color:#ff4fd8;box-shadow:0 0 60px #ff4fd8}' +
+    '.crit{color:#ff4fd8!important;font-size:30px!important}.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#ffcc33;color:#1a1300;font:800 15px Rubik;padding:10px 16px;border-radius:12px;z-index:50;animation:tin 3s forwards}@keyframes tin{0%{opacity:0;bottom:0}10%,85%{opacity:1;bottom:20px}100%{opacity:0}}';
+  document.head.appendChild(css);
+  const msg = $('msg');
+  const mt = document.createElement('div'); mt.innerHTML = '<div class="meter"><i id="mfill"></i></div><div class="ml" id="mlab">STARE FRENZY: click fast to fill!</div>';
+  face.after(mt);
+  const shopPanel = document.querySelector('.shop');
+  shopPanel.innerHTML = '<div class="tabs"><button data-t="shop" class="on">Shop</button><button data-t="ach">Awards</button><button data-t="stats">Stats</button></div>' +
+    '<div id="tshop"><div class="modes"><button data-m="1" class="on">x1</button><button data-m="10">x10</button><button data-m="max">Max</button></div><div id="shop"></div></div>' +
+    '<div id="tach" style="display:none"></div><div id="tstats" style="display:none"></div>';
+  shopPanel.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { shopPanel.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b)); ['shop', 'ach', 'stats'].forEach(t => $('t' + t).style.display = t === b.dataset.t ? '' : 'none'); ui(true); });
+  shopPanel.querySelectorAll('.modes button').forEach(b => b.onclick = () => { buyMode = b.dataset.m === 'max' ? 'max' : +b.dataset.m; shopPanel.querySelectorAll('.modes button').forEach(x => x.classList.toggle('on', x === b)); ui(); });
+  function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 3000); }
+
   const shop = $('shop'); const btns = {};
   ITEMS.forEach(it => {
     const b = document.createElement('button'); b.className = 'item';
-    b.innerHTML = '<span class="ic">' + it.ic + '</span><span class="nm"><b>' + it.name + '</b><small>' + it.desc + '</small></span><span class="cost"></span><span class="own"></span>';
-    b.onclick = () => { const c = cost(it); if (S.n >= c && !(it.max && own(it.id) >= it.max)) { S.n -= c; S.own[it.id] = own(it.id) + 1; ding(); $('msg').textContent = 'Bought ' + it.name + '!'; ui(); } };
+    b.innerHTML = '<span class="ic">' + it.ic + '</span><span class="nm"><b>' + it.name + '</b><small></small></span><span class="cost"></span><span class="own"></span>';
+    b.onclick = () => {
+      if (it.max && own(it.id) >= it.max) return;
+      const k = buyCount(it), c = costN(it, k);
+      if (S.n >= c) { S.n -= c; S.own[it.id] = own(it.id) + k; ding(); msg.textContent = 'Bought ' + (k > 1 ? k + ' x ' : '') + it.name + '!'; if (it.rate && [10, 25, 50, 100].some(m => own(it.id) - k < m && own(it.id) >= m)) toast('⚡ ' + it.name + ' is now x' + mile(it.id) + ' stronger!'); ui(); }
+    };
     shop.appendChild(b); btns[it.id] = b;
   });
   let ac = null;
-  function snd(f, d, type, vol) { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 1.6, t + d); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02); } catch (e) {} }
+  function snd(f, d, type, vol) { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 1.6, t + d); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02); } catch (e) {} }
   const ding = () => snd(660, 0.15, 'triangle', 0.1);
-  function float(x, y, txt) { const p = document.createElement('div'); p.className = 'float'; p.textContent = txt; const r = face.parentElement.getBoundingClientRect(); p.style.left = (x - r.left - 10) + 'px'; p.style.top = (y - r.top - 20) + 'px'; face.parentElement.appendChild(p); setTimeout(() => p.remove(), 900); }
+  function float(x, y, txt, crit) { const p = document.createElement('div'); p.className = 'float' + (crit ? ' crit' : ''); p.textContent = txt; const r = face.parentElement.getBoundingClientRect(); p.style.left = (x - r.left - 10 + (Math.random() - 0.5) * 30) + 'px'; p.style.top = (y - r.top - 20) + 'px'; face.parentElement.appendChild(p); setTimeout(() => p.remove(), 900); }
+  function sparks(x, y, n, set) { const r = face.parentElement.getBoundingClientRect(); for (let i = 0; i < n; i++) { const s = document.createElement('div'); s.className = 'spark'; s.textContent = set[Math.floor(Math.random() * set.length)]; s.style.left = (x - r.left - 11) + 'px'; s.style.top = (y - r.top - 11) + 'px'; const a = Math.random() * Math.PI * 2, d = 50 + Math.random() * 70; s.style.setProperty('--dx', Math.cos(a) * d + 'px'); s.style.setProperty('--dy', Math.sin(a) * d + 'px'); face.parentElement.appendChild(s); setTimeout(() => s.remove(), 800); } }
   face.addEventListener('click', e => {
-    const g = perClick(); S.n += g; S.total += g;
-    float(e.clientX || face.getBoundingClientRect().left + 120, e.clientY || face.getBoundingClientRect().top + 120, '+' + fmt(g));
-    snd(300 + Math.random() * 200, 0.06, 'square', 0.04); ui();
+    const fr = face.getBoundingClientRect(), x = e.clientX || fr.left + fr.width / 2, y = e.clientY || fr.top + fr.height / 2;
+    let g = perClick(); const crit = Math.random() < 0.04; if (crit) { g *= 10; S.crits++; }
+    S.n += g; S.total += g; S.runTotal += g; S.clicks++;
+    float(x, y, (crit ? 'CRITICAL STARE! +' : '+') + fmt(g), crit);
+    if (crit || Math.random() < 0.3) sparks(x, y, crit ? 10 : 2, crit ? ['💥', '👀', '⭐'] : ['👀', '💧', '✨']);
+    face.classList.remove('hit'); void face.offsetWidth; face.classList.add('hit');
+    if (frenzy <= 0) { meter = Math.min(100, meter + 2.2); if (meter >= 100) { frenzy = 10; meter = 100; S.frenzies++; toast('🔥 STARE FRENZY! Clicks x7 for 10 seconds!'); snd(440, 0.5, 'sawtooth', 0.1); } }
+    snd(crit ? 180 : 300 + Math.random() * 200, crit ? 0.2 : 0.06, 'square', crit ? 0.08 : 0.04); ui();
   });
-  const milestones = [[100, 'He noticed you.'], [1000, "He's staring now."], [10000, 'The whole class is concerned.'], [100000, 'The school is famous now.'], [1e6, 'Conner has become a legend.'], [1e8, 'The universe is staring back.']];
-  function ui() {
+  const milestones = [[100, 'He noticed you.'], [1000, "He's staring now."], [10000, 'The whole class is concerned.'], [100000, 'The school is famous now.'], [1e6, 'Conner has become a legend.'], [1e8, 'The universe is staring back.'], [1e11, 'Every star in the sky is Conner.']];
+  const coinsFor = () => Math.floor(Math.sqrt(S.runTotal / 1e6));
+  let tabDirty = 0;
+  function ui(force) {
     $('count').textContent = fmt(S.n) + ' stares';
-    $('rate').textContent = fmt(perSec()) + ' per second · ' + fmt(perClick()) + ' per click';
-    ITEMS.forEach(it => { const b = btns[it.id]; const maxed = it.max && own(it.id) >= it.max; b.disabled = maxed || S.n < cost(it); b.querySelector('.cost').textContent = maxed ? 'MAX' : fmt(cost(it)); b.querySelector('.own').textContent = own(it.id) || ''; });
-    const m = milestones.filter(([n]) => S.total >= n).pop(); if (m && !S['m' + m[0]]) { S['m' + m[0]] = 1; $('msg').textContent = '🏆 ' + m[1]; }
+    $('rate').textContent = fmt(perSec()) + ' per second · ' + fmt(perClick()) + ' per click' + (S.coins ? ' · 🪙 +' + Math.round(S.coins * 10) + '%' : '');
+    ITEMS.forEach(it => {
+      const b = btns[it.id], maxed = it.max && own(it.id) >= it.max, k = buyCount(it), c = costN(it, k);
+      b.disabled = maxed || S.n < c; b.querySelector('.cost').textContent = maxed ? 'MAX' : (k > 1 ? k + 'x ' : '') + fmt(c); b.querySelector('.own').textContent = own(it.id) || '';
+      const m = it.rate ? mile(it.id) : 1, nx = [10, 25, 50, 100].find(v => own(it.id) < v);
+      b.querySelector('small').innerHTML = it.desc + (m > 1 ? ' <i>x' + m + '</i>' : '') + (it.rate && nx ? ' · x2 at ' + nx : '');
+    });
+    const m = milestones.filter(([n]) => S.total >= n).pop(); if (m && !S['m' + m[0]]) { S['m' + m[0]] = 1; msg.textContent = '🏆 ' + m[1]; }
+    ACH.forEach(([id, name, f]) => { if (!S.ach[id] && f()) { S.ach[id] = 1; toast('🏅 Award: ' + name); } });
+    $('mfill').style.width = (frenzy > 0 ? frenzy * 10 : meter) + '%';
+    $('mlab').textContent = frenzy > 0 ? '🔥 FRENZY! x7 clicks · ' + Math.ceil(frenzy) + 's' : boostT > 0 ? '✨ ' + (boostKind === 'click' ? 'Click' : 'Production') + ' x' + boostK + ' · ' + Math.ceil(boostT) + 's' : 'STARE FRENZY: click fast to fill!';
+    face.classList.toggle('fz', frenzy > 0);
+    if (force || (tabDirty++ % 10 === 0)) {
+      if ($('tach').style.display !== 'none') $('tach').innerHTML = '<div class="ml" style="margin-bottom:8px">' + Object.keys(S.ach).length + ' / ' + ACH.length + ' awards</div>' + ACH.map(([id, name]) => '<div class="ach' + (S.ach[id] ? '' : ' no') + '">' + (S.ach[id] ? '🏅' : '🔒') + ' ' + name + '</div>').join('');
+      if ($('tstats').style.display !== 'none') {
+        const c = coinsFor(), gain = Math.max(0, c - (S.coins || 0));
+        $('tstats').innerHTML = [['Stares this run', fmt(S.runTotal)], ['All-time stares', fmt(S.total)], ['Clicks', fmt(S.clicks)], ['Critical stares', fmt(S.crits)], ['Golden Conners', S.golds], ['Frenzies', S.frenzies], ['Rebirths', S.rebirths || 0], ['Conner Coins', (S.coins || 0) + ' (+' + Math.round((S.coins || 0) * 10) + '% everything)']].map(r => '<div class="stat"><span>' + r[0] + '</span>' + r[1] + '</div>').join('') +
+          '<button class="reb" id="reb"' + (gain > 0 ? '' : ' disabled') + '>🌀 REBIRTH: +' + gain + ' Conner Coins</button><div class="ml" style="margin-top:6px">Rebirth resets stares and buildings but keeps awards. Each coin = +10% forever. More coins the more you earn (first coin at 1M this run).</div>';
+        const rb = $('reb'); if (rb) rb.onclick = () => { if (!rb.dataset.c) { rb.dataset.c = 1; rb.textContent = 'Click again to rebirth!'; return; } const keep = { total: S.total, clicks: S.clicks, golds: S.golds, frenzies: S.frenzies, crits: S.crits, ach: S.ach, coins: c, rebirths: (S.rebirths || 0) + 1 }; S = Object.assign(fresh(), keep); frenzy = 0; meter = 0; save('connerClickerSave', JSON.stringify(S)); toast('🌀 Reborn with ' + c + ' Conner Coins!'); ui(true); };
+      }
+    }
   }
+  // offline earnings
+  if (S.t && perSec() > 0) { const away = Math.min(8 * 3600, (Date.now() - S.t) / 1000); if (away > 60) { const g = perSec() * away * 0.5; S.n += g; S.total += g; S.runTotal += g; setTimeout(() => toast('😴 While you were gone Conner earned ' + fmt(g) + ' stares'), 600); } }
   let last = performance.now();
-  setInterval(() => { const now = performance.now(); const g = perSec() * (now - last) / 1000; last = now; S.n += g; S.total += g; ui(); }, 100);
-  setInterval(() => save('connerClickerSave', JSON.stringify(S)), 3000);
-  window.addEventListener('beforeunload', () => save('connerClickerSave', JSON.stringify(S)));
-  // golden Conner: click for a big bonus
+  setInterval(() => {
+    const now = performance.now(), dt = (now - last) / 1000; last = now;
+    const g = perSec() * dt; S.n += g; S.total += g; S.runTotal += g;
+    if (frenzy > 0) { frenzy -= dt; if (frenzy <= 0) { frenzy = 0; meter = 0; } } else meter = Math.max(0, meter - dt * 6);
+    if (boostT > 0) boostT -= dt;
+    ui();
+  }, 100);
+  const persist = () => { S.t = Date.now(); save('connerClickerSave', JSON.stringify(S)); };
+  setInterval(persist, 3000); window.addEventListener('beforeunload', persist);
+  // golden Conner: random effect
   function golden() {
     const g = document.createElement('div'); g.className = 'golden';
     const gi = img2.complete && img2.naturalWidth ? img2 : img; if (gi.complete && gi.naturalWidth) g.style.backgroundImage = 'url(' + gi.src + ')';
     g.style.left = (20 + Math.random() * (innerWidth - 110)) + 'px'; g.style.top = (80 + Math.random() * (innerHeight - 180)) + 'px';
-    g.onclick = () => { const bonus = Math.max(50, perSec() * 30 + perClick() * 20); S.n += bonus; S.total += bonus; $('msg').textContent = '✨ GOLDEN CONNER! +' + fmt(bonus); snd(880, 0.3, 'triangle', 0.12); g.remove(); ui(); };
-    document.body.appendChild(g); setTimeout(() => g.remove(), 7000);
-    setTimeout(golden, 40000 + Math.random() * 50000);
+    g.onclick = () => {
+      S.golds++; const r = Math.random();
+      if (r < 0.4) { const bonus = Math.max(50, perSec() * 60 + perClick() * 20); S.n += bonus; S.total += bonus; S.runTotal += bonus; toast('✨ GOLDEN CONNER! +' + fmt(bonus) + ' stares'); }
+      else if (r < 0.75) { boostKind = 'prod'; boostK = 7; boostT = 30; toast('✨ GOLDEN CONNER! Production x7 for 30s'); }
+      else if (r < 0.92) { boostKind = 'click'; boostK = 50; boostT = 10; toast('✨ GOLDEN CONNER! CLICKS x50 for 10s!'); }
+      else { frenzy = 10; S.frenzies++; toast('✨ GOLDEN CONNER! Instant Stare Frenzy!'); }
+      snd(880, 0.3, 'triangle', 0.12); g.remove(); ui();
+    };
+    document.body.appendChild(g); setTimeout(() => g.remove(), 8000);
+    setTimeout(golden, 35000 + Math.random() * 45000);
   }
-  $('reset').onclick = () => { if ($('reset').dataset.c) { S = { n: 0, total: 0, own: {} }; save('connerClickerSave', JSON.stringify(S)); $('reset').textContent = 'reset progress'; delete $('reset').dataset.c; ui(); } else { $('reset').dataset.c = 1; $('reset').textContent = 'click again to really reset'; } };
-  ui();
+  window.__cc = { golden, S: () => S };
+  $('reset').onclick = () => { if ($('reset').dataset.c) { S = fresh(); save('connerClickerSave', JSON.stringify(S)); $('reset').textContent = 'reset progress'; delete $('reset').dataset.c; ui(true); } else { $('reset').dataset.c = 1; $('reset').textContent = 'click again to really reset'; } };
+  ui(true);
 })();
 </script>
 <script src="presence.js" defer></script>
