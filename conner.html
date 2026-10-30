@@ -49,9 +49,19 @@
   // ================= THE FACE (photo if uploaded, drawn fallback otherwise) =================
   const photo = new Image();
   let photoOK = false;
+  const photo2 = new Image();
   photo.onload = () => { photoOK = true; };
   // ---- password lock: the face is stored encrypted; the password decrypts it ----
   let locked = true;
+  async function loadSecond(pw) {
+    try {
+      const raw2 = new Uint8Array(await (await fetch('conner2.bin', { cache: 'no-store' })).arrayBuffer());
+      const base2 = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+      const key2 = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: raw2.slice(0, 16), iterations: 200000, hash: 'SHA-256' }, base2, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+      const plain2 = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw2.slice(16, 28) }, key2, raw2.slice(28));
+      photo2.src = URL.createObjectURL(new Blob([plain2], { type: 'image/jpeg' }));
+    } catch (e2) {}
+  }
   async function unlock(pw) {
     const raw = new Uint8Array(await (await fetch('conner.bin', { cache: 'no-store' })).arrayBuffer());
     const salt = raw.slice(0, 16), iv = raw.slice(16, 28), ct = raw.slice(28);
@@ -61,6 +71,7 @@
     photo.src = URL.createObjectURL(new Blob([plain], { type: 'image/jpeg' }));
     await new Promise((res, rej) => { photo.onload = () => { photoOK = true; res(); }; photo.onerror = rej; });
     locked = false; document.getElementById('lock').style.display = 'none';
+    loadSecond(pw);
   }
   async function tryPw(pw, remember) {
     const msg = document.getElementById('lockMsg'); msg.style.color = '#888'; msg.textContent = 'Checking...';
@@ -789,7 +800,8 @@
     // the face slowly emerging on the right
     const a = 0.25 + Math.sin(stateT * 0.7) * 0.12 + (Math.random() < 0.05 ? 0.3 : 0);
     ctx.save(); ctx.globalAlpha = a;
-    drawHead(ctx, 960 + Math.sin(stateT * 0.5) * 6, 340, 460, 'grayscale(1) contrast(1.5) brightness(0.8)');
+    if (photo2.complete && photo2.naturalWidth) { ctx.filter = 'grayscale(1) contrast(1.35) brightness(1.35)'; ctx.globalAlpha = Math.min(1, a * 1.6); const ph = 640, pw2 = ph * photo2.width / photo2.height; ctx.drawImage(photo2, 960 - pw2 / 2 + Math.sin(stateT * 0.5) * 6, 60, pw2, ph); ctx.filter = 'none'; }
+    else drawHead(ctx, 960 + Math.sin(stateT * 0.5) * 6, 340, 460, 'grayscale(1) contrast(1.5) brightness(0.8)');
     ctx.restore();
     if (Math.random() < 0.02) { ctx.save(); ctx.globalAlpha = 0.7; drawHead(ctx, 960, 340, 520, 'contrast(1.8)'); ctx.restore(); }
     drawNoise(0.12); scanlines(0.25);
