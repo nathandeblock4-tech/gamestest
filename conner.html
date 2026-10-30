@@ -373,90 +373,126 @@
     wcorner: ['LDOOR'], ecorner: ['RDOOR']
   };
 
-  // stage
+  // ---- school room helpers ----
+  function desk(g, x, y, s) {
+    g.fillStyle = '#6b5a44'; g.fillRect(x - 40 * s, y - 14 * s, 80 * s, 12 * s);
+    g.fillStyle = '#4a3e30'; g.fillRect(x - 40 * s, y - 2 * s, 80 * s, 4 * s);
+    g.fillStyle = '#2a2a2e'; g.fillRect(x - 36 * s, y, 4 * s, 34 * s); g.fillRect(x + 32 * s, y, 4 * s, 34 * s);
+    g.fillStyle = '#3c4a6a'; g.fillRect(x - 22 * s, y + 6 * s, 44 * s, 8 * s); g.fillRect(x - 22 * s, y - 30 * s, 44 * s, 18 * s);
+    g.fillStyle = '#2a2a2e'; g.fillRect(x - 20 * s, y + 14 * s, 3 * s, 22 * s); g.fillRect(x + 17 * s, y + 14 * s, 3 * s, 22 * s);
+  }
+  function lockers(g, x, y, w, h, n, col) {
+    for (let i = 0; i < n; i++) {
+      const lx = x + i * w / n; g.fillStyle = i % 2 ? col : shade(col, 0.88); g.fillRect(lx, y, w / n - 2, h);
+      g.fillStyle = 'rgba(0,0,0,.35)'; for (let k = 0; k < 3; k++) g.fillRect(lx + 4, y + 8 + k * 6, w / n - 10, 2);
+      g.fillStyle = '#c8c8c8'; g.fillRect(lx + w / n - 9, y + h * 0.5, 3, 10);
+    }
+  }
+  function shade(hex, k) { const n = parseInt(hex.slice(1), 16), f = c => Math.round(c * k); return 'rgb(' + f(n >> 16) + ',' + f((n >> 8) & 255) + ',' + f(n & 255) + ')'; }
+  function books(g, x, y, w, h, rows) {
+    g.fillStyle = '#3a2a1c'; g.fillRect(x, y, w, h);
+    const rh = h / rows;
+    for (let r = 0; r < rows; r++) {
+      const sy = y + r * rh; g.fillStyle = '#24180e'; g.fillRect(x, sy + rh - 6, w, 6);
+      let bx = x + 4;
+      while (bx < x + w - 8) { const bw = 6 + Math.random() * 10, bh = rh * (0.55 + Math.random() * 0.35); g.fillStyle = ['#7a2a2a', '#2a4a7a', '#2a6a3a', '#8a7a3a', '#5a3a6a', '#aa6a2a'][Math.floor(Math.random() * 6)]; g.fillRect(bx, sy + rh - 6 - bh, bw - 1, bh); bx += bw; }
+    }
+  }
+  // Cam 1: Classroom 114
   ROOMS.stage.bg = layer(g => {
-    shell(g, { wall: '#33242c', side: '#241820', floor: '#2a2220', ceil: '#100b0e', tiles: true });
-    g.fillStyle = '#5e3a24'; g.fillRect(360, 360, 560, 30); g.fillStyle = '#3e2416'; g.fillRect(360, 390, 560, 80);
-    for (const [x0, x1] of [[340, 480], [800, 940]]) {
-      for (let x = x0; x < x1; x += 20) { const gr = g.createLinearGradient(x, 0, x + 20, 0); gr.addColorStop(0, '#4a0c10'); gr.addColorStop(0.5, '#7a1a20'); gr.addColorStop(1, '#3a080c'); g.fillStyle = gr; g.fillRect(x, 170, 20, 300); }
-    }
-    sign(g, '★ ROOM 114 ★', 470, 190, 340, 60, '#3b1a4a', '#e8c040', 42);
-    g.fillStyle = 'rgba(255,240,200,.06)'; g.beginPath(); g.moveTo(600, 170); g.lineTo(680, 170); g.lineTo(800, 470); g.lineTo(480, 470); g.fill();
-    grime(g, 50);
+    shell(g, { wall: '#2e3540', side: '#232933', floor: '#2b2824', ceil: '#0f1114', tiles: true });
+    g.fillStyle = '#e6e6df'; g.fillRect(420, 200, 440, 150); g.strokeStyle = '#8a8a8a'; g.lineWidth = 6; g.strokeRect(420, 200, 440, 150);
+    g.fillStyle = '#555'; g.fillRect(430, 350, 420, 8);
+    g.fillStyle = '#b02a2a'; g.font = 'bold 22px "Special Elite", serif'; g.textAlign = 'center'; g.fillText('MAKE SURE YOU', 640, 245); g.fillText('THINK FOR YOURSELF', 640, 275);
+    g.fillStyle = '#2a4aa0'; g.font = '18px "Special Elite", serif'; g.fillText('CH 8 / Frankenstein', 640, 315);
+    g.fillStyle = '#ddd'; g.beginPath(); g.arc(640, 186, 12, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#222'; g.lineWidth = 2; g.beginPath(); g.moveTo(640, 186); g.lineTo(640, 178); g.moveTo(640, 186); g.lineTo(646, 189); g.stroke();
+    g.fillStyle = '#8a1a1a'; g.fillRect(372, 200, 3, 90); for (let i = 0; i < 6; i++) { g.fillStyle = i % 2 ? '#eee' : '#b02020'; g.fillRect(375, 200 + i * 6, 32, 6); } g.fillStyle = '#1a2a6a'; g.fillRect(375, 200, 14, 18);
+    sign(g, 'ROOM 114', 880, 182, 110, 30, '#1a1a1a', '#e8e8e8', 20);
+    for (let row = 0; row < 3; row++) { const t = row / 3, s = 0.7 + t * 0.9, y = 420 + t * 170; for (let c = -2; c <= 2; c++) desk(g, 640 + c * 150 * s, y, s); }
+    g.textAlign = 'left'; grime(g, 40);
   });
-  // gift shop
+  // Cam 2: Library
   ROOMS.gift.bg = layer(g => {
-    const b = shell(g, { wall: '#26302f', side: '#1a2221', floor: '#262420', ceil: '#0d1110' });
-    sign(g, 'LIBRARY', 520, 190, 240, 50, '#c2a53a', '#2b1a10', 34);
-    for (let s = 0; s < 3; s++) {
-      const y = 260 + s * 70;
-      g.fillStyle = '#3b2a1c'; g.fillRect(40, y + 40, 260, 10);
-      for (let i = 0; i < 6; i++) { const x = 60 + i * 40; g.fillStyle = ['#7a4a2a', '#8a5a30', '#6a3a1a'][i % 3]; g.beginPath(); g.arc(x, y + 22, 16, 0, Math.PI * 2); g.fill(); g.fillStyle = '#ddd'; g.beginPath(); g.arc(x - 5, y + 18, 4, 0, Math.PI * 2); g.arc(x + 5, y + 18, 4, 0, Math.PI * 2); g.fill(); g.fillStyle = '#111'; g.beginPath(); g.arc(x, y + 30, 4, 0, Math.PI * 2); g.fill(); }
-    }
-    grime(g, 50);
+    shell(g, { wall: '#2c2620', side: '#211c17', floor: '#2a2420', ceil: '#0e0c0a' });
+    sign(g, 'LIBRARY', 540, 182, 200, 40, '#2a4a2a', '#e8e0c0', 28);
+    books(g, 350, 230, 580, 230, 4);
+    g.fillStyle = '#4a3a2a'; g.fillRect(470, 470, 340, 18); g.fillStyle = '#2a2018'; g.fillRect(480, 488, 10, 60); g.fillRect(790, 488, 10, 60);
+    g.fillStyle = 'rgba(255,240,200,.07)'; g.beginPath(); g.moveTo(600, 170); g.lineTo(680, 170); g.lineTo(820, 470); g.lineTo(460, 470); g.fill();
+    grime(g, 45);
   });
   ROOMS.gift.fg = layer(g => {
-    g.fillStyle = '#2e2116'; g.fillRect(900, 220, 300, 420);
-    for (let s = 0; s < 5; s++) { g.fillStyle = '#1c140d'; g.fillRect(900, 230 + s * 82, 300, 10); for (let i = 0; i < 6; i++) { g.fillStyle = ['#4a3a6a', '#6a2a2a', '#2a5a3a'][(i + s) % 3]; g.fillRect(912 + i * 47, 250 + s * 82, 36, 58); } }
-    g.fillStyle = '#20180f'; g.fillRect(380, 520, 360, 200); g.fillStyle = '#3a2a1a'; g.fillRect(380, 510, 360, 18);
+    books(g, 900, 200, 330, 500, 6);
+    g.fillStyle = '#20180f'; g.fillRect(380, 560, 380, 160); g.fillStyle = '#3a2a1a'; g.fillRect(380, 548, 380, 18);
+    g.fillStyle = '#ddd'; g.fillRect(420, 530, 60, 20); g.fillStyle = '#2a4a7a'; g.fillRect(500, 526, 40, 24);
   });
-  // feeding room
+  // Cam 3: Cafeteria
   ROOMS.feed.bg = layer(g => {
-    shell(g, { wall: '#34342a', side: '#25251d', floor: '#302d27', ceil: '#0f0f0b', tiles: true });
-    sign(g, 'NO STUDENTS AFTER DARK', 450, 185, 380, 44, '#8a1a1a', '#f0e0c0', 28);
-    for (let i = 0; i < 4; i++) { g.fillStyle = '#6a4a22'; g.fillRect(820 + i * 30, 400 + (i % 2) * 20, 70, 60); g.fillStyle = '#d8c040'; g.font = 'bold 14px Impact'; g.fillText('LUNCH', 825 + i * 30, 435 + (i % 2) * 20); }
-    g.fillStyle = '#555'; g.fillRect(380, 420, 40, 50); g.fillRect(430, 430, 40, 40);
+    shell(g, { wall: '#3a3830', side: '#2a2822', floor: '#33302a', ceil: '#100f0c', tiles: true });
+    g.fillStyle = '#7a7a80'; g.fillRect(380, 330, 520, 60); g.fillStyle = '#9a9aa0'; g.fillRect(380, 322, 520, 12);
+    for (let i = 0; i < 5; i++) { g.fillStyle = '#5a5a60'; g.fillRect(400 + i * 100, 300, 80, 24); }
+    sign(g, 'LUNCH', 560, 196, 160, 44, '#c08020', '#2a1a00', 30);
+    g.fillStyle = '#20201c'; g.fillRect(760, 200, 130, 100); g.fillStyle = '#e8e0a0'; g.font = '16px VT323'; g.fillText('PIZZA FRIDAY', 770, 225); g.fillText('TACO TUES', 770, 248); g.fillText('???', 770, 271);
+    for (let row = 0; row < 3; row++) { const t = row / 3, s = 0.7 + t * 0.8, y = 440 + t * 150, w = 600 * s; g.fillStyle = '#6a5a8a'; g.fillRect(640 - w / 2, y, w, 16 * s); g.fillStyle = '#3a3050'; g.fillRect(640 - w / 2, y + 16 * s, w, 6 * s); g.fillStyle = '#2a2a2e'; g.fillRect(640 - w / 2 + 20, y + 22 * s, 6 * s, 30 * s); g.fillRect(640 + w / 2 - 26, y + 22 * s, 6 * s, 30 * s);
+      for (let k = 0; k < 4; k++) { g.fillStyle = '#c8a050'; g.fillRect(640 - w / 2 + 60 + k * w / 4.4, y - 6 * s, 40 * s, 8 * s); } }
     grime(g, 50);
   });
-  ROOMS.feed.fg = layer(g => {
-    g.fillStyle = '#1a1a1a';
-    for (let x = 300; x < 760; x += 34) { g.fillRect(x, 150, 10, 480); }
-    g.fillRect(290, 150, 480, 14); g.fillRect(290, 600, 480, 14);
-    g.fillStyle = 'rgba(255,255,255,.08)'; for (let x = 300; x < 760; x += 34) g.fillRect(x + 2, 150, 2, 480);
-  });
-  // halls
+  ROOMS.feed.fg = layer(g => { g.fillStyle = '#1e1e22'; g.fillRect(0, 640, W, 80); g.fillStyle = '#4a4a50'; g.fillRect(1000, 520, 70, 120); g.fillStyle = '#2a6a3a'; g.fillRect(1000, 520, 70, 14); });
+  // Cams 4 + 6: hallways with lockers
   function hall(g, mirror) {
-    const b = shell(g, { wall: '#1c1c22', side: '#2a2a30', floor: '#24221f', ceil: '#0c0c0e', tiles: true, b: [560, 250, 720, 420] });
-    for (let i = 0; i < 4; i++) {
-      const t = i / 4, x0 = 40 + t * 480, y0 = 120 + t * 120, w = 70 * (1 - t * 0.7), h = 300 * (1 - t * 0.55);
-      g.fillStyle = '#3a2f26'; g.fillRect(x0, y0, w, h); g.fillRect(W - x0 - w, y0, w, h);
-      g.fillStyle = '#c8b840'; g.fillRect(x0 + w * 0.75, y0 + h * 0.5, 5, 5); g.fillRect(W - x0 - w * 0.25, y0 + h * 0.5, 5, 5);
+    shell(g, { wall: '#1c1c22', side: '#26262c', floor: '#24221f', ceil: '#0c0c0e', tiles: true, b: [560, 250, 720, 420] });
+    g.save();
+    for (const side of [0, 1]) {
+      if (side) { g.translate(W, 0); g.scale(-1, 1); }
+      for (let i = 0; i < 12; i++) {
+        const t0 = i / 12, t1 = (i + 1) / 12;
+        const x0 = 20 + t0 * 530, x1 = 20 + t1 * 530, top0 = 110 + t0 * 140, top1 = 110 + t1 * 140, bot0 = 600 - t0 * 190, bot1 = 600 - t1 * 190;
+        g.fillStyle = i % 2 ? '#2a4a8a' : '#24407a'; g.beginPath(); g.moveTo(x0, top0); g.lineTo(x1, top1); g.lineTo(x1, bot1); g.lineTo(x0, bot0); g.fill();
+        g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = 2; g.beginPath(); g.moveTo(x1, top1); g.lineTo(x1, bot1); g.stroke();
+        g.fillStyle = '#ccc'; g.fillRect(x0 + (x1 - x0) * 0.75, (top0 + bot0) / 2, 3, 8 * (1 - t0 * 0.6));
+      }
+      g.setTransform(1, 0, 0, 1, 0, 0);
     }
+    g.restore();
     for (let i = 0; i < 4; i++) { const t = i / 4, y = 20 + t * 220, w = 260 * (1 - t * 0.8); g.fillStyle = i === 1 ? '#555' : '#ddd8b0'; g.fillRect(W / 2 - w / 2, y, w, 14 * (1 - t * 0.6)); }
     sign(g, mirror ? 'EXIT →' : '← EXIT', 600, 262, 80, 24, '#0a3a12', '#3aff6a', 18);
-    g.fillStyle = '#5a2a3a'; g.fillRect(mirror ? 980 : 180, 200, 90, 120); g.fillStyle = '#e8c040'; g.font = 'bold 16px Impact'; g.textAlign = 'center'; g.fillText('SMILE!', mirror ? 1025 : 225, 230);
-    g.textAlign = 'left';
+    sign(g, 'GO TIGERS!', 580, 300, 120, 26, '#c08020', '#1a1a1a', 18);
     grime(g, 60);
   }
   ROOMS.whall.bg = layer(g => hall(g, false));
   ROOMS.ehall.bg = layer(g => hall(g, true));
-  // closet
+  // Cam 5: Janitor closet
   ROOMS.closet.bg = layer(g => {
-    shell(g, { wall: '#2a241c', side: '#1d1913', floor: '#25211b', ceil: '#0c0a08', b: [420, 200, 860, 460] });
-    for (let s = 0; s < 3; s++) { g.fillStyle = '#3a2e20'; g.fillRect(430, 260 + s * 70, 420, 8); for (let i = 0; i < 5; i++) { g.fillStyle = ['#8a7050', '#6a5038', '#a08060'][(i + s) % 3]; g.fillRect(440 + i * 82, 222 + s * 70, 64, 38); } }
+    shell(g, { wall: '#2a2a24', side: '#1d1d18', floor: '#25241e', ceil: '#0c0c0a', b: [420, 200, 860, 460] });
+    for (let s = 0; s < 3; s++) { g.fillStyle = '#4a4a44'; g.fillRect(430, 260 + s * 70, 420, 8); for (let i = 0; i < 7; i++) { g.fillStyle = ['#3a7ac0', '#d0c040', '#c04040', '#e0e0e0'][(i + s) % 4]; g.fillRect(445 + i * 58, 228 + s * 70, 22, 32); g.fillStyle = '#222'; g.fillRect(450 + i * 58, 222 + s * 70, 12, 8); } }
     g.strokeStyle = '#111'; g.lineWidth = 2; g.beginPath(); g.moveTo(640, 0); g.lineTo(640, 90); g.stroke();
     g.fillStyle = '#e8d890'; g.beginPath(); g.arc(640, 100, 12, 0, Math.PI * 2); g.fill();
     g.fillStyle = 'rgba(255,240,180,.07)'; g.beginPath(); g.moveTo(630, 100); g.lineTo(650, 100); g.lineTo(900, 720); g.lineTo(380, 720); g.fill();
+    sign(g, 'WET FLOOR', 760, 400, 90, 60, '#e8c020', '#1a1a1a', 16);
     grime(g, 50);
   });
   ROOMS.closet.fg = layer(g => {
-    g.fillStyle = '#4a4a50'; g.fillRect(140, 520, 160, 200); g.fillStyle = '#2a2a30'; g.fillRect(140, 520, 160, 16);
-    g.fillStyle = '#7a6040'; g.fillRect(860, 560, 260, 160); g.fillRect(900, 470, 180, 100);
+    g.fillStyle = '#e8c020'; g.fillRect(140, 560, 170, 160); g.fillStyle = '#b89010'; g.fillRect(140, 560, 170, 18);
+    g.strokeStyle = '#7a6040'; g.lineWidth = 10; g.beginPath(); g.moveTo(230, 560); g.lineTo(300, 120); g.stroke();
+    g.fillStyle = '#aaa'; g.fillRect(270, 100, 60, 30);
+    g.fillStyle = '#4a4a50'; g.fillRect(900, 520, 200, 200);
   });
-  // corners
+  // Cams 7 + 8: corners by the office (stairwell, trophy case)
   function corner(g, mirror) {
     g.save(); if (mirror) { g.translate(W, 0); g.scale(-1, 1); }
     shell(g, { wall: '#16161a', side: '#222228', floor: '#1e1c1a', ceil: '#09090b', b: [720, 140, 1040, 560] });
-    g.fillStyle = '#3a3a3e'; for (let i = 0; i < 3; i++) g.fillRect(760 + i * 40, 140, 16, 420);
-    g.fillStyle = '#2a221c'; g.fillRect(1100, 120, 180, 600);
+    g.fillStyle = '#3a3a3e'; for (let i = 0; i < 6; i++) { g.fillRect(740, 520 - i * 60, 300 - i * 20, 12); }
+    g.fillStyle = '#2a2a2e'; g.fillRect(730, 140, 8, 420);
+    g.fillStyle = '#1a1612'; g.fillRect(160, 200, 380, 260); g.fillStyle = 'rgba(160,200,255,.08)'; g.fillRect(170, 210, 360, 240);
+    for (let i = 0; i < 5; i++) { g.fillStyle = '#c8a030'; g.fillRect(200 + i * 66, 330, 26, 40); g.beginPath(); g.arc(213 + i * 66, 320, 18, 0, Math.PI, true); g.fill(); g.fillRect(205 + i * 66, 370, 16, 10); }
     g.fillStyle = '#8a1010'; g.font = 'bold 22px Impact'; g.fillText('STAFF ONLY', 1110, 170);
+    g.fillStyle = '#2a221c'; g.fillRect(1100, 180, 180, 540);
     g.restore();
     grime(g, 70);
   }
   ROOMS.wcorner.bg = layer(g => corner(g, false));
   ROOMS.ecorner.bg = layer(g => corner(g, true));
 
-  // where Demetrius stands in each camera
+  // where Conner stands in each camera
   const POSE = {
     stage: { x: 640, y: 255, s: 80 },
     gift: { x: 880, y: 300, s: 110 },
@@ -470,14 +506,16 @@
 
   // ================= GAME STATE =================
   const HOUR = 45;
-  const AI = [0, 4, 7, 10, 13, 16];
+  const AI = [0, 4, 7, 10, 13, 16, 20];
+  let customAI = 10;
   const CALLS = [
     '',
     "Hey! Uh, hi. Welcome to your first night as the security guard at the school. Easy job, really. Watch the cameras, save power, and if he comes to your door... close it. There's a kid named Conner. Blue shirt. He never went home after last period. Nobody knows how he's still here. He just... looks at you. Over his shoulder. Don't let him get close. See you at six. Probably.",
     "Night two! You made it. Okay so, Conner moves faster once he knows you're watching. Check the corners. He really likes the corners. And if you hear footsteps at a door, that's him. That's not me. I'm at home.",
     "Hey, so the cameras might act up tonight. That's not a glitch. Or it is, but it's HIS glitch. He sits in Classroom 114 like class never ended. Keep an eye on your power. When the power goes out... you'll hear a little song. Don't love that part.",
     "I, uh... I don't think I'm coming in tomorrow. Listen, if you shine the light and he's there, close that door FAST. He doesn't blink. I watched him for ten minutes on camera four. He didn't blink once.",
-    "...hello? ...he's not in the classroom anymore. He's never in the classroom anymore. Close the doors. Close the doors. Clo-"
+    "...hello? ...he's not in the classroom anymore. He's never in the classroom anymore. Close the doors. Close the doors. Clo-",
+    "...it's me."
   ];
   let state = 'menu', night = parseInt(load('fnacNight') || '1', 10);
   if (!(night >= 1 && night <= 5)) night = 1;
@@ -486,17 +524,17 @@
   let flash = 0;    // hallucination flash
   let posterFlash = 0;
 
-  function newNight(n) {
+  function newNight(n, custom) {
     G = {
-      n, time: 0, power: 100, doors: { L: false, R: false }, anim: { L: 0, R: 0 }, lights: { L: false, R: false },
+      n, custom: custom != null, aiBase: custom != null ? custom : null, itsme: 0, time: 0, power: 100, doors: { L: false, R: false }, anim: { L: 0, R: 0 }, lights: { L: false, R: false },
       camUp: false, camAnim: 0, cam: 'stage', glitch: 0,
       dem: { room: 'stage', moveT: 0, doorT: 0 },
-      powerOut: null, call: CALLS[n], callT: 0, callMuted: false, seenAtDoor: false, bright: 1
+      powerOut: null, call: custom != null ? '' : CALLS[n], callT: 0, callMuted: false, seenAtDoor: false, bright: 1
     };
   }
   function goto(s) { state = s; stateT = 0; }
-  function startNight(n) {
-    A(); ensureLoops(); newNight(n); goto('card');
+  function startNight(n, custom) {
+    A(); ensureLoops(); newNight(n, custom); goto('card');
   }
 
   function demMove() {
@@ -520,7 +558,7 @@
   }
   function aggression() {
     const h = Math.floor(G.time / HOUR);
-    return AI[G.n] + (h >= 2 ? 1 : 0) + (h >= 3 ? 1 : 0) + (h >= 4 ? 2 : 0);
+    return (G.aiBase != null ? G.aiBase : AI[Math.min(G.n, 6)]) + (h >= 2 ? 1 : 0) + (h >= 3 ? 1 : 0) + (h >= 4 ? 2 : 0);
   }
   function jumpscare() {
     G.camUp = false; setLoops(false, 0, 0); musicBox(false); stopAmb();
@@ -536,7 +574,9 @@
     if (state === 'card' && stateT > 3) { goto('night'); startAmb(); if (G.call) { ring(); } }
     if (state === 'scare' && stateT > 2.3) { goto('dead'); staticBurst(2.5, 0.25); }
     if (state === 'six' && stateT > 6) {
-      if (G.n >= 5) { goto('win'); save('fnacNight', '5'); }
+      if (G.custom) { if (G.aiBase >= 20) save('fnacStar3', '1'); goto('win'); }
+      else if (G.n >= 6) { save('fnacStar2', '1'); goto('win'); }
+      else if (G.n >= 5) { goto('win'); save('fnacNight', '5'); save('fnacStar1', '1'); }
       else { night = G.n + 1; save('fnacNight', String(night)); startNight(night); }
     }
     if (state !== 'night') return;
@@ -601,6 +641,8 @@
       if (G.camUp) { flash = 0.18; sting(); } else { posterFlash = 0.35; }
     }
     if (G.n >= 3 && G.camUp && Math.random() < 0.002 * dt * 60) { G.glitch = 2; staticBurst(0.8, 0.15); }
+    G.itsme = Math.max(0, G.itsme - dt);
+    if (G.n >= 3 && !G.camUp && G.itsme <= 0 && Math.random() < dt * 0.012 * (G.n - 1)) { G.itsme = 0.45; staticBurst(0.3, 0.12); }
   }
 
   // ================= DRAW: OFFICE =================
@@ -710,6 +752,7 @@
         glowEyes(ctx, photoOK ? [[155 - 150 * 0.14, 290 - 150 * 0.12], [155 + 150 * 0.14, 290 - 150 * 0.12]] : [[155 - 150 * 0.15, 290 - 150 * 0.02], [155 + 150 * 0.15, 290 - 150 * 0.02]], 9, 0.9);
       }
     }
+    if (G.itsme > 0) { const j = () => rnd(-6, 6); text("IT'S ME", W / 2 + j(), H / 2 + j(), 150, 'rgba(200,20,20,' + Math.min(1, G.itsme * 3) + ')', 'center', "'Special Elite', serif"); }
     vignette(0.65);
     drawNoise(0.04);
   }
@@ -793,6 +836,7 @@
   }
   let mouse = { x: -1, y: -1 };
   function inRect(x, y, r) { return x >= r[0] && x <= r[0] + r[2] && y >= r[1] && y <= r[1] + r[3]; }
+  const MENU_SIX = [90, 564, 215, 50], MENU_CUSTOM = [320, 564, 215, 50], C_MINUS = [470, 360, 90, 80], C_PLUS = [720, 360, 90, 80], C_START = [490, 480, 300, 60], C_BACK = [490, 560, 300, 56];
   const MENU_NEW = [90, 420, 360, 56], MENU_CONT = [90, 492, 360, 56], DEAD_RETRY = [490, 470, 300, 56], DEAD_MENU = [490, 540, 300, 56];
 
   function drawMenu() {
@@ -811,16 +855,30 @@
     text("AT CONNER'S", 90, 335, 70, '#b01818', 'left', "'Special Elite', serif");
     button2(...MENU_NEW, 'New Game', inRect(mouse.x, mouse.y, MENU_NEW));
     if (night > 1) button2(...MENU_CONT, 'Continue  Night ' + night, inRect(mouse.x, mouse.y, MENU_CONT));
-    text('Survive from 12 AM to 6 AM. Watch the cameras. Close the doors when he comes.', 90, 610, 26, '#888');
-    text("Don't run out of power.", 90, 640, 26, '#888');
+    if (load('fnacStar1')) { button2(...MENU_SIX, 'Night 6', inRect(mouse.x, mouse.y, MENU_SIX)); button2(...MENU_CUSTOM, 'Custom', inRect(mouse.x, mouse.y, MENU_CUSTOM)); }
+    const stars = (load('fnacStar1') ? '★' : '') + (load('fnacStar2') ? '★' : '') + (load('fnacStar3') ? '★' : '');
+    if (stars) text(stars, 90, 395, 48, '#e8c040');
+    text('Survive from 12 AM to 6 AM. Watch the cameras. Close the doors when he comes.', 90, 660, 26, '#888');
+    text("Don't run out of power.", 90, 690, 26, '#888');
     vignette(0.9);
+  }
+  function drawCustom() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    ctx.save(); ctx.globalAlpha = 0.25; drawHead(ctx, 1000, 360, 420, 'grayscale(1) contrast(1.4)'); ctx.restore();
+    text('CUSTOM NIGHT', W / 2, 140, 80, '#ddd', 'center', "'Special Elite', serif");
+    text("Set Conner's difficulty (0 to 20)", W / 2, 200, 30, '#888', 'center');
+    button2(...C_MINUS, ' -', inRect(mouse.x, mouse.y, C_MINUS)); button2(...C_PLUS, ' +', inRect(mouse.x, mouse.y, C_PLUS));
+    text(String(customAI), 640, 432, 90, customAI >= 20 ? '#ff3030' : '#eee', 'center');
+    text(customAI === 0 ? 'He just sits there.' : customAI < 8 ? 'Easy' : customAI < 14 ? 'Normal' : customAI < 20 ? 'Hard' : 'LEVEL 20: good luck.', W / 2, 300, 30, '#aaa', 'center');
+    button2(...C_START, 'Start', inRect(mouse.x, mouse.y, C_START)); button2(...C_BACK, 'Back', inRect(mouse.x, mouse.y, C_BACK));
+    drawNoise(0.08); scanlines(0.2); vignette(0.8);
   }
   function drawCard() {
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
     const a = Math.min(1, stateT, 3 - stateT);
     ctx.globalAlpha = Math.max(0, a);
     text('12:00 AM', W / 2, H / 2 - 20, 80, '#eee', 'center');
-    text('Night ' + G.n, W / 2, H / 2 + 50, 50, '#ccc', 'center');
+    text(G.custom ? 'Custom Night  ·  Conner level ' + G.aiBase : 'Night ' + G.n, W / 2, H / 2 + 50, 50, '#ccc', 'center');
     ctx.globalAlpha = 1; drawNoise(0.06);
   }
   function drawScare() {
@@ -861,7 +919,7 @@
     drawNoise(stateT < 2 ? 0.7 - stateT * 0.3 : 0.12);
     ctx.save(); ctx.globalAlpha = 0.18; drawHead(ctx, W / 2, 300, 380, 'grayscale(1)'); ctx.restore();
     text('GAME OVER', W / 2, 200, 110, '#c01818', 'center', "'Special Elite', serif");
-    text('Conner got you on Night ' + G.n + '.', W / 2, 260, 34, '#aaa', 'center');
+    text('Conner got you on ' + (G.custom ? 'the Custom Night' : 'Night ' + G.n) + '.', W / 2, 260, 34, '#aaa', 'center');
     button2(...DEAD_RETRY, 'Try Again', inRect(mouse.x, mouse.y, DEAD_RETRY));
     button2(...DEAD_MENU, 'Menu', inRect(mouse.x, mouse.y, DEAD_MENU));
     scanlines(0.25); vignette(0.9);
@@ -874,14 +932,14 @@
     text('6', W / 2 - 60, H / 2 + 110 - roll * 100, 110, '#eee', 'right');
     ctx.restore();
     text('AM', W / 2 - 30, H / 2 + 10, 110, '#eee', 'left');
-    if (stateT > 2.5) text(G.n >= 5 ? 'You survived the week.' : 'Night ' + G.n + ' complete', W / 2, H / 2 + 110, 40, '#9be29b', 'center');
+    if (stateT > 2.5) text(G.custom ? 'Custom Night complete' : G.n >= 6 ? 'You survived Night 6.' : G.n >= 5 ? 'You survived the week.' : 'Night ' + G.n + ' complete', W / 2, H / 2 + 110, 40, '#9be29b', 'center');
     drawNoise(0.05);
   }
   function drawWin() {
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
     text('YOU SURVIVED', W / 2, 230, 90, '#ddd', 'center', "'Special Elite', serif");
     text("FIVE NIGHTS AT CONNER'S", W / 2, 310, 54, '#b01818', 'center', "'Special Elite', serif");
-    text('★ ★ ★ ★ ★', W / 2, 390, 60, '#e8c040', 'center');
+    text(G.custom ? (G.aiBase >= 20 ? 'LEVEL 20 MODE BEATEN ★' : 'Custom Night: level ' + G.aiBase) : G.n >= 6 ? 'NIGHT 6 BEATEN ★' : 'Night 6 and Custom Night unlocked!', W / 2, 390, 44, '#e8c040', 'center');
     text('Click to return to the menu', W / 2, 470, 30, '#888', 'center');
     if (stateT > 4 && stateT < 4.25) { drawHead(ctx, W / 2, H / 2, 700, 'contrast(1.6)'); if (!G.winScare) { G.winScare = true; sting(); } }
     drawNoise(0.08); vignette(0.8);
@@ -906,10 +964,19 @@
     if (state === 'menu') {
       if (inRect(x, y, MENU_NEW)) { night = 1; save('fnacNight', '1'); startNight(1); }
       else if (night > 1 && inRect(x, y, MENU_CONT)) startNight(night);
+      else if (load('fnacStar1') && inRect(x, y, MENU_SIX)) startNight(6);
+      else if (load('fnacStar1') && inRect(x, y, MENU_CUSTOM)) goto('customSel');
+      return;
+    }
+    if (state === 'customSel') {
+      if (inRect(x, y, C_MINUS)) customAI = Math.max(0, customAI - 1);
+      else if (inRect(x, y, C_PLUS)) customAI = Math.min(20, customAI + 1);
+      else if (inRect(x, y, C_START)) startNight(6, customAI);
+      else if (inRect(x, y, C_BACK)) goto('menu');
       return;
     }
     if (state === 'dead') {
-      if (inRect(x, y, DEAD_RETRY)) startNight(G.n);
+      if (inRect(x, y, DEAD_RETRY)) startNight(G.n, G.custom ? G.aiBase : undefined);
       else if (inRect(x, y, DEAD_MENU)) goto('menu');
       return;
     }
@@ -946,6 +1013,7 @@
     const dt = last ? Math.min(0.05, (t - last) / 1000) : 0.016; last = t;
     update(dt);
     if (state === 'menu') drawMenu();
+    else if (state === 'customSel') drawCustom();
     else if (state === 'card') drawCard();
     else if (state === 'night') {
       if (G.camAnim > 0.5 && G.camUp) drawCams(); else drawOffice(dt);
