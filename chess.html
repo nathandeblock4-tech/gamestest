@@ -106,6 +106,18 @@
   .emotes { display: none; gap: 6px; }
   .emotes.on { display: flex; }
   .emotes button { flex: 1; background: #24274a; border: none; border-radius: 10px; font-size: 22px; padding: 6px; cursor: pointer; }
+  .bots { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; width: 100%; }
+  .bot { background: #24274a; border: 2px solid transparent; border-radius: 10px; padding: 6px 2px; cursor: pointer; color: #dfe2ff; text-align: center; font: 700 11px Rubik, sans-serif; }
+  .bot i { display: block; font-style: normal; font-size: 22px; line-height: 1.2; }
+  .bot.on { border-color: #ffcc33; background: #2c2a1a; color: #ffcc33; }
+  .botInfo { background: #0f1020; border-radius: 10px; padding: 8px 10px; font-size: 13px; color: #c3c7ee; line-height: 1.4; }
+  .botInfo b { color: #ffcc33; }
+  .rating { font-weight: 800; color: #4ade80; }
+  .evalbar { height: 14px; border-radius: 7px; background: #262626; overflow: hidden; position: relative; margin: 0 0 6px; display: none; }
+  .evalbar.on { display: block; }
+  .evalbar i { position: absolute; left: 0; top: 0; bottom: 0; width: 50%; background: #f2f2f2; transition: width .35s; }
+  .evalbar span { position: absolute; left: 0; right: 0; top: 0; text-align: center; font: 800 10px/14px Rubik, sans-serif; color: #ff8c1a; text-shadow: 0 0 2px #000; }
+  .sq.hint { box-shadow: inset 0 0 0 calc(var(--bw) / 8 * .08) #38bdf8; }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #24274a; color: #fff; padding: 10px 18px; border-radius: 12px; font-weight: 700; box-shadow: 0 6px 20px rgba(0,0,0,.4); display: none; z-index: 60; }
   .toast.on { display: block; }
 </style>
@@ -128,8 +140,8 @@
       </div>
       <div class="mode">
         <div class="mi">🤖</div><h3>vs Computer</h3>
-        <p>Play a chess engine with 5 difficulty levels, from total beginner up to expert.</p>
-        <div class="chips" id="lvlChips"><span>Difficulty</span></div>
+        <p>Pick one of 10 bots, from total beginner to grandmaster. Beat them to raise your rating.</p>
+        <div class="bots" id="botGrid"></div><div class="botInfo" id="botInfo"></div>
         <div class="chips" id="colChips"><span>You play as</span></div>
         <div class="grow"></div>
         <div class="muted" id="cpuStats"></div>
@@ -165,9 +177,10 @@
     <div class="playGrid">
       <div class="boardCol">
         <div class="pbar" id="barTop"><div class="ava" id="avaTop"></div><div class="pinfo"><div class="pname" id="nameTop"></div><div class="caps" id="capsTop"></div></div><div class="clock" id="clockTop">0:00</div></div>
+        <div class="evalbar" id="evalBar"><i id="evalFill"></i><span id="evalTxt">0.0</span></div>
         <div class="board" id="board">
           <div class="boardOv" id="promoOv"><p>Promote your pawn to:</p><div class="promo" id="promoRow"></div><button class="btn ghost" id="promoCancel">Cancel</button></div>
-          <div class="boardOv" id="endOv"><h2 id="endTitle"></h2><p id="endSub"></p><div class="ctrl" style="justify-content:center"><button class="btn" id="endAgain">New game</button><button class="btn ghost" id="endClose">View board</button></div></div>
+          <div class="boardOv" id="endOv"><h2 id="endTitle"></h2><p id="endSub"></p><p id="endRating" class="rating"></p><div class="ctrl" style="justify-content:center"><button class="btn" id="endAgain">New game</button><button class="btn ghost" id="endClose">View board</button></div></div>
         </div>
         <div class="pbar" id="barBot"><div class="ava" id="avaBot"></div><div class="pinfo"><div class="pname" id="nameBot"></div><div class="caps" id="capsBot"></div></div><div class="clock" id="clockBot">0:00</div></div>
       </div>
@@ -179,6 +192,8 @@
         <div class="ctrl">
           <button class="btn ghost" id="undoBtn">↶ Undo</button>
           <button class="btn ghost" id="flipBtn">⇅ Flip</button>
+          <button class="btn ghost" id="hintBtn">💡 Hint</button>
+          <button class="btn ghost" id="evalBtn">📊 Eval</button>
           <button class="btn ghost" id="drawBtn">½ Draw</button>
           <button class="btn ghost" id="resignBtn">🏳 Resign</button>
           <button class="btn" id="newBtn">☰ Menu</button>
@@ -509,13 +524,27 @@ function ENGINE() {
   function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   const GL = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
   const glyph = p => GL[p.toLowerCase()] + '︎';
-  const LVNAMES = ['Beginner', 'Easy', 'Medium', 'Hard', 'Expert'];
+  const BOTS = [
+    { n: 'Pebble', e: '🪨', r: 250, d: 'Just learned how the pieces move. Hangs pieces all the time.' },
+    { n: 'Noodle', e: '🍜', r: 450, d: 'Knows the rules, but forgets to protect things.' },
+    { n: 'Rookie Ricky', e: '🧢', r: 650, d: 'Grabs free pieces. Still makes silly mistakes.' },
+    { n: 'Casual Cam', e: '🎮', r: 850, d: 'Plays real openings and sees simple tactics.' },
+    { n: 'Club Kid', e: '🏫', r: 1050, d: 'Chess club regular. Punishes hanging pieces.' },
+    { n: 'Sharp Sam', e: '🦊', r: 1300, d: 'Spots forks and pins. Rarely blunders.' },
+    { n: 'Tactician Tia', e: '🎯', r: 1550, d: 'Calculates a few moves ahead. Tough to trick.' },
+    { n: 'Master Max', e: '🧠', r: 1800, d: 'Strong club player. You need a real plan.' },
+    { n: 'Iron Ivan', e: '🤖', r: 2100, d: 'Deep calculation, no mistakes. Expert level.' },
+    { n: 'Grandmaster Ghost', e: '👻', r: 2400, d: 'Full power engine. Good luck.' }
+  ];
+  const LVNAMES = BOTS.map(b => b.n);
   const CLOCKS = [{ n: 'None', m: 0, i: 0 }, { n: '3 | 2', m: 3, i: 2 }, { n: '5 | 0', m: 5, i: 0 }, { n: '10 | 0', m: 10, i: 0 }];
   const THEMES = [['#eeeed2', '#769656'], ['#dee3e6', '#8ca2ad'], ['#f0d9b5', '#b58863'], ['#ece4f7', '#8e6fc1'], ['#f3e3e3', '#c26767']];
 
   // settings
   let cfg = { lvl: 3, col: 'w', clockL: 0, clockO: 2, flip: 1, hostCol: 'r', theme: 0 };
   try { cfg = Object.assign(cfg, JSON.parse(load('chess_cfg') || '{}')); } catch (e) {}
+  if (!cfg.v2) { cfg.lvl = [1, 3, 5, 7, 9][(cfg.lvl || 3) - 1] || 4; cfg.v2 = 1; cfg.eval = 0; }
+  let rating = +(load('chess_rating') || 800), rated = +(load('chess_rated') || 0);
   const saveCfg = () => save('chess_cfg', JSON.stringify(cfg));
 
   // ---------- sound ----------
@@ -534,17 +563,20 @@ function ENGINE() {
   };
 
   // ---------- AI worker ----------
-  let worker = null, aiId = 0, aiCb = null;
-  try {
-    const src = 'const E=(' + ENGINE.toString() + ')();onmessage=function(e){postMessage({id:e.data.id,uci:E.search(e.data.fen,e.data.level)});};';
-    worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
-    worker.onmessage = e => { if (aiCb && e.data.id === aiId) aiCb(e.data.uci); };
-    worker.onerror = () => { worker = null; };
-  } catch (e) { worker = null; }
+  let worker = null, aiId = 0, aiCb = null, anaW = null, anaId = 0, anaCb = {};
+  function mkWorker(onMsg) { try { const w = new Worker('chess-engine.js'); w.onmessage = onMsg; w.onerror = () => {}; return w; } catch (e) { return null; } }
+  worker = mkWorker(e => { if (aiCb && e.data.id === aiId) aiCb(e.data.uci); });
+  anaW = mkWorker(e => { const cb = anaCb[e.data.id]; delete anaCb[e.data.id]; if (cb) cb(e.data); });
   function askEngine(fen, level, cb) {
     const id = ++aiId; aiCb = cb;
-    if (worker) worker.postMessage({ id: id, fen: fen, level: level });
-    else setTimeout(() => { const u = E.search(fen, level); if (id === aiId && aiCb) aiCb(u); }, 30);
+    // old built-in engine as a fallback if workers aren't available
+    if (worker) worker.postMessage({ id: id, fen: fen, level: level, hist: fens.slice(0, -1), moves: hist.map(h => h.uci) });
+    else setTimeout(() => { const u = E.search(fen, Math.max(1, Math.round(level / 2))); if (id === aiId && aiCb) aiCb(u); }, 30);
+  }
+  function analyze(opts, cb) {
+    if (!anaW) return;
+    const id = ++anaId; anaCb[id] = cb;
+    anaW.postMessage(Object.assign({ id: id, fen: E.toFEN(P), level: 10, analyze: 1, hist: fens.slice(0, -1), moves: hist.map(h => h.uci) }, opts));
   }
 
   // ---------- game state ----------
@@ -583,6 +615,7 @@ function ENGINE() {
       if (last && (last.f === sq || last.t === sq)) cls += ' last';
       if (sq === sel) cls += ' sel';
       if (sq === chkSq) cls += ' check';
+      if (hintSq.indexOf(sq) >= 0) cls += ' hint';
       const t = tg.find(m => m.t === sq);
       if (t) cls += (p !== '.' || t.fl === 2) ? ' capt' : ' dot';
       o.el.className = cls; o.el.dataset.sq = sq;
@@ -604,8 +637,8 @@ function ENGINE() {
   }
   function names() {
     if (mode === 'local') return { w: ['White', '♔'], b: ['Black', '♚'] };
-    const opp = mode === 'cpu' ? ['Computer · ' + LVNAMES[level - 1], '🤖'] : ['Opponent', '🌐'];
-    const me = ['You', '😎'];
+    const bot = BOTS[level - 1], opp = mode === 'cpu' ? [bot.n + ' (' + bot.r + ')', bot.e] : ['Opponent', '🌐'];
+    const me = [mode === 'cpu' ? 'You (' + rating + ')' : 'You', '😎'];
     return myColor === 'w' ? { w: me, b: opp } : { w: opp, b: me };
   }
   function fmt(ms) { ms = Math.max(0, ms); const s = Math.ceil(ms / 1000); if (ms < 10000 && ms > 0) return (ms / 1000).toFixed(1); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
@@ -642,7 +675,7 @@ function ENGINE() {
     else if (mode === 'local') t = side + ' to move' + (chk ? ' · Check!' : '');
     else if (mode === 'online' && !net.connected) t = 'Connection lost';
     else if (P.t === myColor) t = 'Your turn' + (chk ? ' · Check!' : '');
-    else t = mode === 'cpu' ? 'Computer is thinking...' : "Opponent's turn" + (chk ? ' · Check!' : '');
+    else t = mode === 'cpu' ? BOTS[level - 1].n + ' is thinking...' : "Opponent's turn" + (chk ? ' · Check!' : '');
     $('status').textContent = t;
     const nd = $('netDot'); nd.classList.toggle('on', mode === 'online'); nd.classList.toggle('off', mode === 'online' && !net.connected);
   }
@@ -663,6 +696,40 @@ function ENGINE() {
     pc.style.transition = 'transform .16s ease-out'; pc.style.transform = '';
     setTimeout(() => { pc.style.zIndex = ''; pc.style.transition = ''; }, 200);
   }
+
+  // ---------- hints + eval bar ----------
+  let hintSq = [], evalOn = !!cfg.eval, hintsUsed = 0;
+  function evalShow() { return evalOn && mode !== 'online'; }
+  function refreshEval() {
+    $('evalBar').classList.toggle('on', evalShow());
+    $('evalBtn').classList.toggle('green', evalOn);
+    $('evalBtn').style.display = mode === 'online' ? 'none' : '';
+    $('hintBtn').style.display = mode === 'online' ? 'none' : '';
+    if (!evalShow() || over) return;
+    const ply = hist.length;
+    analyze({ ms: 700, noBook: 1, kind: 'eval' }, d => {
+      if (ply !== hist.length) return;
+      let sc = d.score, txt;
+      if (d.mate) { txt = 'Mate'; sc = sc > 0 ? 3000 : -3000; } else txt = (sc > 0 ? '+' : '') + (sc / 100).toFixed(1);
+      const w = 50 + 50 * Math.tanh(sc / 500);
+      $('evalFill').style.width = (flipped ? 100 - w : w) + '%';
+      $('evalFill').style.left = flipped ? 'auto' : '0'; $('evalFill').style.right = flipped ? '0' : 'auto';
+      $('evalTxt').textContent = txt;
+    });
+  }
+  $('evalBtn').onclick = () => { evalOn = !evalOn; cfg.eval = evalOn ? 1 : 0; saveCfg(); refreshEval(); };
+  $('hintBtn').onclick = () => {
+    if (!canMove() || !anaW) return;
+    $('hintBtn').disabled = true; $('hintBtn').textContent = '💡 ...';
+    const ply = hist.length;
+    analyze({ ms: 1500, kind: 'hint' }, d => {
+      $('hintBtn').disabled = false; $('hintBtn').textContent = '💡 Hint';
+      if (ply !== hist.length || !d.uci) return;
+      const m = legal.find(x => E.uci(x) === d.uci); if (!m) return;
+      hintsUsed++; hintSq = [m.f, m.t]; render();
+      toast('Hint: ' + E.san(P, m, legal));
+    });
+  };
 
   // ---------- moves ----------
   function tryMove(f, t) {
@@ -685,6 +752,7 @@ function ENGINE() {
 
   function doMove(m, remote) {
     const sanStr = E.san(P, m, legal), mover = P.t;
+    hintSq = [];
     E.make(P, m);
     hist.push({ m: m, san: sanStr, uci: E.uci(m) });
     fens.push(E.toFEN(P));
@@ -698,7 +766,7 @@ function ENGINE() {
     if (mode === 'local' && autoFlip && !over) flipped = P.t === 'b';
     checkEnd();
     render(); if (!(mode === 'local' && autoFlip)) animate(m);
-    persist();
+    persist(); refreshEval();
     if (!over && mode === 'cpu' && P.t !== myColor) cpuMove();
   }
   function cpuMove() {
@@ -727,13 +795,22 @@ function ENGINE() {
     let title;
     if (winner === 'd') title = 'Draw';
     else if (mode === 'local') title = (winner === 'w' ? 'White' : 'Black') + ' wins!';
-    else title = winner === myColor ? 'You win! 🎉' : (mode === 'cpu' ? 'Computer wins' : 'You lost');
+    else title = winner === myColor ? 'You win! 🎉' : (mode === 'cpu' ? BOTS[level - 1].n + ' wins' : 'You lost');
     over = { winner: winner, reason: reason, title: title };
     $('endTitle').textContent = title; $('endSub').textContent = winner === 'd' ? 'Game drawn ' + reason : reason.charAt(0).toUpperCase() + reason.slice(1);
     $('endAgain').textContent = mode === 'online' ? '↻ Rematch' : '↻ New game';
     setTimeout(() => { if (over) $('endOv').classList.add('on'); }, 450);
     if (mode !== 'local' && winner !== 'd' && winner !== myColor) SND.lose(); else SND.end();
-    if (mode === 'cpu') { const k = 'chess_stats_' + level, s = JSON.parse(load(k) || '{"w":0,"l":0,"d":0}'); s[winner === 'd' ? 'd' : (winner === myColor ? 'w' : 'l')]++; save(k, JSON.stringify(s)); }
+    $('endRating').textContent = '';
+    if (mode === 'cpu') {
+      const k = 'chess_stats2_' + level, s = JSON.parse(load(k) || '{"w":0,"l":0,"d":0}'); s[winner === 'd' ? 'd' : (winner === myColor ? 'w' : 'l')]++; save(k, JSON.stringify(s));
+      if (hist.length >= 4) {
+        const res = winner === 'd' ? 0.5 : (winner === myColor ? 1 : 0), exp = 1 / (1 + Math.pow(10, (BOTS[level - 1].r - rating) / 400));
+        const K = rated < 10 ? 48 : 28, delta = Math.round(K * (res - exp)), old = rating;
+        rating = Math.max(100, rating + delta); rated++; save('chess_rating', rating); save('chess_rated', rated);
+        $('endRating').textContent = 'Your rating: ' + rating + ' (' + (delta >= 0 ? '+' : '') + (rating - old) + ')';
+      }
+    }
     clearPersist();
     render();
   }
@@ -749,17 +826,19 @@ function ENGINE() {
     else { myColor = opts.color; clockSet = CLOCKS[opts.clock] || CLOCKS[0]; }
     clk = { w: clockSet.m * 60000, b: clockSet.m * 60000 };
     flipped = myColor === 'b';
-    show('play'); render();
+    hintSq = []; hintsUsed = 0; $('endRating').textContent = '';
+    show('play'); render(); refreshEval();
     if (m === 'cpu' && myColor === 'b') cpuMove();
   }
   function persist() {
     if (mode === 'online' || over) return;
-    save('chess_save', JSON.stringify({ mode: mode, level: level, color: myColor, moves: hist.map(h => h.uci), clock: CLOCKS.indexOf(clockSet), clk: clk, autoFlip: autoFlip }));
+    save('chess_save', JSON.stringify({ v: 2, mode: mode, level: level, color: myColor, moves: hist.map(h => h.uci), clock: CLOCKS.indexOf(clockSet), clk: clk, autoFlip: autoFlip }));
   }
   function clearPersist() { try { localStorage.removeItem('chess_save'); } catch (e) {} }
   function resume() {
     let s; try { s = JSON.parse(load('chess_save') || 'null'); } catch (e) { s = null; }
     if (!s) return;
+    if (s.v !== 2 && s.mode === 'cpu') s.level = [1, 3, 5, 7, 9][s.level - 1] || 4;
     newGame(s.mode, { level: s.level, color: s.color });
     if (s.mode === 'local') { clockSet = CLOCKS[s.clock] || CLOCKS[0]; autoFlip = s.autoFlip !== false; }
     for (const u of s.moves) { const m = legal.find(x => E.uci(x) === u); if (!m) break; replayMove(m); }
@@ -779,7 +858,7 @@ function ENGINE() {
     for (let i = 0; i < n; i++) { const k = E.key(P); reps[k]--; hist.pop(); fens.pop(); P = E.fromFEN(fens[fens.length - 1]); }
     legal = E.legal(P); over = null; sel = -1; $('endOv').classList.remove('on');
     if (mode === 'local' && autoFlip) flipped = P.t === 'b';
-    render(); persist();
+    hintSq = []; render(); persist(); refreshEval();
     if (mode === 'cpu' && P.t !== myColor) cpuMove();
   }
 
@@ -839,7 +918,7 @@ function ENGINE() {
   boardEl.addEventListener('contextmenu', e => e.preventDefault());
 
   // ---------- controls ----------
-  $('flipBtn').onclick = () => { flipped = !flipped; if (mode === 'local') autoFlip = false; render(); };
+  $('flipBtn').onclick = () => { flipped = !flipped; if (mode === 'local') autoFlip = false; render(); refreshEval(); };
   $('undoBtn').onclick = undo;
   let resignArm = 0, drawArm = 0;
   $('resignBtn').onclick = () => {
@@ -878,18 +957,20 @@ function ENGINE() {
     items.forEach(it => { const c = document.createElement('button'); c.className = 'chip' + (getter() === it[0] ? ' on' : ''); c.textContent = it[1]; c.onclick = () => { setter(it[0]); saveCfg(); chips(id, items, getter, setter); refreshMenu(); }; row.appendChild(c); });
   }
   function refreshMenu() {
-    const s = JSON.parse(load('chess_stats_' + cfg.lvl) || '{"w":0,"l":0,"d":0}');
-    $('cpuStats').textContent = 'Your record vs ' + LVNAMES[cfg.lvl - 1] + ': ' + s.w + ' wins · ' + s.l + ' losses · ' + s.d + ' draws';
+    const s = JSON.parse(load('chess_stats2_' + cfg.lvl) || '{"w":0,"l":0,"d":0}'), b = BOTS[cfg.lvl - 1];
+    $('botInfo').innerHTML = '<b>' + b.e + ' ' + b.n + '</b> · rating about ' + b.r + '<br>' + b.d;
+    $('cpuStats').innerHTML = 'Your rating: <span class="rating">' + rating + '</span> · vs ' + b.n + ': ' + s.w + 'W ' + s.l + 'L ' + s.d + 'D';
+    const g = $('botGrid'); g.innerHTML = '';
+    BOTS.forEach((bt, i) => { const c = document.createElement('button'); c.className = 'bot' + (cfg.lvl === i + 1 ? ' on' : ''); c.innerHTML = '<i>' + bt.e + '</i>' + (i + 1); c.title = bt.n + ' (' + bt.r + ')'; c.onclick = () => { cfg.lvl = i + 1; saveCfg(); refreshMenu(); }; g.appendChild(c); });
     let sv = null; try { sv = JSON.parse(load('chess_save') || 'null'); } catch (e) {}
     $('contBox').hidden = !(sv && sv.moves && sv.moves.length);
-    if (sv) $('contBtn').textContent = '▶ Continue your game (' + (sv.mode === 'cpu' ? 'vs Computer · ' + LVNAMES[sv.level - 1] : 'Pass & Play') + ', move ' + (Math.floor(sv.moves.length / 2) + 1) + ')';
+    if (sv) $('contBtn').textContent = '▶ Continue your game (' + (sv.mode === 'cpu' ? 'vs ' + (sv.v === 2 ? LVNAMES[sv.level - 1] : 'Computer') : 'Pass & Play') + ', move ' + (Math.floor(sv.moves.length / 2) + 1) + ')';
     const tr = $('themeRow'); tr.innerHTML = '';
     THEMES.forEach((t, i) => { const b = document.createElement('button'); b.className = 'sw' + (cfg.theme === i ? ' on' : ''); b.style.setProperty('--a', t[0]); b.style.setProperty('--b', t[1]); b.setAttribute('aria-label', 'Board colors ' + (i + 1)); b.onclick = () => { cfg.theme = i; saveCfg(); applyTheme(); refreshMenu(); }; tr.appendChild(b); });
   }
   function buildMenu() {
     chips('clockChipsL', CLOCKS.map((c, i) => [i, c.n]), () => cfg.clockL, v => cfg.clockL = v);
     chips('flipChips', [[1, 'Auto-flip each turn'], [0, 'Keep white at bottom']], () => cfg.flip, v => cfg.flip = v);
-    chips('lvlChips', LVNAMES.map((n, i) => [i + 1, n]), () => cfg.lvl, v => cfg.lvl = v);
     chips('colChips', [['w', '♔ White'], ['r', '🎲 Random'], ['b', '♚ Black']], () => cfg.col, v => cfg.col = v);
     chips('clockChipsO', CLOCKS.map((c, i) => [i, c.n]), () => cfg.clockO, v => cfg.clockO = v);
     chips('hostColChips', [['w', '♔ White'], ['r', '🎲 Random'], ['b', '♚ Black']], () => cfg.hostCol, v => cfg.hostCol = v);
