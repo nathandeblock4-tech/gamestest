@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Block Drop · Game Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@600;800;900&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1020; color: #f2f3ff; font-family: 'Rubik', system-ui, sans-serif; min-height: 100vh; padding: 12px; }
+  .wrap { max-width: 480px; margin: 0 auto; text-align: center; }
+  .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  a.back { color: #f2f3ff; background: #24274a; padding: 8px 14px; border-radius: 10px; text-decoration: none; font-weight: 800; font-size: 14px; }
+  h1 { font-weight: 900; font-size: 18px; letter-spacing: 2px; color: #38bdf8; }
+  canvas { width: 100%; max-width: min(480px, calc((100vh - 210px) * 0.727)); aspect-ratio: 480 / 660; display: block; margin: 0 auto; border-radius: 14px; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .pad { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 10px; }
+  .pad button { background: #24274a; color: #fff; border: none; border-radius: 12px; padding: 14px 0; font: 800 20px Rubik, sans-serif; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+  .pad button:active { background: #38bdf8; color: #000; }
+  .help { color: #9aa0c7; font-size: 13px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar"><a class="back" href="index.html">← Back</a><h1>BLOCK DROP</h1><span style="width:60px"></span></div>
+  <canvas id="c" width="480" height="660"></canvas>
+  <div class="pad"><button data-a="left">◀</button><button data-a="right">▶</button><button data-a="rot">⟳</button><button data-a="down">▼</button><button data-a="drop">⤓</button><button data-a="hold">H</button></div>
+  <div class="help">← → move · ↑ rotate · Z rotate back · ↓ soft drop · Space hard drop · C hold · P pause</div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('c'), g = cv.getContext('2d'), COLS = 10, ROWS = 20, S = 30, OX = 20, OY = 30;
+  function ld(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
+  function sv(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  const SH = {
+    I: [[0, 1], [1, 1], [2, 1], [3, 1]], O: [[1, 0], [2, 0], [1, 1], [2, 1]], T: [[1, 0], [0, 1], [1, 1], [2, 1]],
+    S: [[1, 0], [2, 0], [0, 1], [1, 1]], Z: [[0, 0], [1, 0], [1, 1], [2, 1]], J: [[0, 0], [0, 1], [1, 1], [2, 1]], L: [[2, 0], [0, 1], [1, 1], [2, 1]]
+  };
+  const CL = { I: '#22d3ee', O: '#facc15', T: '#a855f7', S: '#4ade80', Z: '#f43f5e', J: '#3b82f6', L: '#fb923c' };
+  const SIZE = { I: 4, O: 4, T: 3, S: 3, Z: 3, J: 3, L: 3 };
+  function cells(t, rot) { let c = SH[t].map(p => p.slice()); const n = SIZE[t]; if (t === 'O') return c; for (let i = 0; i < rot; i++) c = c.map(([x, y]) => [n - 1 - y, x]); return c; }
+  let grid, cur, bag, next, hold, canHold, score, lines, level, state, dropT, lockT, best = +ld('blocksBest', 0), flash = [], flashT = 0, parts = [], msg = null;
+  let ac = null;
+  function tone(f, d, vol, type) { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); const t = ac.currentTime, o = ac.createOscillator(), gn = ac.createGain(); o.type = type || 'square'; o.frequency.value = f; gn.gain.setValueAtTime(vol, t); gn.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(gn); gn.connect(ac.destination); o.start(t); o.stop(t + d + 0.02); } catch (e) {} }
+  function refill() { const b = 'IOTSZJL'.split(''); for (let i = 6; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } bag.push(...b); }
+  function take() { if (bag.length < 7) refill(); return bag.shift(); }
+  function fits(t, rot, x, y) { for (const [cx, cy] of cells(t, rot)) { const X = x + cx, Y = y + cy; if (X < 0 || X >= COLS || Y >= ROWS) return false; if (Y >= 0 && grid[Y][X]) return false; } return true; }
+  function spawn(t) { cur = { t: t || take(), rot: 0, x: 3, y: -1 }; if (!t) { next = bag.slice(0, 3); if (next.length < 3) { refill(); next = bag.slice(0, 3); } } if (!fits(cur.t, 0, cur.x, cur.y)) { cur.y = -2; if (!fits(cur.t, 0, cur.x, cur.y)) gameOver(); } dropT = 0; lockT = 0; }
+  function reset() { grid = Array.from({ length: ROWS }, () => new Array(COLS).fill(0)); bag = []; hold = null; canHold = true; score = 0; lines = 0; level = 1; flash = []; parts = []; msg = null; spawn(); state = 'play'; }
+  function gameOver() { state = 'over'; if (score > best) { best = score; sv('blocksBest', best); } tone(140, 0.6, 0.12, 'sawtooth'); }
+  function move(dx) { if (fits(cur.t, cur.rot, cur.x + dx, cur.y)) { cur.x += dx; lockT = 0; tone(300, 0.03, 0.03); return true; } return false; }
+  function rotate(dir) {
+    const r = (cur.rot + dir + 4) % 4;
+    for (const [kx, ky] of [[0, 0], [-1, 0], [1, 0], [0, -1], [-2, 0], [2, 0], [-1, -1], [1, -1]]) if (fits(cur.t, r, cur.x + kx, cur.y + ky)) { cur.rot = r; cur.x += kx; cur.y += ky; lockT = 0; tone(420, 0.04, 0.03); return; }
+  }
+  function ghostY() { let y = cur.y; while (fits(cur.t, cur.rot, cur.x, y + 1)) y++; return y; }
+  function lock() {
+    let above = false;
+    for (const [cx, cy] of cells(cur.t, cur.rot)) { const Y = cur.y + cy; if (Y < 0) { above = true; continue; } grid[Y][cur.x + cx] = cur.t; }
+    tone(160, 0.08, 0.08, 'triangle');
+    const full = []; for (let y = 0; y < ROWS; y++) if (grid[y].every(v => v)) full.push(y);
+    if (full.length) {
+      flash = full; flashT = 0.22; state = 'clear';
+      const pts = [0, 100, 300, 500, 800][full.length] * level; score += pts; lines += full.length;
+      const nl = Math.floor(lines / 10) + 1; if (nl > level) { level = nl; msg = { s: 'LEVEL ' + level, t: 1.2 }; tone(880, 0.3, 0.1, 'triangle'); }
+      else if (full.length === 4) msg = { s: 'QUAD! +' + pts, t: 1 };
+      for (const y of full) for (let x = 0; x < COLS; x++) for (let k = 0; k < 2; k++) parts.push({ x: OX + x * S + 15, y: OY + y * S + 15, vx: (Math.random() - 0.5) * 300, vy: -Math.random() * 250, c: CL[grid[y][x]], life: 0.7 });
+      [523, 659, 784, 1047].slice(0, full.length).forEach((f, i) => setTimeout(() => tone(f, 0.15, 0.08, 'triangle'), i * 60));
+    } else if (above) { gameOver(); return; } else { canHold = true; spawn(); }
+  }
+  function finishClear() { for (const y of flash) { grid.splice(y, 1); grid.unshift(new Array(COLS).fill(0)); } flash = []; state = 'play'; canHold = true; spawn(); }
+  function soft() { if (fits(cur.t, cur.rot, cur.x, cur.y + 1)) { cur.y++; score += 1; dropT = 0; return true; } return false; }
+  function hard() { let n = 0; while (fits(cur.t, cur.rot, cur.x, cur.y + 1)) { cur.y++; n++; } score += n * 2; lock(); }
+  function doHold() { if (!canHold) return; canHold = false; const t = cur.t; if (hold) spawn(hold); else spawn(); hold = t; tone(600, 0.06, 0.05); }
+  const speed = () => Math.max(0.05, 0.8 * Math.pow(0.82, level - 1));
+  function act(a) {
+    if (state === 'over' || state === 'menu') { reset(); return; }
+    if (a === 'pause') { state = state === 'pause' ? 'play' : (state === 'play' ? 'pause' : state); return; }
+    if (state !== 'play') return;
+    if (a === 'left') move(-1); else if (a === 'right') move(1); else if (a === 'rot') rotate(1); else if (a === 'rotb') rotate(-1); else if (a === 'down') soft(); else if (a === 'drop') hard(); else if (a === 'hold') doHold();
+  }
+  const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'rot', x: 'rot', X: 'rot', z: 'rotb', Z: 'rotb', ArrowDown: 'down', ' ': 'drop', c: 'hold', C: 'hold', Shift: 'hold', p: 'pause', P: 'pause' };
+  const rep = {};
+  document.addEventListener('keydown', e => { const a = KEYS[e.key]; if (!a) return; e.preventDefault(); if (e.repeat) return; act(a); if (a === 'left' || a === 'right' || a === 'down') rep[a] = 0.17; });
+  document.addEventListener('keyup', e => { const a = KEYS[e.key]; if (a) delete rep[a]; });
+  document.querySelectorAll('.pad button').forEach(b => {
+    const a = b.dataset.a;
+    b.addEventListener('pointerdown', e => { e.preventDefault(); act(a); if (a === 'left' || a === 'right' || a === 'down') rep[a] = 0.2; });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => { delete rep[a]; }));
+  });
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); if (state === 'over' || state === 'menu') reset(); else if (state === 'pause') state = 'play'; else act('rot'); });
+  function update(dt) {
+    for (const p of parts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 900 * dt; p.life -= dt; } parts = parts.filter(p => p.life > 0);
+    if (msg) { msg.t -= dt; if (msg.t <= 0) msg = null; }
+    if (state === 'clear') { flashT -= dt; if (flashT <= 0) finishClear(); return; }
+    if (state !== 'play') return;
+    for (const a in rep) { rep[a] -= dt; if (rep[a] <= 0) { rep[a] = a === 'down' ? 0.04 : 0.05; if (a === 'left') move(-1); else if (a === 'right') move(1); else soft(); } }
+    dropT += dt;
+    if (fits(cur.t, cur.rot, cur.x, cur.y + 1)) { if (dropT >= speed()) { cur.y++; dropT = 0; } lockT = 0; }
+    else { lockT += dt; if (lockT > 0.45) lock(); }
+  }
+  function cell(px, py, c, s, a) { s = s || S; g.globalAlpha = a == null ? 1 : a; g.fillStyle = c; g.fillRect(px + 1, py + 1, s - 2, s - 2); g.fillStyle = 'rgba(255,255,255,.28)'; g.fillRect(px + 1, py + 1, s - 2, 4); g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(px + 1, py + s - 5, s - 2, 4); g.globalAlpha = 1; }
+  function mini(t, x, y, s) { if (!t) return; const cs = cells(t, 0), minx = Math.min(...cs.map(c => c[0])), maxx = Math.max(...cs.map(c => c[0])), miny = Math.min(...cs.map(c => c[1])), maxy = Math.max(...cs.map(c => c[1])); const w = (maxx - minx + 1) * s, h = (maxy - miny + 1) * s; for (const [cx, cy] of cs) cell(x + (88 - w) / 2 + (cx - minx) * s, y + (50 - h) / 2 + (cy - miny) * s, CL[t], s); }
+  function draw() {
+    g.fillStyle = '#0f1020'; g.fillRect(0, 0, 480, 660);
+    g.fillStyle = '#080914'; g.fillRect(OX, OY, COLS * S, ROWS * S);
+    g.strokeStyle = 'rgba(255,255,255,.04)'; g.lineWidth = 1;
+    for (let x = 1; x < COLS; x++) { g.beginPath(); g.moveTo(OX + x * S, OY); g.lineTo(OX + x * S, OY + ROWS * S); g.stroke(); }
+    for (let y = 1; y < ROWS; y++) { g.beginPath(); g.moveTo(OX, OY + y * S); g.lineTo(OX + COLS * S, OY + y * S); g.stroke(); }
+    if (grid) for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (grid[y][x]) { if (flash.indexOf(y) >= 0) cell(OX + x * S, OY + y * S, '#fff', S, flashT / 0.22); else cell(OX + x * S, OY + y * S, CL[grid[y][x]]); }
+    if (cur && (state === 'play' || state === 'pause')) {
+      const gy = ghostY();
+      for (const [cx, cy] of cells(cur.t, cur.rot)) { if (gy + cy >= 0) { g.strokeStyle = CL[cur.t]; g.globalAlpha = 0.45; g.lineWidth = 2; g.strokeRect(OX + (cur.x + cx) * S + 2, OY + (gy + cy) * S + 2, S - 4, S - 4); g.globalAlpha = 1; } }
+      for (const [cx, cy] of cells(cur.t, cur.rot)) if (cur.y + cy >= 0) cell(OX + (cur.x + cx) * S, OY + (cur.y + cy) * S, CL[cur.t]);
+    }
+    g.strokeStyle = '#2c3060'; g.lineWidth = 3; g.strokeRect(OX - 1.5, OY - 1.5, COLS * S + 3, ROWS * S + 3);
+    parts.forEach(p => { g.globalAlpha = Math.min(1, p.life * 2); g.fillStyle = p.c; g.fillRect(p.x, p.y, 6, 6); }); g.globalAlpha = 1;
+    // side panel
+    const px = 345; g.textAlign = 'left'; g.fillStyle = '#9aa0c7'; g.font = '800 13px Rubik, sans-serif';
+    g.fillText('NEXT', px, 46); g.fillStyle = '#17192f'; g.fillRect(px, 54, 110, 190);
+    if (next) next.forEach((t, i) => mini(t, px + 11, 62 + i * 60, 20));
+    g.fillStyle = '#9aa0c7'; g.fillText('HOLD', px, 272); g.fillStyle = '#17192f'; g.fillRect(px, 280, 110, 70); g.globalAlpha = canHold ? 1 : 0.35; mini(hold, px + 11, 290, 20); g.globalAlpha = 1;
+    const rows = [['SCORE', score], ['LINES', lines], ['LEVEL', level], ['BEST', Math.max(best, score || 0)]];
+    rows.forEach((r, i) => { g.fillStyle = '#9aa0c7'; g.font = '800 13px Rubik, sans-serif'; g.fillText(r[0], px, 386 + i * 58); g.fillStyle = '#fff'; g.font = '900 24px Rubik, sans-serif'; g.fillText(r[1] == null ? 0 : r[1], px, 412 + i * 58); });
+    g.textAlign = 'center';
+    if (msg) { g.font = '900 34px Rubik, sans-serif'; g.lineWidth = 6; g.strokeStyle = '#000'; g.strokeText(msg.s, OX + 150, 300); g.fillStyle = '#facc15'; g.fillText(msg.s, OX + 150, 300); }
+    if (state === 'menu' || state === 'over' || state === 'pause') {
+      g.fillStyle = 'rgba(8,9,20,.8)'; g.fillRect(OX, OY + 200, COLS * S, 200);
+      g.fillStyle = '#38bdf8'; g.font = '900 34px Rubik, sans-serif'; g.fillText(state === 'menu' ? 'BLOCK DROP' : state === 'pause' ? 'PAUSED' : 'GAME OVER', OX + 150, OY + 270);
+      g.fillStyle = '#fff'; g.font = '800 18px Rubik, sans-serif'; if (state === 'over') g.fillText('Score ' + score + ' · Best ' + best, OX + 150, OY + 310);
+      g.fillStyle = '#c3c7ee'; g.fillText(state === 'pause' ? 'Tap or press P' : 'Tap or press any key', OX + 150, OY + 350);
+    }
+  }
+  let last = 0;
+  function frame(t) { const dt = last ? Math.min(0.05, (t - last) / 1000) : 0.016; last = t; update(dt); draw(); requestAnimationFrame(frame); }
+  window.__b = { act, st: () => ({ state, score, lines, level, cur: cur && cur.t }), fill: () => { for (let y = 16; y < 20; y++) for (let x = 0; x < 9; x++) grid[y][x] = 'J'; cur = { t: 'I', rot: 1, x: 7, y: 0 }; } };
+  state = 'menu'; requestAnimationFrame(frame);
+})();
+</script>
+<script src="presence.js" defer></script>
+</body>
+</html>

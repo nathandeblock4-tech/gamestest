@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Four in a Row · Game Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@600;800;900&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1020; color: #f2f3ff; font-family: 'Rubik', system-ui, sans-serif; min-height: 100vh; padding: 12px; }
+  .wrap { max-width: 620px; margin: 0 auto; text-align: center; }
+  .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  a.back, button { color: #f2f3ff; background: #24274a; padding: 8px 14px; border-radius: 10px; text-decoration: none; font: 800 14px Rubik, sans-serif; border: 2px solid transparent; cursor: pointer; }
+  button.on { border-color: #ffcc33; color: #ffcc33; }
+  h1 { font-weight: 900; font-size: 18px; letter-spacing: 2px; color: #ffcc33; }
+  .row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 8px; }
+  #status { font-weight: 900; font-size: 20px; margin: 6px 0 8px; min-height: 26px; }
+  canvas { width: 100%; aspect-ratio: 7 / 6.6; display: block; border-radius: 16px; cursor: pointer; touch-action: manipulation; }
+  .help { color: #9aa0c7; font-size: 14px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar"><a class="back" href="index.html">← Back</a><h1>FOUR IN A ROW</h1><span style="width:60px"></span></div>
+  <div class="row"><button id="mCpu" class="on">vs Computer</button><button id="mPvp">2 Players</button></div>
+  <div class="row" id="lvls"><button data-l="0">😊 Easy</button><button data-l="1">🙂 Medium</button><button data-l="2">😤 Hard</button><button data-l="3">🧠 Expert</button></div>
+  <div id="status"></div>
+  <canvas id="c" width="700" height="660"></canvas>
+  <div class="row" style="margin-top:10px"><button id="new">↻ New game</button><button id="undo">↶ Undo</button></div>
+  <div class="help" id="rec"></div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('c'), g = cv.getContext('2d'), W = 700, H = 660, CS = 100, TOP = 60, C = 7, R = 6;
+  const $ = id => document.getElementById(id);
+  function ld(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
+  function sv(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  let mode = 'cpu', lvl = +ld('fourLvl', 1), b, turn, over, win, hist, hover = 3, anim = null, thinking = false, human = 1, games = 0;
+  const LV = [{ n: 'Easy', d: 1, rand: 0.35 }, { n: 'Medium', d: 3, rand: 0.1 }, { n: 'Hard', d: 6, rand: 0 }, { n: 'Expert', d: 10, rand: 0 }];
+  let ac = null;
+  function tone(f, d, vol, type) { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); const t = ac.currentTime, o = ac.createOscillator(), gn = ac.createGain(); o.type = type || 'triangle'; o.frequency.value = f; gn.gain.setValueAtTime(vol, t); gn.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(gn); gn.connect(ac.destination); o.start(t); o.stop(t + d + 0.02); } catch (e) {} }
+
+  // ---------- rules ----------
+  const LINES = [];
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) for (const [dr, dc] of [[0, 1], [1, 0], [1, 1], [1, -1]]) {
+    const l = []; for (let k = 0; k < 4; k++) { const rr = r + dr * k, cc = c + dc * k; if (rr < 0 || rr >= R || cc < 0 || cc >= C) break; l.push(rr * C + cc); }
+    if (l.length === 4) LINES.push(l);
+  }
+  const rowFor = (bd, c) => { for (let r = R - 1; r >= 0; r--) if (!bd[r * C + c]) return r; return -1; };
+  function winner(bd) { for (const l of LINES) { const v = bd[l[0]]; if (v && v === bd[l[1]] && v === bd[l[2]] && v === bd[l[3]]) return l; } return null; }
+  // ---------- bot ----------
+  const ORDER = [3, 2, 4, 1, 5, 0, 6];
+  function evalBd(bd, me) {
+    let s = 0;
+    for (let r = 0; r < R; r++) if (bd[r * C + 3] === me) s += 4; else if (bd[r * C + 3]) s -= 4;
+    for (const l of LINES) {
+      let a = 0, o = 0; for (let k = 0; k < 4; k++) { const v = bd[l[k]]; if (v === me) a++; else if (v) o++; }
+      if (a && o) continue;
+      if (a === 3) s += 50; else if (a === 2) s += 6; else if (o === 3) s -= 60; else if (o === 2) s -= 6;
+    }
+    return s;
+  }
+  let nodes = 0;
+  function negamax(bd, me, depth, alpha, beta) {
+    nodes++;
+    let any = false, best = -1e9;
+    for (const c of ORDER) {
+      const r = rowFor(bd, c); if (r < 0) continue; any = true;
+      bd[r * C + c] = me;
+      let sc;
+      if (winner4(bd, r, c, me)) sc = 100000 + depth;
+      else if (depth <= 1) sc = evalBd(bd, me);
+      else sc = -negamax(bd, 3 - me, depth - 1, -beta, -alpha);
+      bd[r * C + c] = 0;
+      if (sc > best) best = sc; if (sc > alpha) alpha = sc; if (alpha >= beta) break;
+    }
+    return any ? best : 0;
+  }
+  function winner4(bd, r, c, v) {
+    for (const [dr, dc] of [[0, 1], [1, 0], [1, 1], [1, -1]]) {
+      let n = 1;
+      for (let s = -1; s <= 1; s += 2) { let rr = r + dr * s, cc = c + dc * s; while (rr >= 0 && rr < R && cc >= 0 && cc < C && bd[rr * C + cc] === v) { n++; rr += dr * s; cc += dc * s; } }
+      if (n >= 4) return true;
+    }
+    return false;
+  }
+  function botMove() {
+    const cfg = LV[lvl], me = turn, bd = b.slice(), moves = ORDER.filter(c => rowFor(bd, c) >= 0);
+    // always take a win; block an immediate loss (except Easy sometimes misses the block)
+    for (const c of moves) { const r = rowFor(bd, c); bd[r * C + c] = me; const w = winner4(bd, r, c, me); bd[r * C + c] = 0; if (w) return c; }
+    if (!(lvl === 0 && Math.random() < 0.3)) for (const c of moves) { const r = rowFor(bd, c); bd[r * C + c] = 3 - me; const w = winner4(bd, r, c, 3 - me); bd[r * C + c] = 0; if (w) return c; }
+    if (Math.random() < cfg.rand) return moves[Math.floor(Math.random() * moves.length)];
+    const filled = bd.filter(x => x).length, depth = Math.min(cfg.d + (lvl === 3 && filled > 16 ? 3 : 0), 42 - filled);
+    let best = -1e9, pick = [];
+    for (const c of moves) {
+      const r = rowFor(bd, c); bd[r * C + c] = me;
+      const sc = depth <= 1 ? evalBd(bd, me) : -negamax(bd, 3 - me, depth - 1, -1e9, 1e9);
+      bd[r * C + c] = 0;
+      if (sc > best + 0.5) { best = sc; pick = [c]; } else if (Math.abs(sc - best) <= 0.5) pick.push(c);
+    }
+    return pick[Math.floor(Math.random() * pick.length)];
+  }
+  // ---------- game ----------
+  function reset() { b = new Array(R * C).fill(0); turn = 1; over = false; win = null; hist = []; anim = null; thinking = false; human = mode === 'cpu' && games % 2 === 1 ? 2 : 1; games++; ui(); if (mode === 'cpu' && turn !== human) cpuGo(); }
+  function names() { return mode === 'cpu' ? (human === 1 ? ['You', LV[lvl].n + ' bot'] : [LV[lvl].n + ' bot', 'You']) : ['Red', 'Yellow']; }
+  function ui() {
+    const n = names(), st = $('status');
+    if (win) { const w = b[win[0]]; st.textContent = mode === 'cpu' ? (w === human ? 'You win! 🎉' : n[w - 1] + ' wins') : n[w - 1] + ' wins! 🎉'; st.style.color = w === 1 ? '#ff5a6e' : '#ffd23f'; }
+    else if (over) { st.textContent = "It's a draw"; st.style.color = '#f2f3ff'; }
+    else { st.textContent = thinking ? n[turn - 1] + ' is thinking...' : (mode === 'cpu' ? 'Your turn' : n[turn - 1] + "'s turn"); st.style.color = turn === 1 ? '#ff5a6e' : '#ffd23f'; }
+    $('lvls').style.display = mode === 'cpu' ? '' : 'none';
+    document.querySelectorAll('#lvls button').forEach(x => x.classList.toggle('on', +x.dataset.l === lvl));
+    $('mCpu').classList.toggle('on', mode === 'cpu'); $('mPvp').classList.toggle('on', mode === 'pvp');
+    const r = JSON.parse(ld('fourRec' + lvl, '{"w":0,"l":0,"d":0}'));
+    $('rec').textContent = mode === 'cpu' ? 'vs ' + LV[lvl].n + ': ' + r.w + ' wins · ' + r.l + ' losses · ' + r.d + ' draws. You swap who goes first each game.' : 'Take turns dropping discs. First to get 4 in a row wins.';
+  }
+  function play(c) {
+    const r = rowFor(b, c); if (r < 0 || over || anim) return false;
+    anim = { c, r, v: turn, y: -CS / 2, vy: 0 };
+    return true;
+  }
+  function land() {
+    const { c, r, v } = anim; anim = null; b[r * C + c] = v; hist.push(c); tone(180 + r * 30, 0.12, 0.15);
+    win = winner(b);
+    if (win || hist.length === R * C) {
+      over = true;
+      if (mode === 'cpu') { const k = 'fourRec' + lvl, rec = JSON.parse(ld(k, '{"w":0,"l":0,"d":0}')); rec[!win ? 'd' : (b[win[0]] === human ? 'w' : 'l')]++; sv(k, JSON.stringify(rec)); }
+      if (win) [523, 659, 784].forEach((f, i) => setTimeout(() => tone(f, 0.3, 0.12), i * 110));
+    } else { turn = 3 - turn; if (mode === 'cpu' && turn !== human) cpuGo(); }
+    ui();
+  }
+  function cpuGo() { thinking = true; ui(); setTimeout(() => { if (over || !thinking) return; const c = botMove(); thinking = false; play(c); ui(); }, 350); }
+  function colAt(e) { const r = cv.getBoundingClientRect(); return Math.max(0, Math.min(C - 1, Math.floor((e.clientX - r.left) / r.width * C))); }
+  cv.addEventListener('pointermove', e => { hover = colAt(e); });
+  cv.addEventListener('pointerdown', e => { hover = colAt(e); if (over) { reset(); return; } if (thinking || (mode === 'cpu' && turn !== human)) return; play(hover); });
+  document.addEventListener('keydown', e => { if (e.key === 'ArrowLeft') hover = Math.max(0, hover - 1); else if (e.key === 'ArrowRight') hover = Math.min(C - 1, hover + 1); else if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); if (over) reset(); else if (!thinking && !(mode === 'cpu' && turn !== human)) play(hover); } });
+  $('new').onclick = () => reset();
+  $('undo').onclick = () => {
+    if (anim || thinking || !hist.length) return;
+    let n = mode === 'cpu' ? (turn === human && !over ? 2 : (over && win && b[win[0]] === human ? 1 : 2)) : 1; n = Math.min(n, hist.length);
+    for (let i = 0; i < n; i++) { const c = hist.pop(); for (let r = 0; r < R; r++) if (b[r * C + c]) { b[r * C + c] = 0; break; } }
+    over = false; win = null; turn = hist.length % 2 === 0 ? 1 : 2; ui(); if (mode === 'cpu' && turn !== human) cpuGo();
+  };
+  $('mCpu').onclick = () => { mode = 'cpu'; games = 0; reset(); }; $('mPvp').onclick = () => { mode = 'pvp'; reset(); };
+  document.querySelectorAll('#lvls button').forEach(x => x.onclick = () => { lvl = +x.dataset.l; sv('fourLvl', lvl); games = 0; reset(); });
+  // ---------- draw ----------
+  const COL = ['', '#ff3b5c', '#ffd23f'], DK = ['', '#b3122e', '#c79a00'];
+  function disc(x, y, v, a) { g.globalAlpha = a == null ? 1 : a; g.fillStyle = DK[v]; g.beginPath(); g.arc(x, y, 41, 0, 7); g.fill(); g.fillStyle = COL[v]; g.beginPath(); g.arc(x, y - 2, 37, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,.25)'; g.beginPath(); g.arc(x - 10, y - 14, 12, 0, 7); g.fill(); g.globalAlpha = 1; }
+  function draw(t) {
+    g.fillStyle = '#0f1020'; g.fillRect(0, 0, W, H);
+    if (!over && !anim && !thinking && !(mode === 'cpu' && turn !== human)) { disc(hover * CS + CS / 2, TOP / 2 + 4, turn, 0.9); const r = rowFor(b, hover); if (r >= 0) disc(hover * CS + CS / 2, TOP + r * CS + CS / 2, turn, 0.18); }
+    if (anim) disc(anim.c * CS + CS / 2, Math.max(TOP / 2, anim.y), anim.v);
+    for (let i = 0; i < R * C; i++) if (b[i]) disc((i % C) * CS + CS / 2, TOP + Math.floor(i / C) * CS + CS / 2, b[i]);
+    // board with holes
+    g.save(); g.beginPath(); g.roundRect ? g.roundRect(0, TOP, W, R * CS, 18) : g.rect(0, TOP, W, R * CS);
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) { g.moveTo(c * CS + CS / 2 + 40, TOP + r * CS + CS / 2); g.arc(c * CS + CS / 2, TOP + r * CS + CS / 2, 40, 0, Math.PI * 2, true); }
+    g.fillStyle = '#2647d8'; g.fill('evenodd'); g.restore();
+    g.strokeStyle = 'rgba(0,0,0,.25)'; g.lineWidth = 4; for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) { g.beginPath(); g.arc(c * CS + CS / 2, TOP + r * CS + CS / 2, 40, 0, 7); g.stroke(); }
+    if (win) { const p = 0.5 + 0.5 * Math.sin(t / 150); g.strokeStyle = 'rgba(255,255,255,' + (0.5 + p * 0.5) + ')'; g.lineWidth = 8; for (const i of win) { g.beginPath(); g.arc((i % C) * CS + CS / 2, TOP + Math.floor(i / C) * CS + CS / 2, 40, 0, 7); g.stroke(); } }
+    if (over) { g.fillStyle = 'rgba(15,16,32,.75)'; g.fillRect(0, 0, W, TOP - 4); g.fillStyle = '#fff'; g.font = '800 22px Rubik, sans-serif'; g.textAlign = 'center'; g.fillText('Tap the board to play again', W / 2, 38); }
+  }
+  let last = 0;
+  function frame(t) {
+    const dt = last ? Math.min(0.05, (t - last) / 1000) : 0.016; last = t;
+    if (anim) { anim.vy += 5200 * dt; anim.y += anim.vy * dt; if (anim.y >= TOP + anim.r * CS + CS / 2) land(); }
+    draw(t); requestAnimationFrame(frame);
+  }
+  window.__four = { bot: (bd, me, l) => { const sb = b, st = turn, sl = lvl; b = bd.slice(); turn = me; lvl = l; const c = botMove(); b = sb; turn = st; lvl = sl; return c; }, rowFor, winner, st: () => ({ over, turn, n: hist.length, win: !!win }) };
+  reset(); requestAnimationFrame(frame);
+})();
+</script>
+<script src="presence.js" defer></script>
+</body>
+</html>
