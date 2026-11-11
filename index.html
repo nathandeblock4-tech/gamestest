@@ -111,6 +111,7 @@ function load(key) { try { return localStorage.getItem(key); } catch (e) { retur
 function loadJ(key, d) { try { const v = JSON.parse(load(key) || 'null'); return v == null ? d : v; } catch (e) { return d; } }
 
 const GAMES = [
+  { id: 'towers', href: 'towers.html', t: 'Tower Siege', d: 'Tower defense: 6 towers with upgrades, 8 enemy types, bosses, 30 waves, 3 maps and 3 difficulties.', i: '🏰', cat: 'puzzle', tags: ['NEW', 'BIG'], c: ['#16a34a', '#facc15'], n: 36 },
   { id: 'survivors', href: 'survivors.html', t: 'Neon Survivors', d: 'Survive 10 minutes of a huge swarm. 6 auto-firing weapons, level-up choices, bosses, 3 characters and permanent upgrades.', i: '⚡', cat: 'arcade', tags: ['NEW', 'BIG'], c: ['#22d3ee', '#a855f7'], n: 35 },
   { id: 'four', href: 'four.html', t: 'Four in a Row', d: 'Drop discs and connect four. Play a friend or 4 computer bots from Easy to Expert.', i: '🔴', cat: 'puzzle', tags: ['NEW', '2P'], c: ['#2647d8', '#ff3b5c'], n: 34 },
   { id: 'blocks', href: 'blocks.html', t: 'Block Drop', d: 'Stack falling blocks and clear lines. Hold piece, ghost piece, and it speeds up every 10 lines.', i: '🧩', cat: 'arcade', tags: ['NEW'], c: ['#38bdf8', '#a855f7'], n: 33 },
