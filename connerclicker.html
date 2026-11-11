@@ -81,7 +81,7 @@
     } catch (e2) {}
   }
   async function unlock(pw) {
-    const raw = new Uint8Array(await (await fetch('conner.bin', { cache: 'no-store' })).arrayBuffer());
+    const raw = new Uint8Array(await (await fetch('conner_face.bin', { cache: 'no-store' })).arrayBuffer());
     const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
     const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: raw.slice(0, 16), iterations: 200000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
     const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw.slice(16, 28) }, key, raw.slice(28));
@@ -96,139 +96,258 @@
   }
   $('lockForm').addEventListener('submit', e => { e.preventDefault(); tryPw($('pw').value, true); });
   if (load('fnac_pw')) tryPw(load('fnac_pw'), false); else setTimeout(() => $('pw').focus(), 100);
+  // ---------- data ----------
+  const AREAS = [
+    { n: 'Classroom 114', ic: '🏫', mult: 1, bg: ['#1b2450', '#0f1020'], col: '#2f7bff', boss: { n: 'Substitute Teacher', ic: '👩‍🏫', hp: 1 } },
+    { n: 'The Hallway', ic: '🚪', mult: 2.5, bg: ['#3b2a1a', '#140e08'], col: '#f59e0b', boss: { n: 'Hall Monitor', ic: '🧑‍✈️', hp: 1 } },
+    { n: 'Cafeteria', ic: '🍕', mult: 6, bg: ['#4a1d1d', '#170909'], col: '#ef4444', boss: { n: 'Lunch Lady', ic: '👩‍🍳', hp: 1 } },
+    { n: 'The Gym', ic: '🏀', mult: 15, bg: ['#4a2c0d', '#170e04'], col: '#fb923c', boss: { n: 'Coach', ic: '🏋️', hp: 1 } },
+    { n: 'Library', ic: '📚', mult: 40, bg: ['#1d3b2a', '#08140e'], col: '#34d399', boss: { n: 'The Librarian', ic: '🤫', hp: 1 } },
+    { n: "Principal's Office", ic: '🚨', mult: 100, bg: ['#3b1d4a', '#110817'], col: '#c084fc', boss: { n: 'The Principal', ic: '👔', hp: 1 } },
+    { n: 'School Bus', ic: '🚌', mult: 260, bg: ['#4a4310', '#171504'], col: '#fde047', boss: { n: 'Bus Driver', ic: '🧑‍🔧', hp: 1 } },
+    { n: 'Downtown', ic: '🏙️', mult: 700, bg: ['#12384a', '#051117'], col: '#38bdf8', boss: { n: 'The Mayor', ic: '🎩', hp: 1 } },
+    { n: 'The Moon', ic: '🌙', mult: 2000, bg: ['#2b2b3a', '#07070c'], col: '#e5e7eb', boss: { n: 'Moon Alien', ic: '👽', hp: 1 } },
+    { n: 'Conner Dimension', ic: '🌀', mult: 6000, bg: ['#4a0d3f', '#0d0217'], col: '#f472b6', boss: { n: 'MEGA CONNER', ic: '👑', hp: 1 } }
+  ];
+  const BOSS_HP = [2.2e4, 1.3e6, 7.4e7, 2.8e9, 5.2e10, 8.8e11, 3.2e13, 7.6e14, 2.1e16, 5.7e17];
+  BOSS_HP.forEach((h, i) => { AREAS[i].boss.hp = h; });
   const ITEMS = [
     { id: 'click', ic: '👆', name: 'Louder "Bruh"', desc: '+1 per click', base: 15, click: 1 },
-    { id: 'juice', ic: '🧃', name: 'Juice Box', desc: '+0.5/s', base: 25, rate: 0.5 },
-    { id: 'look', ic: '👀', name: 'Over-the-Shoulder Look', desc: 'He turns around. +3/s', base: 120, rate: 3 },
-    { id: 'clone', ic: '🧍', name: 'Second Conner', desc: '+10/s', base: 600, rate: 10 },
-    { id: 'water', ic: '💧', name: 'Water Bottle Collection', desc: '+40/s', base: 3000, rate: 40 },
-    { id: 'class', ic: '🏫', name: 'Classroom 114', desc: '+150/s', base: 15000, rate: 150 },
-    { id: 'tv', ic: '📺', name: 'Conner News Network', desc: '+600/s', base: 80000, rate: 600 },
-    { id: 'planet', ic: '🪐', name: 'Planet Conner', desc: '+3,000/s', base: 500000, rate: 3000 },
-    { id: 'district', ic: '🚌', name: 'Conner School District', desc: '+15,000/s', base: 4e6, rate: 15000 },
-    { id: 'galaxy', ic: '🌌', name: 'Conner Galaxy', desc: '+90,000/s', base: 4e7, rate: 90000 },
-    { id: 'multi', ic: '🌀', name: 'The Conner-verse', desc: '+600,000/s', base: 5e8, rate: 600000 },
-    { id: 'mega', ic: '💥', name: 'MEGA BRUH', desc: 'Clicks x2', base: 10000, mult: 2, max: 3 },
-    { id: 'cps', ic: '🧠', name: 'Big Brain Clicks', desc: 'Clicks also earn 3% of your /s', base: 50000, max: 5 }
+    { id: 'auto', ic: '🤖', name: 'Robot Finger', desc: 'Clicks for you once a second', base: 150, auto: 1, grow: 1.22 },
+    { id: 'juice', ic: '🧃', name: 'Juice Box', desc: '+0.5/s', base: 25, rate: 0.5, area: 0 },
+    { id: 'look', ic: '👀', name: 'Over-the-Shoulder Look', desc: '+3/s', base: 120, rate: 3, area: 0 },
+    { id: 'clone', ic: '🧍', name: 'Second Conner', desc: '+10/s', base: 600, rate: 10, area: 0 },
+    { id: 'water', ic: '💧', name: 'Water Bottle Collection', desc: '+40/s', base: 3000, rate: 40, area: 1 },
+    { id: 'class', ic: '📝', name: 'Study Group', desc: '+150/s', base: 15000, rate: 150, area: 1 },
+    { id: 'tv', ic: '📺', name: 'Conner News Network', desc: '+600/s', base: 80000, rate: 600, area: 2 },
+    { id: 'planet', ic: '🍟', name: 'Lunch Table Empire', desc: '+3,000/s', base: 500000, rate: 3000, area: 2 },
+    { id: 'district', ic: '🏀', name: 'Gym Class Army', desc: '+15,000/s', base: 4e6, rate: 15000, area: 3 },
+    { id: 'galaxy', ic: '📚', name: 'Conner Library', desc: '+90,000/s', base: 4e7, rate: 90000, area: 4 },
+    { id: 'multi', ic: '🚨', name: 'Detention Factory', desc: '+600,000/s', base: 5e8, rate: 600000, area: 5 },
+    { id: 'bus', ic: '🚌', name: 'Bus Fleet', desc: '+5M/s', base: 7e9, rate: 5e6, area: 6 },
+    { id: 'tower', ic: '🏙️', name: 'Conner Tower', desc: '+40M/s', base: 1e11, rate: 4e7, area: 7 },
+    { id: 'moon', ic: '🌙', name: 'Moon Base', desc: '+350M/s', base: 1.5e12, rate: 3.5e8, area: 8 },
+    { id: 'verse', ic: '🌀', name: 'The Conner-verse', desc: '+3B/s', base: 2.5e13, rate: 3e9, area: 9 },
+    { id: 'mega', ic: '💥', name: 'MEGA BRUH', desc: 'Clicks x2', base: 10000, mult: 2, max: 8, grow: 14 },
+    { id: 'cps', ic: '🧠', name: 'Big Brain Clicks', desc: 'Clicks also earn 3% of your /s', base: 50000, max: 5, grow: 9 }
   ];
   const ACH = [
     ['c100', '100 clicks', () => S.clicks >= 100], ['c1000', '1,000 clicks', () => S.clicks >= 1000], ['c10k', '10,000 clicks', () => S.clicks >= 10000],
-    ['t1k', 'Earn 1K stares', () => S.total >= 1e3], ['t1m', 'Earn 1M stares', () => S.total >= 1e6], ['t1b', 'Earn 1B stares', () => S.total >= 1e9], ['t1t', 'Earn 1T stares', () => S.total >= 1e12],
+    ['t1k', 'Earn 1K stares', () => S.total >= 1e3], ['t1m', 'Earn 1M stares', () => S.total >= 1e6], ['t1b', 'Earn 1B stares', () => S.total >= 1e9], ['t1t', 'Earn 1T stares', () => S.total >= 1e12], ['t1qa', 'Earn 1Qa stares', () => S.total >= 1e15],
     ['g1', 'Click a Golden Conner', () => S.golds >= 1], ['g10', 'Click 10 Golden Conners', () => S.golds >= 10],
     ['f1', 'Start a Stare Frenzy', () => S.frenzies >= 1], ['crit', 'Land a critical stare', () => S.crits >= 1],
-    ['b10', 'Own 10 of anything', () => ITEMS.some(i => own(i.id) >= 10)], ['b50', 'Own 50 of anything', () => ITEMS.some(i => own(i.id) >= 50)],
-    ['all', 'Own every building', () => ITEMS.filter(i => i.rate).every(i => own(i.id) > 0)], ['reb', 'Rebirth once', () => (S.rebirths || 0) >= 1]
+    ['b10', 'Own 10 of anything', () => ITEMS.some(i => own(i.id) >= 10)], ['b50', 'Own 50 of anything', () => ITEMS.some(i => own(i.id) >= 50)], ['b100', 'Own 100 of anything', () => ITEMS.some(i => own(i.id) >= 100)],
+    ['boss1', 'Win a staring contest', () => S.bosses >= 1], ['a2', 'Reach the Hallway', () => S.bestArea >= 1], ['a5', 'Reach the Library', () => S.bestArea >= 4], ['a8', 'Reach Downtown', () => S.bestArea >= 7], ['a10', 'Reach the Conner Dimension', () => S.bestArea >= 9],
+    ['win', 'Out-stare MEGA CONNER', () => S.won >= 1 || S.done], ['reb', 'Rebirth once', () => (S.rebirths || 0) >= 1], ['reb5', 'Rebirth 5 times', () => (S.rebirths || 0) >= 5], ['top', 'Reach #1 on the leaderboard', () => myRank() === 1]
   ];
-  const fresh = () => ({ n: 0, total: 0, own: {}, clicks: 0, golds: 0, frenzies: 0, crits: 0, ach: {}, coins: 0, rebirths: 0, runTotal: 0, t: Date.now() });
+  const RIVALS = [['Blinkless Bob', 5e3], ['Sir Stares-a-Lot', 1e5], ['The Hallway Hawk', 5e6], ['Eyeball Ed', 3e8], ['Lunchroom Legend', 2e10], ['Detention Dan', 2e12], ['Captain No-Blink', 3e14], ['Staremaster 3000', 5e16], ['The Unblinking', 1e19], ['MEGA CONNER', 5e21]];
+  const fresh = () => ({ n: 0, total: 0, own: {}, clicks: 0, golds: 0, frenzies: 0, crits: 0, ach: {}, coins: 0, rebirths: 0, runTotal: 0, area: 0, view: 0, bestArea: 0, bosses: 0, won: 0, done: 0, t: Date.now() });
   let S = fresh();
   try { const s = JSON.parse(load('connerClickerSave') || 'null'); if (s) S = Object.assign(fresh(), s); } catch (e) {}
   if (!S.runTotal) S.runTotal = S.total;
+  S.area = Math.max(0, Math.min(9, S.area | 0)); S.view = Math.max(0, Math.min(S.area, S.view | 0));
   const own = id => S.own[id] || 0;
-  const mile = id => { const o = own(id); return Math.pow(2, [10, 25, 50, 100].filter(m => o >= m).length); };
-  const costN = (it, k) => { let c = 0, o = own(it.id); for (let i = 0; i < k; i++) c += Math.ceil(it.base * Math.pow(1.15, o + i)); return c; };
+  const mile = id => { const o = own(id); return Math.pow(2, [10, 25, 50, 100, 150, 200].filter(m => o >= m).length); };
+  const costN = (it, k) => { let c = 0, o = own(it.id), gr = it.grow || 1.15; for (let i = 0; i < k; i++) c += Math.ceil(it.base * Math.pow(gr, o + i)); return c; };
   let buyMode = 1;
   function buyCount(it) {
     if (it.max) return 1;
     if (buyMode !== 'max') return buyMode;
-    let k = 0, c = 0, o = own(it.id); while (k < 500) { const nx = Math.ceil(it.base * Math.pow(1.15, o + k)); if (c + nx > S.n) break; c += nx; k++; } return Math.max(1, k);
+    let k = 0, c = 0, o = own(it.id), gr = it.grow || 1.15; while (k < 500) { const nx = Math.ceil(it.base * Math.pow(gr, o + k)); if (c + nx > S.n) break; c += nx; k++; } return Math.max(1, k);
   }
   const coinMult = () => 1 + 0.1 * (S.coins || 0);
-  let frenzy = 0, meter = 0, boostT = 0, boostK = 1, boostKind = '';
-  const prodMult = () => coinMult() * (boostKind === 'prod' && boostT > 0 ? boostK : 1);
-  const perSec = () => ITEMS.filter(i => i.rate).reduce((a, i) => a + i.rate * own(i.id) * mile(i.id), 0) * prodMult();
-  const perClick = () => ((1 + ITEMS.filter(i => i.click).reduce((a, i) => a + i.click * own(i.id), 0)) * Math.pow(2, own('mega')) + perSec() * 0.03 * own('cps')) * coinMult()
-    * (frenzy > 0 ? 7 : 1) * (boostKind === 'click' && boostT > 0 ? boostK : 1);
+  const tier = () => S.won || 0;
+  const areaMult = () => AREAS[S.area].mult * Math.pow(6, tier());
+  const bossHp = i => AREAS[i].boss.hp * Math.pow(40, tier());
+  let frenzy = 0, meter = 0, boostT = 0, boostK = 1, boostKind = '', bossF = null;
+  const prodMult = () => coinMult() * areaMult() * (boostKind === 'prod' && boostT > 0 ? boostK : 1);
+  const clickBase = () => (1 + ITEMS.filter(i => i.click).reduce((a, i) => a + i.click * own(i.id), 0)) * Math.pow(2, own('mega')) * coinMult() * areaMult();
+  const perSec = () => ITEMS.filter(i => i.rate).reduce((a, i) => a + i.rate * own(i.id) * mile(i.id), 0) * prodMult() + own('auto') * clickBase();
+  const perClick = () => (clickBase() + perSec() * 0.03 * own('cps')) * (frenzy > 0 ? 7 : 1) * (boostKind === 'click' && boostT > 0 ? boostK : 1);
   function fmt(n) {
     if (n < 1000) return (Math.round(n * 10) / 10).toString();
-    const u = ['K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp']; let i = -1; while (n >= 1000 && i < u.length - 1) { n /= 1000; i++; }
+    const u = ['K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc']; let i = -1; while (n >= 1000 && i < u.length - 1) { n /= 1000; i++; }
     return n.toFixed(n < 10 ? 2 : n < 100 ? 1 : 0) + u[i];
   }
+  const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function gain(g) { S.n += g; S.total += g; S.runTotal += g; }
+
   // ---------- extra UI ----------
   const css = document.createElement('style');
-  css.textContent = '.modes{display:flex;gap:6px;margin-bottom:10px}.modes button{flex:1;background:#24274a;color:#f2f3ff;border:2px solid transparent;border-radius:10px;padding:6px;font:800 13px Rubik;cursor:pointer}.modes button.on{border-color:#ffcc33;color:#ffcc33}' +
-    '.meter{height:14px;background:#24274a;border-radius:8px;overflow:hidden;margin:12px auto 4px;max-width:280px}.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2f7bff,#ff4fd8);transition:width .1s}.ml{font:800 12px Rubik;color:#9aa0c7}' +
-    '.item .nm small i{color:#9be29b;font-style:normal}.tabs{display:flex;gap:6px;margin-bottom:10px}.tabs button{flex:1;background:none;color:#9aa0c7;border:none;border-bottom:3px solid #24274a;padding:6px;font:800 15px Rubik;cursor:pointer}.tabs button.on{color:#ffcc33;border-color:#ffcc33}' +
+  css.textContent = 'body{transition:background 0.6s}.modes{display:flex;gap:6px;margin-bottom:10px}.modes button{flex:1;background:#24274a;color:#f2f3ff;border:2px solid transparent;border-radius:10px;padding:6px;font:800 13px Rubik;cursor:pointer}.modes button.on{border-color:#ffcc33;color:#ffcc33}' +
+    '.panel{background:rgba(20,22,44,.82)}.meter{height:14px;background:#24274a;border-radius:8px;overflow:hidden;margin:12px auto 4px;max-width:280px}.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2f7bff,#ff4fd8);transition:width .1s}.ml{font:800 12px Rubik;color:#9aa0c7}' +
+    '.item .nm small i{color:#9be29b;font-style:normal}.tabs{display:flex;gap:2px;margin-bottom:10px}.tabs button{flex:1;background:none;color:#9aa0c7;border:none;border-bottom:3px solid #24274a;padding:6px 2px;font:800 13px Rubik;cursor:pointer}.tabs button.on{color:#ffcc33;border-color:#ffcc33}' +
     '.ach{display:flex;gap:8px;align-items:center;background:#24274a;border-radius:10px;padding:8px 10px;margin-bottom:6px;text-align:left;font-weight:700}.ach.no{opacity:.35}.stat{display:flex;justify-content:space-between;padding:6px 2px;border-bottom:1px solid #24274a;font-weight:700}.stat span{color:#9aa0c7}' +
     '.reb{width:100%;background:linear-gradient(90deg,#ff4fd8,#2f7bff);color:#fff;border:none;border-radius:12px;padding:12px;font:800 15px Rubik;cursor:pointer;margin-top:12px}.reb:disabled{opacity:.4;cursor:default}' +
     '.spark{position:absolute;pointer-events:none;font-size:22px;animation:sp .8s forwards}@keyframes sp{to{transform:translate(var(--dx),var(--dy)) rotate(200deg);opacity:0}}' +
-    '#face.hit{animation:squish .15s}@keyframes squish{40%{transform:scale(.88,1.06) rotate(-4deg)}80%{transform:scale(1.05,.95)}}#face.fz{border-color:#ff4fd8;box-shadow:0 0 60px #ff4fd8}' +
-    '.crit{color:#ff4fd8!important;font-size:30px!important}.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#ffcc33;color:#1a1300;font:800 15px Rubik;padding:10px 16px;border-radius:12px;z-index:50;animation:tin 3s forwards}@keyframes tin{0%{opacity:0;bottom:0}10%,85%{opacity:1;bottom:20px}100%{opacity:0}}';
+    '#face.hit{animation:squish .15s}@keyframes squish{40%{transform:scale(.88,1.06) rotate(-4deg)}80%{transform:scale(1.05,.95)}}#face.fz{box-shadow:0 0 60px #ff4fd8}' +
+    '.crit{color:#ff4fd8!important;font-size:30px!important}#toasts{position:fixed;left:0;right:0;bottom:16px;z-index:50;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;padding:0 10px}.toast{background:#ffcc33;color:#1a1300;font:800 15px Rubik;padding:10px 16px;border-radius:12px;animation:tin 3.2s forwards;max-width:100%;text-align:center}@keyframes tin{0%{opacity:0;transform:translateY(20px)}10%,85%{opacity:1;transform:none}100%{opacity:0}}' +
+    '#areaLbl{font-weight:800;font-size:15px;margin-bottom:8px}.ar{display:flex;gap:10px;align-items:center;background:#24274a;border:2px solid transparent;border-radius:12px;padding:8px 10px;margin-bottom:6px;text-align:left;width:100%;color:#f2f3ff;font:inherit;cursor:pointer}.ar.cur{border-color:#ffcc33}.ar.lock{opacity:.4;cursor:default}.ar i{font-style:normal;font-size:24px}.ar span{flex:1}.ar span b{display:block}.ar span small{color:#9aa0c7}.ar em{font-style:normal;font-weight:800;color:#ffcc33}' +
+    '.bossCard{background:#2b1530;border:2px solid #ff4fd8;border-radius:12px;padding:10px;margin:2px 0 10px;text-align:center}.bossCard .bi{font-size:34px}.bossCard small{color:#c9b3d6;display:block;margin:4px 0 8px}.rdy{height:8px;background:#24274a;border-radius:6px;overflow:hidden;margin:6px 0}.rdy i{display:block;height:100%;background:#4ade80}' +
+    '#boss{display:none;margin-top:10px;background:#2b1530;border:2px solid #ff4fd8;border-radius:12px;padding:10px}#boss.on{display:block}#boss .bn{font-weight:800}#boss .bi{font-size:44px;line-height:1.1;animation:wob 1s infinite}#bossBar{height:16px;background:#24274a;border-radius:8px;overflow:hidden;margin:6px 0}#bossBar i{display:block;height:100%;background:linear-gradient(90deg,#ef4444,#f97316);width:100%}' +
+    '.lb{display:flex;gap:8px;align-items:center;background:#24274a;border-radius:10px;padding:7px 10px;margin-bottom:5px;text-align:left;font-weight:700}.lb.me{background:#2c2a1a;border:2px solid #ffcc33}.lb u{text-decoration:none;width:26px;color:#9aa0c7}.lb span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lb em{font-style:normal;color:#ffcc33}.lb small{color:#9aa0c7;font-weight:600}' +
+    '.lbc{display:flex;gap:6px;margin-top:8px}.lbc input{flex:1;min-width:0;background:#0f1020;border:2px solid #2c3060;border-radius:10px;color:#fff;font:600 13px Rubik;padding:8px}.sb{background:#2f7bff;color:#fff;border:none;border-radius:10px;padding:8px 12px;font:800 13px Rubik;cursor:pointer}.sb.w{width:100%;margin-top:8px}.sb:disabled{opacity:.45;cursor:default}';
   document.head.appendChild(css);
   const msg = $('msg');
-  const mt = document.createElement('div'); mt.innerHTML = '<div class="meter"><i id="mfill"></i></div><div class="ml" id="mlab">STARE FRENZY: click fast to fill!</div>';
+  const lbl = document.createElement('div'); lbl.id = 'areaLbl'; $('count').before(lbl);
+  const mt = document.createElement('div'); mt.innerHTML = '<div class="meter"><i id="mfill"></i></div><div class="ml" id="mlab">STARE FRENZY: click fast to fill!</div><div id="boss"><div class="bn" id="bossN"></div><div class="bi" id="bossI"></div><div id="bossBar"><i id="bossFill"></i></div><div class="ml" id="bossT"></div></div>';
   face.after(mt);
   const shopPanel = document.querySelector('.shop');
-  shopPanel.innerHTML = '<div class="tabs"><button data-t="shop" class="on">Shop</button><button data-t="ach">Awards</button><button data-t="stats">Stats</button></div>' +
-    '<div id="tshop"><div class="modes"><button data-m="1" class="on">x1</button><button data-m="10">x10</button><button data-m="max">Max</button></div><div id="shop"></div></div>' +
+  const TABS = ['shop', 'area', 'rank', 'ach', 'stats'];
+  shopPanel.innerHTML = '<div class="tabs"><button data-t="shop" class="on">Shop</button><button data-t="area">Areas</button><button data-t="rank">Ranks</button><button data-t="ach">Awards</button><button data-t="stats">Stats</button></div>' +
+    '<div id="tshop"><div class="modes"><button data-m="1" class="on">x1</button><button data-m="10">x10</button><button data-m="max">Max</button></div><div id="shop"></div><div class="ml" id="more"></div></div>' +
+    '<div id="tarea" style="display:none"></div>' +
+    '<div id="trank" style="display:none"><div class="ml" style="margin-bottom:8px">Ranked by all-time stares. 🤖 are computer rivals. Add real friends with a score code.</div><div id="rankList"></div><button class="sb w" id="copyCode">📋 Copy my score code</button><div class="lbc"><input id="codeIn" placeholder="Paste a friend\'s score code" autocomplete="off"><button class="sb" id="addCode">Add</button></div><div class="ml" id="codeMsg" style="margin-top:6px"></div></div>' +
     '<div id="tach" style="display:none"></div><div id="tstats" style="display:none"></div>';
-  shopPanel.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { shopPanel.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b)); ['shop', 'ach', 'stats'].forEach(t => $('t' + t).style.display = t === b.dataset.t ? '' : 'none'); ui(true); });
+  let tab = 'shop', ptrDown = false;
+  addEventListener('pointerdown', () => { ptrDown = true; }, true); addEventListener('pointerup', () => { ptrDown = false; }, true); addEventListener('pointercancel', () => { ptrDown = false; }, true);
+  shopPanel.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; shopPanel.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b)); TABS.forEach(t => $('t' + t).style.display = t === tab ? '' : 'none'); panes(); });
   shopPanel.querySelectorAll('.modes button').forEach(b => b.onclick = () => { buyMode = b.dataset.m === 'max' ? 'max' : +b.dataset.m; shopPanel.querySelectorAll('.modes button').forEach(x => x.classList.toggle('on', x === b)); ui(); });
-  function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 3000); }
+  const toasts = document.createElement('div'); toasts.id = 'toasts'; document.body.appendChild(toasts);
+  function toast(t) { if (simming) return; const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; toasts.appendChild(d); while (toasts.children.length > 4) toasts.firstChild.remove(); setTimeout(() => d.remove(), 3200); }
+  let simming = false;
 
   const shop = $('shop'); const btns = {};
   ITEMS.forEach(it => {
     const b = document.createElement('button'); b.className = 'item';
     b.innerHTML = '<span class="ic">' + it.ic + '</span><span class="nm"><b>' + it.name + '</b><small></small></span><span class="cost"></span><span class="own"></span>';
-    b.onclick = () => {
-      if (it.max && own(it.id) >= it.max) return;
-      const k = buyCount(it), c = costN(it, k);
-      if (S.n >= c) { S.n -= c; S.own[it.id] = own(it.id) + k; ding(); msg.textContent = 'Bought ' + (k > 1 ? k + ' x ' : '') + it.name + '!'; if (it.rate && [10, 25, 50, 100].some(m => own(it.id) - k < m && own(it.id) >= m)) toast('⚡ ' + it.name + ' is now x' + mile(it.id) + ' stronger!'); ui(); }
-    };
+    b.onclick = () => buy(it);
     shop.appendChild(b); btns[it.id] = b;
   });
+  function buy(it, silent) {
+    if (it.max && own(it.id) >= it.max) return false;
+    const k = buyCount(it), c = costN(it, k);
+    if (S.n < c) return false;
+    S.n -= c; S.own[it.id] = own(it.id) + k;
+    if (!silent) { ding(); msg.textContent = 'Bought ' + (k > 1 ? k + ' x ' : '') + it.name + '!'; if (it.rate && [10, 25, 50, 100, 150, 200].some(m => own(it.id) - k < m && own(it.id) >= m)) toast('⚡ ' + it.name + ' is now x' + mile(it.id) + ' stronger!'); ui(); }
+    return true;
+  }
   let ac = null;
-  function snd(f, d, type, vol) { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 1.6, t + d); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02); } catch (e) {} }
+  function snd(f, d, type, vol) { if (simming) return; try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 1.6, t + d); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02); } catch (e) {} }
   const ding = () => snd(660, 0.15, 'triangle', 0.1);
   function float(x, y, txt, crit) { const p = document.createElement('div'); p.className = 'float' + (crit ? ' crit' : ''); p.textContent = txt; const r = face.parentElement.getBoundingClientRect(); p.style.left = (x - r.left - 10 + (Math.random() - 0.5) * 30) + 'px'; p.style.top = (y - r.top - 20) + 'px'; face.parentElement.appendChild(p); setTimeout(() => p.remove(), 900); }
   function sparks(x, y, n, set) { const r = face.parentElement.getBoundingClientRect(); for (let i = 0; i < n; i++) { const s = document.createElement('div'); s.className = 'spark'; s.textContent = set[Math.floor(Math.random() * set.length)]; s.style.left = (x - r.left - 11) + 'px'; s.style.top = (y - r.top - 11) + 'px'; const a = Math.random() * Math.PI * 2, d = 50 + Math.random() * 70; s.style.setProperty('--dx', Math.cos(a) * d + 'px'); s.style.setProperty('--dy', Math.sin(a) * d + 'px'); face.parentElement.appendChild(s); setTimeout(() => s.remove(), 800); } }
   face.addEventListener('click', e => {
     const fr = face.getBoundingClientRect(), x = e.clientX || fr.left + fr.width / 2, y = e.clientY || fr.top + fr.height / 2;
     let g = perClick(); const crit = Math.random() < 0.04; if (crit) { g *= 10; S.crits++; }
-    S.n += g; S.total += g; S.runTotal += g; S.clicks++;
+    gain(g); S.clicks++;
+    if (bossF) bossF.hp -= g;
     float(x, y, (crit ? 'CRITICAL STARE! +' : '+') + fmt(g), crit);
     if (crit || Math.random() < 0.3) sparks(x, y, crit ? 10 : 2, crit ? ['💥', '👀', '⭐'] : ['👀', '💧', '✨']);
     face.classList.remove('hit'); void face.offsetWidth; face.classList.add('hit');
     if (frenzy <= 0) { meter = Math.min(100, meter + 2.2); if (meter >= 100) { frenzy = 10; meter = 100; S.frenzies++; toast('🔥 STARE FRENZY! Clicks x7 for 10 seconds!'); snd(440, 0.5, 'sawtooth', 0.1); } }
     snd(crit ? 180 : 300 + Math.random() * 200, crit ? 0.2 : 0.06, 'square', crit ? 0.08 : 0.04); ui();
   });
+
+  // ---------- areas + bosses ----------
+  function theme() { const a = AREAS[S.view]; document.body.style.background = 'linear-gradient(180deg,' + a.bg[0] + ',' + a.bg[1] + ') fixed'; face.style.borderColor = a.col; face.style.boxShadow = frenzy > 0 ? '' : '0 0 40px ' + a.col + '88'; lbl.textContent = a.ic + ' ' + a.n + (S.view === S.area ? ' · everything x' + fmt(areaMult()) : ' (visiting)') + (tier() ? ' · ⭐ Tier ' + (tier() + 1) : ''); lbl.style.color = a.col; }
+  const bossEst = () => perSec() * 30 + clickBase() * 130 + perSec() * 0.03 * own('cps') * 130;
+  function challenge() {
+    if (bossF || S.done) return; const b = AREAS[S.area].boss;
+    bossF = { hp: bossHp(S.area), max: bossHp(S.area), t: 30 }; S.view = S.area; theme();
+    $('bossN').textContent = '👁 STARING CONTEST vs ' + b.n; $('bossI').textContent = b.ic; $('boss').classList.add('on');
+    toast('Staring contest! Click as fast as you can for 30 seconds!'); snd(200, 0.4, 'sawtooth', 0.1); panes();
+    face.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  function bossEnd(win) {
+    const i = S.area, b = AREAS[i].boss; bossF = null; $('boss').classList.remove('on');
+    if (win) {
+      S.bosses++; gain(bossHp(i) * 0.5);
+      if (i < AREAS.length - 1) { S.area = i + 1; S.view = S.area; if (S.area > S.bestArea) S.bestArea = S.area; toast('🏆 You out-stared ' + b.n + '! New area: ' + AREAS[S.area].ic + ' ' + AREAS[S.area].n + ' (everything x' + fmt(areaMult()) + ')'); msg.textContent = 'Welcome to ' + AREAS[S.area].n + '! New buildings in the shop.'; }
+      else { S.done = 1; toast('👑 YOU OUT-STARED MEGA CONNER! You beat the game! Rebirth to go again, stronger.'); msg.textContent = '👑 You beat Conner Clicker!'; }
+      [523, 659, 784, 1047].forEach((f, k) => setTimeout(() => snd(f, 0.25, 'triangle', 0.1), k * 110));
+    } else { toast('😵 ' + b.n + ' out-stared you. Get stronger and try again!'); snd(160, 0.5, 'sawtooth', 0.1); }
+    theme(); persist(); ui(); panes();
+  }
+  // ---------- leaderboard ----------
+  const myName = () => { try { return (window.GR && window.GR.name()) || 'You'; } catch (e) { return 'You'; } };
+  const hash = t => { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
+  let friends = {}; try { friends = JSON.parse(load('connerFriends') || '{}') || {}; } catch (e) { friends = {}; }
+  function board() {
+    const rows = RIVALS.map(r => ({ n: r[0], s: r[1], bot: 1 }));
+    for (const k in friends) rows.push({ n: k, s: +friends[k].s || 0, a: friends[k].a, fr: 1 });
+    rows.push({ n: myName(), s: S.total, a: S.bestArea, me: 1 });
+    return rows.sort((a, b) => b.s - a.s);
+  }
+  function myRank() { return board().findIndex(r => r.me) + 1; }
+  function myCode() { const d = [myName().slice(0, 20), Math.floor(S.total), S.bestArea, S.rebirths || 0]; d.push(hash('cc|' + d.join('|'))); return btoa(unescape(encodeURIComponent(JSON.stringify(d)))); }
+  function addCode(code) {
+    try { const d = JSON.parse(decodeURIComponent(escape(atob(code.trim())))); if (!Array.isArray(d) || d.length !== 5 || hash('cc|' + d.slice(0, 4).join('|')) !== d[4]) throw 0;
+      const n = String(d[0]).slice(0, 20); if (!n || !(+d[1] >= 0)) throw 0; if (n === myName()) return "That's your own code!";
+      friends[n] = { s: +d[1], a: Math.max(0, Math.min(9, d[2] | 0)), r: d[3] | 0 }; save('connerFriends', JSON.stringify(friends)); return 'Added ' + n + ' to your leaderboard!';
+    } catch (e) { return "That code didn't work. Ask them to copy it again."; }
+  }
+  $('copyCode').onclick = () => { const c = myCode(), ok = () => { $('codeMsg').textContent = 'Copied! Send it to a friend so they can add you.'; }; try { navigator.clipboard.writeText(c).then(ok, () => { $('codeIn').value = c; $('codeMsg').textContent = 'Copy the code from the box.'; }); } catch (e) { $('codeIn').value = c; $('codeMsg').textContent = 'Copy the code from the box.'; } };
+  $('addCode').onclick = () => { $('codeMsg').textContent = addCode($('codeIn').value); $('codeIn').value = ''; panes(); };
+
   const milestones = [[100, 'He noticed you.'], [1000, "He's staring now."], [10000, 'The whole class is concerned.'], [100000, 'The school is famous now.'], [1e6, 'Conner has become a legend.'], [1e8, 'The universe is staring back.'], [1e11, 'Every star in the sky is Conner.']];
-  const coinsFor = () => Math.floor(Math.sqrt(S.runTotal / 1e6));
-  let tabDirty = 0;
-  function ui(force) {
+  const coinsFor = () => Math.floor(Math.pow(S.runTotal / 1e6, 0.17));
+  let rebArm = 0;
+  function ui() {
+    if (simming) return;
     $('count').textContent = fmt(S.n) + ' stares';
-    $('rate').textContent = fmt(perSec()) + ' per second · ' + fmt(perClick()) + ' per click' + (S.coins ? ' · 🪙 +' + Math.round(S.coins * 10) + '%' : '');
+    $('rate').textContent = fmt(perSec()) + ' per second · ' + fmt(perClick()) + ' per click' + (S.coins ? ' · 🪙 +' + fmt(S.coins * 10) + '%' : '');
+    let hidden = 0;
     ITEMS.forEach(it => {
-      const b = btns[it.id], maxed = it.max && own(it.id) >= it.max, k = buyCount(it), c = costN(it, k);
+      const b = btns[it.id], vis = it.area == null || S.area >= it.area || own(it.id) > 0; b.style.display = vis ? '' : 'none'; if (!vis) { hidden++; return; }
+      const maxed = it.max && own(it.id) >= it.max, k = buyCount(it), c = costN(it, k);
       b.disabled = maxed || S.n < c; b.querySelector('.cost').textContent = maxed ? 'MAX' : (k > 1 ? k + 'x ' : '') + fmt(c); b.querySelector('.own').textContent = own(it.id) || '';
-      const m = it.rate ? mile(it.id) : 1, nx = [10, 25, 50, 100].find(v => own(it.id) < v);
+      const m = it.rate ? mile(it.id) : 1, nx = [10, 25, 50, 100, 150, 200].find(v => own(it.id) < v);
       b.querySelector('small').innerHTML = it.desc + (m > 1 ? ' <i>x' + m + '</i>' : '') + (it.rate && nx ? ' · x2 at ' + nx : '');
     });
+    $('more').textContent = hidden ? '🔒 ' + hidden + ' more building' + (hidden > 1 ? 's' : '') + ' unlock in later areas. Beat the boss in the Areas tab!' : '';
     const m = milestones.filter(([n]) => S.total >= n).pop(); if (m && !S['m' + m[0]]) { S['m' + m[0]] = 1; msg.textContent = '🏆 ' + m[1]; }
     ACH.forEach(([id, name, f]) => { if (!S.ach[id] && f()) { S.ach[id] = 1; toast('🏅 Award: ' + name); } });
     $('mfill').style.width = (frenzy > 0 ? frenzy * 10 : meter) + '%';
     $('mlab').textContent = frenzy > 0 ? '🔥 FRENZY! x7 clicks · ' + Math.ceil(frenzy) + 's' : boostT > 0 ? '✨ ' + (boostKind === 'click' ? 'Click' : 'Production') + ' x' + boostK + ' · ' + Math.ceil(boostT) + 's' : 'STARE FRENZY: click fast to fill!';
     face.classList.toggle('fz', frenzy > 0);
-    if (force || (tabDirty++ % 10 === 0)) {
-      if ($('tach').style.display !== 'none') $('tach').innerHTML = '<div class="ml" style="margin-bottom:8px">' + Object.keys(S.ach).length + ' / ' + ACH.length + ' awards</div>' + ACH.map(([id, name]) => '<div class="ach' + (S.ach[id] ? '' : ' no') + '">' + (S.ach[id] ? '🏅' : '🔒') + ' ' + name + '</div>').join('');
-      if ($('tstats').style.display !== 'none') {
-        const c = coinsFor(), gain = Math.max(0, c - (S.coins || 0));
-        $('tstats').innerHTML = [['Stares this run', fmt(S.runTotal)], ['All-time stares', fmt(S.total)], ['Clicks', fmt(S.clicks)], ['Critical stares', fmt(S.crits)], ['Golden Conners', S.golds], ['Frenzies', S.frenzies], ['Rebirths', S.rebirths || 0], ['Conner Coins', (S.coins || 0) + ' (+' + Math.round((S.coins || 0) * 10) + '% everything)']].map(r => '<div class="stat"><span>' + r[0] + '</span>' + r[1] + '</div>').join('') +
-          '<button class="reb" id="reb"' + (gain > 0 ? '' : ' disabled') + '>🌀 REBIRTH: +' + gain + ' Conner Coins</button><div class="ml" style="margin-top:6px">Rebirth resets stares and buildings but keeps awards. Each coin = +10% forever. More coins the more you earn (first coin at 1M this run).</div>';
-        const rb = $('reb'); if (rb) rb.onclick = () => { if (!rb.dataset.c) { rb.dataset.c = 1; rb.textContent = 'Click again to rebirth!'; return; } const keep = { total: S.total, clicks: S.clicks, golds: S.golds, frenzies: S.frenzies, crits: S.crits, ach: S.ach, coins: c, rebirths: (S.rebirths || 0) + 1 }; S = Object.assign(fresh(), keep); frenzy = 0; meter = 0; save('connerClickerSave', JSON.stringify(S)); toast('🌀 Reborn with ' + c + ' Conner Coins!'); ui(true); };
-      }
+    if (bossF) { $('bossFill').style.width = Math.max(0, bossF.hp / bossF.max * 100) + '%'; $('bossT').textContent = fmt(Math.max(0, bossF.hp)) + ' left · ' + Math.ceil(bossF.t) + 's'; }
+  }
+  function panes() {
+    if (simming) return;
+    if (tab === 'area') {
+      const el = $('tarea'); el.innerHTML = '';
+      AREAS.forEach((a, i) => {
+        const open = i <= S.area, r = document.createElement('button'); r.className = 'ar' + (i === S.view ? ' cur' : '') + (open ? '' : ' lock'); r.disabled = !open;
+        r.innerHTML = '<i>' + (open ? a.ic : '🔒') + '</i><span><b>' + (i + 1) + '. ' + a.n + '</b><small>' + (open ? (i < S.area || S.done ? 'Boss beaten ✅' : 'Boss: ' + a.boss.ic + ' ' + a.boss.n) : 'Beat ' + AREAS[i - 1].boss.n + ' to unlock') + '</small></span><em>x' + fmt(a.mult * Math.pow(6, tier())) + '</em>';
+        r.onclick = () => { S.view = i; theme(); panes(); }; el.appendChild(r);
+        if (i === S.area && !S.done) { const b = a.boss, pct = Math.min(1, bossEst() / bossHp(i)), c = document.createElement('div'); c.className = 'bossCard';
+          c.innerHTML = '<div class="bi">' + b.ic + '</div><b>Staring contest: ' + b.n + '</b><small>Deal ' + fmt(bossHp(i)) + ' stares in 30 seconds. Clicks and your per-second both count.</small><div class="rdy"><i style="width:' + pct * 100 + '%"></i></div><small>' + (pct >= 1 ? 'You look strong enough. Go!' : pct > 0.6 ? 'Close! Clicking fast and a Frenzy might do it.' : 'You would only do about ' + Math.round(pct * 100) + '%. Buy more first.') + '</small>';
+          const go = document.createElement('button'); go.className = 'sb'; go.textContent = bossF ? 'Fighting...' : '👁 Challenge'; go.disabled = !!bossF; go.onclick = challenge; c.appendChild(go); el.appendChild(c); }
+        if (i === AREAS.length - 1 && S.done) { const c = document.createElement('div'); c.className = 'bossCard'; c.innerHTML = '<div class="bi">👑</div><b>You beat the game!</b><small>Rebirth (Stats tab) to start Tier ' + (tier() + 2) + ': tougher bosses, but everything earns 6x more. Keep climbing the leaderboard!</small>'; el.appendChild(c); }
+      });
+    } else if (tab === 'rank') {
+      const rows = board(); $('rankList').innerHTML = rows.map((r, i) => '<div class="lb' + (r.me ? ' me' : '') + '"><u>#' + (i + 1) + '</u><span>' + (r.bot ? '🤖 ' : r.me ? '😎 ' : '🧑 ') + esc(r.n) + (r.me ? ' (you)' : '') + (r.a != null ? ' <small>· ' + AREAS[r.a].ic + '</small>' : '') + '</span><em>' + fmt(r.s) + '</em></div>').join('');
+    } else if (tab === 'ach') {
+      $('tach').innerHTML = '<div class="ml" style="margin-bottom:8px">' + Object.keys(S.ach).length + ' / ' + ACH.length + ' awards</div>' + ACH.map(([id, name]) => '<div class="ach' + (S.ach[id] ? '' : ' no') + '">' + (S.ach[id] ? '🏅' : '🔒') + ' ' + name + '</div>').join('');
+    } else if (tab === 'stats') {
+      const c = coinsFor(), gainC = Math.max(0, c - (S.coins || 0)), armed = Date.now() - rebArm < 4000;
+      $('tstats').innerHTML = [['Stares this run', fmt(S.runTotal)], ['All-time stares', fmt(S.total)], ['Leaderboard rank', '#' + myRank()], ['Area', AREAS[S.area].ic + ' ' + (S.area + 1) + ' / 10'], ['Bosses beaten', S.bosses], ['Times beaten the game', (S.won || 0) + (S.done ? 1 : 0)], ['Tier', tier() + 1], ['Clicks', fmt(S.clicks)], ['Critical stares', fmt(S.crits)], ['Golden Conners', S.golds], ['Frenzies', S.frenzies], ['Rebirths', S.rebirths || 0], ['Conner Coins', fmt(S.coins || 0) + ' (+' + fmt((S.coins || 0) * 10) + '% everything)']].map(r => '<div class="stat"><span>' + r[0] + '</span>' + r[1] + '</div>').join('') +
+        '<button class="reb" id="reb"' + (gainC > 0 ? '' : ' disabled') + '>' + (armed ? 'Click again to rebirth!' : '🌀 REBIRTH: +' + fmt(gainC) + ' Conner Coins') + '</button><div class="ml" style="margin-top:6px">Rebirth sends you back to Classroom 114 with no stares or buildings, but keeps awards and all-time stares. Each coin = +10% forever. The farther you get, the more coins.</div>';
+      const rb = $('reb'); if (rb) rb.onclick = () => { if (Date.now() - rebArm > 4000) { rebArm = Date.now(); panes(); return; } rebArm = 0; rebirth(); };
     }
   }
+  function rebirth() {
+    const c = Math.max(S.coins || 0, coinsFor());
+    const keep = { total: S.total, clicks: S.clicks, golds: S.golds, frenzies: S.frenzies, crits: S.crits, ach: S.ach, coins: c, rebirths: (S.rebirths || 0) + 1, bestArea: S.bestArea, bosses: S.bosses, won: (S.won || 0) + (S.done ? 1 : 0) };
+    milestones.forEach(m => { if (S['m' + m[0]]) keep['m' + m[0]] = 1; });
+    S = Object.assign(fresh(), keep); frenzy = 0; meter = 0; bossF = null; $('boss').classList.remove('on'); persist(); toast('🌀 Reborn with ' + fmt(c) + ' Conner Coins!'); theme(); ui(); panes();
+  }
   // offline earnings
-  if (S.t && perSec() > 0) { const away = Math.min(8 * 3600, (Date.now() - S.t) / 1000); if (away > 60) { const g = perSec() * away * 0.5; S.n += g; S.total += g; S.runTotal += g; setTimeout(() => toast('😴 While you were gone Conner earned ' + fmt(g) + ' stares'), 600); } }
-  let last = performance.now();
-  setInterval(() => {
-    const now = performance.now(), dt = (now - last) / 1000; last = now;
-    const g = perSec() * dt; S.n += g; S.total += g; S.runTotal += g;
-    if (frenzy > 0) { frenzy -= dt; if (frenzy <= 0) { frenzy = 0; meter = 0; } } else meter = Math.max(0, meter - dt * 6);
+  if (S.t && perSec() > 0) { const away = Math.min(8 * 3600, (Date.now() - S.t) / 1000); if (away > 60) { const g = perSec() * away * 0.5; gain(g); setTimeout(() => toast('😴 While you were gone Conner earned ' + fmt(g) + ' stares'), 600); } }
+  function tick(dt) {
+    const ps = perSec(); gain(ps * dt);
+    if (frenzy > 0) { frenzy -= dt; if (frenzy <= 0) { frenzy = 0; meter = 0; theme(); } } else meter = Math.max(0, meter - dt * 6);
     if (boostT > 0) boostT -= dt;
-    ui();
+    if (bossF) { bossF.hp -= ps * dt; bossF.t -= dt; if (bossF.hp <= 0) bossEnd(true); else if (bossF.t <= 0) bossEnd(false); }
+  }
+  let last = performance.now(), paneT = 0;
+  setInterval(() => {
+    const now = performance.now(), dt = Math.min(5, (now - last) / 1000); last = now;
+    tick(dt); ui();
+    paneT += dt; if (paneT > 1.5 && !ptrDown && document.activeElement !== $('codeIn')) { paneT = 0; if (tab !== 'shop' && tab !== 'ach') panes(); }
   }, 100);
-  const persist = () => { S.t = Date.now(); save('connerClickerSave', JSON.stringify(S)); };
+  function persist() { if (simming) return; S.t = Date.now(); save('connerClickerSave', JSON.stringify(S)); }
   setInterval(persist, 3000); window.addEventListener('beforeunload', persist);
   // golden Conner: random effect
   function golden() {
@@ -237,7 +356,7 @@
     g.style.left = (20 + Math.random() * (innerWidth - 110)) + 'px'; g.style.top = (80 + Math.random() * (innerHeight - 180)) + 'px';
     g.onclick = () => {
       S.golds++; const r = Math.random();
-      if (r < 0.4) { const bonus = Math.max(50, perSec() * 60 + perClick() * 20); S.n += bonus; S.total += bonus; S.runTotal += bonus; toast('✨ GOLDEN CONNER! +' + fmt(bonus) + ' stares'); }
+      if (r < 0.4) { const bonus = Math.max(50, perSec() * 60 + perClick() * 20); gain(bonus); toast('✨ GOLDEN CONNER! +' + fmt(bonus) + ' stares'); }
       else if (r < 0.75) { boostKind = 'prod'; boostK = 7; boostT = 30; toast('✨ GOLDEN CONNER! Production x7 for 30s'); }
       else if (r < 0.92) { boostKind = 'click'; boostK = 50; boostT = 10; toast('✨ GOLDEN CONNER! CLICKS x50 for 10s!'); }
       else { frenzy = 10; S.frenzies++; toast('✨ GOLDEN CONNER! Instant Stare Frenzy!'); }
@@ -246,9 +365,27 @@
     document.body.appendChild(g); setTimeout(() => g.remove(), 8000);
     setTimeout(golden, 35000 + Math.random() * 45000);
   }
-  window.__cc = { golden, S: () => S };
-  $('reset').onclick = () => { if ($('reset').dataset.c) { S = fresh(); save('connerClickerSave', JSON.stringify(S)); $('reset').textContent = 'reset progress'; delete $('reset').dataset.c; ui(true); } else { $('reset').dataset.c = 1; $('reset').textContent = 'click again to really reset'; } };
-  ui(true);
+  // test hook: simulate a steady player (5 clicks a second, buys sensibly, fights bosses when ready)
+  function sim(maxT, targets, startCoins, won) {
+    simming = true; const keepS = S; S = fresh(); S.coins = startCoins || 0; S.won = won || 0; const log = [], hp = [];
+    let t = 0;
+    while (t < maxT && !S.done) {
+      t++; gain(perSec()); gain(perClick() * 5 * 1.5);
+      for (let n = 0; n < 40; n++) {
+        let best = null, bv = Infinity;
+        for (const it of ITEMS) { if (it.max && own(it.id) >= it.max) continue; if (it.area != null && S.area < it.area) continue; const c = costN(it, 1); if (c > S.n) continue;
+          const v = it.rate ? c / (it.rate * mile(it.id)) : (c < S.n * 0.25 ? 0.0001 * c : Infinity); if (v < bv) { bv = v; best = it; } }
+        if (!best) break; S.n -= costN(best, 1); S.own[best.id] = own(best.id) + 1;
+      }
+      const i = S.area;
+      if (targets) { if (t >= targets[i]) { hp[i] = bossEst(); log.push([i, t]); if (i < 9) S.area++; else S.done = 1; } }
+      else if (bossEst() * 1.05 >= bossHp(i)) { t += 30; gain(perSec() * 30); gain(bossHp(i) * 0.5); log.push([i, t]); if (i < 9) S.area++; else S.done = 1; }
+    }
+    const out = { log, hp, total: S.runTotal, coins: coinsFor(), ps: perSec() }; S = keepS; simming = false; return out;
+  }
+  window.__cc = { golden, S: () => S, sim, challenge, boss: () => bossF, set: o => { Object.assign(S, o); theme(); ui(); panes(); }, code: myCode, addCode };
+  $('reset').onclick = () => { if ($('reset').dataset.c) { S = fresh(); bossF = null; $('boss').classList.remove('on'); persist(); $('reset').textContent = 'reset progress'; delete $('reset').dataset.c; theme(); ui(); panes(); } else { $('reset').dataset.c = 1; $('reset').textContent = 'click again to really reset'; } };
+  theme(); ui(); panes();
 })();
 </script>
 <script src="presence.js" defer></script>
