@@ -25,14 +25,23 @@ const CURVES = {
   bankright: u => { const c = CURVES.bigright(u); c.b = -0.38 * Math.sin(PI * u); c.p[1] += (HW + RAILW) * Math.sin(-c.b); return c; },
   up: u => ({ p: [0, HSTEP * sm(u), -h + CELL * u], t: [0, HSTEP * 6 * u * (1 - u), CELL], b: 0 }),
   down: u => ({ p: [0, -HSTEP * sm(u), -h + CELL * u], t: [0, -HSTEP * 6 * u * (1 - u), CELL], b: 0 }),
-  jump: u => ({ p: [0, 3.4 * u * u, -h + CELL * u], t: [0, 6.8 * u, CELL], b: 0 })
+  jump: u => ({ p: [0, 3.4 * u * u, -h + CELL * u], t: [0, 6.8 * u, CELL], b: 0 }),
+  loopleft: u => loopCurve(u, 1), loopright: u => loopCurve(u, -1)
 };
+export const LOOPR = 15;
+function loopCurve(u, s) { // straight in, one full vertical loop that slides one cell sideways, straight out
+  const C = 2 * PI * LOOPR, tot = CELL + C, d = u * tot;
+  if (d < h) return { p: [0, 0, -h + d], t: [0, 0, 1], b: 0, r: [1, 0, 0] };
+  if (d > h + C) return { p: [s * CELL, 0, d - h - C], t: [0, 0, 1], b: 0, r: [1, 0, 0] };
+  const w = (d - h) / C, a = w * 2 * PI;
+  return { p: [s * CELL * sm(w), LOOPR * (1 - Math.cos(a)), LOOPR * Math.sin(a)], t: [s * CELL * 6 * w * (1 - w) / (2 * PI), LOOPR * Math.sin(a), LOOPR * Math.cos(a)], b: 0, r: [1, 0, 0] };
+}
 const KIND = { start: 'straight', finish: 'straight', check: 'straight', boost: 'straight', land: 'straight' };
-const SEGS = { straight: 4, left: 12, right: 12, bigleft: 22, bigright: 22, bankleft: 22, bankright: 22, up: 12, down: 12, jump: 10 };
+const SEGS = { straight: 4, left: 12, right: 12, bigleft: 22, bigright: 22, bankleft: 22, bankright: 22, up: 12, down: 12, jump: 10, loopleft: 72, loopright: 72 };
 // exit: [cells left, cells forward, turn (+1 = left), level change]; cells: extra occupied cells [left, forward]
-const EXIT = { straight: [0, 1, 0, 0], left: [1, 0, 1, 0], right: [-1, 0, 3, 0], bigleft: [2, 1, 1, 0], bigright: [-2, 1, 3, 0], bankleft: [2, 1, 1, 0], bankright: [-2, 1, 3, 0], up: [0, 1, 0, 1], down: [0, 1, 0, -1], jump: [0, 1, 0, 0] };
-const EXTRA = { bigleft: [[0, 1], [1, 1]], bigright: [[0, 1], [-1, 1]], bankleft: [[0, 1], [1, 1]], bankright: [[0, 1], [-1, 1]] };
-const TOKEN = { S: 'straight', L: 'left', R: 'right', BL: 'bigleft', BR: 'bigright', KL: 'bankleft', KR: 'bankright', U: 'up', D: 'down', B: 'boost', C: 'check', F: 'finish' };
+const EXIT = { straight: [0, 1, 0, 0], left: [1, 0, 1, 0], right: [-1, 0, 3, 0], bigleft: [2, 1, 1, 0], bigright: [-2, 1, 3, 0], bankleft: [2, 1, 1, 0], bankright: [-2, 1, 3, 0], up: [0, 1, 0, 1], down: [0, 1, 0, -1], jump: [0, 1, 0, 0], loopleft: [1, 1, 0, 0], loopright: [-1, 1, 0, 0] };
+const EXTRA = { bigleft: [[0, 1], [1, 1]], bigright: [[0, 1], [-1, 1]], bankleft: [[0, 1], [1, 1]], bankright: [[0, 1], [-1, 1]], loopleft: [[1, 0]], loopright: [[-1, 0]] };
+const TOKEN = { S: 'straight', L: 'left', R: 'right', BL: 'bigleft', BR: 'bigright', KL: 'bankleft', KR: 'bankright', U: 'up', D: 'down', B: 'boost', C: 'check', F: 'finish', OL: 'loopleft', OR: 'loopright' };
 
 function toWorld(pc, lp) { const a = pc.d * PI / 2, c = Math.cos(a), s = Math.sin(a); return [pc.gx * CELL + lp[0] * c + lp[2] * s, pc.lv * HSTEP + ROADY + lp[1], pc.gz * CELL - lp[0] * s + lp[2] * c]; }
 function toWorldDir(pc, lp) { const a = pc.d * PI / 2, c = Math.cos(a), s = Math.sin(a); return [lp[0] * c + lp[2] * s, lp[1], -lp[0] * s + lp[2] * c]; }
@@ -47,6 +56,7 @@ export function buildTrack(def) {
     const ex = EXIT[kind];
     claim(gx, gz, lv, pc.i); if (kind === 'up') claim(gx, gz, lv + 1, pc.i); if (kind === 'down') claim(gx, gz, lv - 1, pc.i);
     for (const e of EXTRA[kind] || []) claim(gx + e[0] * LX[d] + e[1] * DX[d], gz + e[0] * LZ[d] + e[1] * DZ[d], lv, pc.i);
+    if (kind === 'loopleft' || kind === 'loopright') for (let up = 1; up <= 4; up++) { claim(gx, gz, lv + up, pc.i); const e = EXTRA[kind][0]; claim(gx + e[0] * LX[d], gz + e[0] * LZ[d], lv + up, pc.i); }
     gx += ex[0] * LX[d] + ex[1] * DX[d]; gz += ex[0] * LZ[d] + ex[1] * DZ[d]; lv += ex[3]; d = (d + ex[2]) % 4;
     if (lv < 0) throw new Error('Track "' + def.name + '" goes below ground');
     return pc;
@@ -74,6 +84,7 @@ export function buildTrack(def) {
     for (let i = 0; i <= n; i++) {
       const u = i / n, c = f(u), p = toWorld(pc, c.p), fw = norm(toWorldDir(pc, c.t));
       let l = norm(cross([0, 1, 0], fw)), up = cross(fw, l);
+      if (c.r) { const R = toWorldDir(pc, c.r); l = norm(sub(R, mul(fw, dot(R, fw)))); up = cross(fw, l); }
       if (c.b) { const cb = Math.cos(c.b), sb = Math.sin(c.b), l2 = sub(mul(l, cb), mul(up, sb)), u2 = add(mul(up, cb), mul(l, sb)); l = l2; up = u2; }
       frames.push({ p, f: fw, l, u: up });
     }
@@ -98,7 +109,7 @@ export function buildTrack(def) {
       strip(-HW - RAILW, -0.7, HW + RAILW, -0.7, C_UNDER);
       // centerline samples every ~2.5 m
       const segLen = len(sub(B.p, A.p)), ns = Math.max(1, Math.round(segLen / 2.5));
-      for (let k = 0; k < ns; k++) { const u = k / ns; samples.push({ p: add(A.p, mul(sub(B.p, A.p), u)), f: A.f, pc: pc.i, d: dist + segLen * u }); }
+      for (let k = 0; k < ns; k++) { const u = k / ns; samples.push({ p: add(A.p, mul(sub(B.p, A.p), u)), f: A.f, pc: pc.i, d: dist + segLen * u, loop: pc.kind === 'loopleft' || pc.kind === 'loopright' }); }
       dist += segLen;
     }
     if (pc.kind === 'jump') { // end cap + air samples over the gap
@@ -166,7 +177,7 @@ function closestOnTri(T, q, p) {
 export const CAR = {
   mass: 1200, inertia: [1500, 1900, 520],           // about left (pitch), up (yaw), forward (roll) axes
   wheels: [[0.92, -0.18, 1.42], [-0.92, -0.18, 1.42], [0.92, -0.18, -1.38], [-0.92, -0.18, -1.38]], // FL FR RL RR
-  radius: 0.37, rayLen: 0.98, k: 62000, damp: 5200,
+  radius: 0.37, rayLen: 0.98, k: 62000, damp: 5200, bumpAt: 0.42, bumpK: 520000,
   gravity: 21, mu: 1.75, muGrass: 0.85, slipPeak: 0.11,
   engine: 17500, power: 640000, brake: 34000, reverse: 9000, drag: 1.02, roll: 60, downforce: 5.2,
   maxSteer: 0.52, steerSpeedRef: 21, steerRate: 5.5, steerReturn: 8, boost: 52000, vmax: 118,
@@ -218,15 +229,15 @@ export function stepCar(c, inp, dt, tr) {
     wl.hit = true; wl.mat = hit.mat; grounded++;
     const comp = P.rayLen - hit.t, n = hit.n, cp = [O[0] + down[0] * hit.t, O[1] + down[1] * hit.t, O[2] + down[2] * hit.t], r = sub(cp, c.p), vc = add(c.v, cross(c.w, r));
     wl.comp = comp;
-    const N = Math.max(0, P.k * comp - P.damp * dot(vc, n)) * Math.max(0, dot(n, ay));
+    const N = Math.max(0, P.k * comp + (comp > P.bumpAt ? P.bumpK * (comp - P.bumpAt) : 0) - P.damp * dot(vc, n)) * Math.max(0, dot(n, ay));
     // wheel heading on the contact plane
     let hd = i < 2 ? [az[0] * hc + ax[0] * hs, az[1] * hc + ax[1] * hs, az[2] * hc + ax[2] * hs] : az;
     const f = norm(sub(hd, mul(n, dot(hd, n)))), s = cross(n, f), vl = dot(vc, f), vs = dot(vc, s);
-    const grass = hit.mat === 2, mu = grass ? P.muGrass : P.mu, maxF = mu * N;
+    const grass = hit.mat === 2, hand = inp.hand && i >= 2 && !c.finished, mu = (grass ? P.muGrass : P.mu) * (hand ? 0.42 : 1), maxF = mu * N;
     let Fx = 0;
     if (thr > 0) Fx += thr * Math.min(P.engine, P.power / Math.max(8, Math.abs(vf))) / 4 * (vf > P.vmax * 0.66 ? Math.max(0, 1 - (vf - P.vmax * 0.66) / (P.vmax * 0.06)) : 1);
     if (brk > 0) { if (vl > 1.5) Fx -= brk * P.brake / 4; else if (!c.finished) Fx -= brk * P.reverse / 4 * (vf < -14 ? 0 : 1); else Fx -= vl * 900; }
-    Fx -= vl * (grass ? 420 : P.roll);
+    Fx -= vl * (grass ? 420 : P.roll); if (hand) Fx -= Math.sign(vl) * Math.min(Math.abs(vl) * 2500, 5200);
     if (onBoost) Fx += P.boost / 4;
     let Fy = -maxF * clamp((vs / (Math.abs(vl) + 3.5)) / P.slipPeak, -1, 1);
     const cap = Math.abs(vs) * (P.mass / 4) / dt * 0.8; Fy = clamp(Fy, -cap, cap);
@@ -292,7 +303,7 @@ export function botInput(c, tr, skill) {
   // speed planning from curvature ahead
   let allow = 1e9; const horizon = Math.min(S.length - 2, bi + Math.round((30 + sp * 2.6) / 2.5));
   for (let i = bi + 2; i < horizon; i += 2) {
-    const a = S[i], b = S[Math.min(S.length - 1, i + 4)]; if (a.air || b.air) continue;
+    const a = S[i], b = S[Math.min(S.length - 1, i + 4)]; if (a.air || b.air || a.loop || b.loop) continue;
     const turn = Math.abs(Math.atan2(a.f[0] * b.f[2] - a.f[2] * b.f[0], a.f[0] * b.f[0] + a.f[2] * b.f[2]));
     if (turn < 0.02) continue;
     const R = (b.d - a.d) / turn, vmax = Math.sqrt((27 + R * 0.38) * k * R), dist = Math.max(0, a.d - S[bi].d - 6);
@@ -308,11 +319,15 @@ export const TRACKS = [
   { name: 'First Lap', par: 14.85, path: 'S3 BL S2 C BL S3 BL S F' },
   { name: 'Twister', par: 17.36, path: 'S R S L S BL C S L S R S BR S2 F' },
   { name: 'Boost Alley', par: 18.31, path: 'S B S B S4 BL S C B S3 BR S2 R S L S F' },
-  { name: 'Hill Climb', par: 19.39, path: 'S U U S C D D S R S L S U S C BL D S F' },
-  { name: 'Bankers', par: 17.23, path: 'S B S KL S2 C KL B S KR S C KR S2 F' },
-  { name: 'Big Air', par: 21.35, path: 'S B S J1 S2 BL S C B J2 S2 BL S3 C BL S F' },
+  { name: 'Hill Climb', par: 19.38, path: 'S U U S C D D S R S L S U S C BL D S F' },
+  { name: 'Bankers', par: 17.06, path: 'S B S KL S2 C KL B S KR S C KR S2 F' },
+  { name: 'Big Air', par: 21.33, path: 'S B S J1 S2 BL S C B J2 S2 BL S3 C BL S F' },
+  { name: 'Loop-de-Loop', par: 19.54, path: 'S B S OL S BL S C B S OR S BL S2 F' },
   { name: 'Snake Pass', par: 17.9, path: 'S L R S R L S C L S R R S C L R S F' },
-  { name: 'Sky Bridge', par: 26.39, path: 'S4 BR S C BR U S BR S4 D S C L S U BL S D S F' },
-  { name: 'Canyon Run', par: 30.97, path: 'S B S KR S U S B J1 S C D S L S R S BL S B S KL C S U S BR D S R S F' },
-  { name: 'Gauntlet', par: 36.42, path: 'S B L R S B J2 S C R R S U L S D B S KL S C L R L S B J1 S BR U S D R S F' }
+  { name: 'Rollercoaster', par: 23.26, path: 'S B S OL S U S KR S C D B S OR S R S L S F' },
+  { name: 'Sky Bridge', par: 26.42, path: 'S4 BR S C BR U S BR S4 D S C L S U BL S D S F' },
+  { name: 'Corkscrew', par: 25.19, path: 'S B B J2 S B OL S C KL S B OR S U S BL D B J1 S F' },
+  { name: 'Canyon Run', par: 30.37, path: 'S B S KR S U S B J1 S C D S L S R S BL S B S KL C S U S BR D S R S F' },
+  { name: 'Gauntlet', par: 34.84, path: 'S B L R S B J2 S C R R S U L S D B S KL S C L R L S B J1 S BR U S D R S F' },
+  { name: 'Stormbreaker', par: 40.36, path: 'S B S OR S KR S C U S B S J1 S D S L R S B S OL S C KL S2 BR S B S OR S2 R S F' }
 ];

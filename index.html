@@ -111,7 +111,7 @@ function load(key) { try { return localStorage.getItem(key); } catch (e) { retur
 function loadJ(key, d) { try { const v = JSON.parse(load(key) || 'null'); return v == null ? d : v; } catch (e) { return d; } }
 
 const GAMES = [
-  { id: 'racer', href: 'racer.html', t: 'Trackstorm', d: '3D low-poly time trial racing with real car physics. 10 tracks with jumps, boosts and banked turns, medals and a ghost car. Keyboard only.', i: '🏎️', cat: 'arcade', tags: ['NEW', 'BIG', '3D'], c: ['#ff5a36', '#3b9bff'], n: 37 },
+  { id: '3D low-poly time trial racing with real car physics. 14 tracks with loops, jumps, boosts and banked turns, medals, split times and a ghost car. Keyboard only.', href: 'racer.html', t: 'Trackstorm', d: '3D low-poly time trial racing with real car physics. 14 tracks with loops, jumps, boosts and banked turns, medals, split times and a ghost car. Keyboard only.', i: '🏎️', cat: 'arcade', tags: ['NEW', 'BIG', '3D'], c: ['#ff5a36', '#3b9bff'], n: 37 },
   { id: 'towers', href: 'towers.html', t: 'Tower Siege', d: 'Tower defense: 6 towers with upgrades, 8 enemy types, bosses, 30 waves, 3 maps and 3 difficulties.', i: '🏰', cat: 'puzzle', tags: ['NEW', 'BIG'], c: ['#16a34a', '#facc15'], n: 36 },
   { id: 'survivors', href: 'survivors.html', t: 'Neon Survivors', d: 'Survive 10 minutes of a huge swarm. 6 auto-firing weapons, level-up choices, bosses, 3 characters and permanent upgrades.', i: '⚡', cat: 'arcade', tags: ['NEW', 'BIG'], c: ['#22d3ee', '#a855f7'], n: 35 },
   { id: 'four', href: 'four.html', t: 'Four in a Row', d: 'Drop discs and connect four. Play a friend or 4 computer bots from Easy to Expert.', i: '🔴', cat: 'puzzle', tags: ['NEW', '2P'], c: ['#2647d8', '#ff3b5c'], n: 34 },
