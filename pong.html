@@ -22,6 +22,8 @@
 <div class="wrap">
   <div class="bar"><a class="back" href="index.html">← Back</a><h1>PONG</h1><span></span></div>
   <div class="row"><button id="cpu" class="on">1 Player (vs CPU)</button><button id="pvp">2 Players</button></div>
+  <div class="row" id="lvls"><button data-l="0">😊 Easy</button><button data-l="1">🙂 Medium</button><button data-l="2">😤 Hard</button><button data-l="3">💀 Impossible</button></div>
+  <div class="help" id="rec" style="margin:-4px 0 10px"></div>
   <canvas id="c" width="800" height="500"></canvas>
   <p class="help">Left paddle: W / S. Right paddle (2 players): ↑ / ↓. On a phone, drag on your side of the screen. First to 7 wins. Space to serve.</p>
 </div>
@@ -30,6 +32,39 @@
   const cv = document.getElementById('c'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
   const PH = 90, PW = 14;
   let mode = 'cpu', L, R, ball, sL, sR, state = 'ready', keys = {}, trail = [];
+  // CPU difficulty: speed = max paddle speed, react = seconds between decisions, err = aiming error (px),
+  // predict = works out where the ball will land after wall bounces, aim = tries to hit with the paddle edge for sharp angles
+  const LV = [
+    { n: 'Easy', speed: 4.2, react: 0.32, err: 40, predict: false, aim: 0 },
+    { n: 'Medium', speed: 5.6, react: 0.2, err: 30, predict: true, aim: 0.3 },
+    { n: 'Hard', speed: 7.2, react: 0.1, err: 21, predict: true, aim: 0.7 },
+    { n: 'Impossible', speed: 9.5, react: 0.03, err: 8, predict: true, aim: 1 }
+  ];
+  function ld(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
+  function sv(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  let lvl = +ld('pongLvl', 1), cpu = { target: H / 2, timer: 0, err: 0, aim: 0, dir: 0 };
+  function showRec() { const r = JSON.parse(ld('pongRec' + lvl, '{"w":0,"l":0}')); document.getElementById('rec').textContent = mode === 'cpu' ? 'vs ' + LV[lvl].n + ': ' + r.w + ' wins · ' + r.l + ' losses' : ''; document.getElementById('lvls').style.display = mode === 'cpu' ? '' : 'none'; document.getElementById('rec').style.display = mode === 'cpu' ? '' : 'none'; document.querySelectorAll('#lvls button').forEach(b => b.classList.toggle('on', +b.dataset.l === lvl)); }
+  function predictY() {
+    const px = W - 30 - PW / 2 - 8; if (ball.vx <= 0) return H / 2;
+    let t = (px - ball.x) / ball.vx, y = ball.y + ball.vy * t;
+    const lo = 8, hi = H - 8, span = hi - lo; let m = (y - lo) % (2 * span); if (m < 0) m += 2 * span;
+    return lo + (m > span ? 2 * span - m : m);
+  }
+  function cpuThink(dt) {
+    const c = LV[lvl], dir = Math.sign(ball.vx);
+    if (dir !== cpu.dir) { cpu.dir = dir; cpu.err = (Math.random() + Math.random() + Math.random() - 1.5) * 2 * c.err; cpu.aim = (Math.random() < 0.5 ? -1 : 1) * c.aim * PH * 0.38 * Math.random(); cpu.timer = c.react * (0.6 + Math.random() * 0.8); }
+    cpu.timer -= dt;
+    if (cpu.timer <= 0) {
+      cpu.timer = c.react;
+      if (state !== 'run') cpu.target = H / 2;
+      else if (ball.vx > 0) {
+        const y = c.predict ? predictY() : ball.y;
+        // get more accurate as the ball gets closer
+        const close = Math.max(0.8, Math.min(1.3, (W - ball.x) / W * 1.6));
+        cpu.target = y + cpu.err * close - cpu.aim;
+      } else cpu.target = H / 2 + (ball.y - H / 2) * 0.25;
+    }
+  }
   let ac = null;
   function snd(f, d, vol) { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.setValueAtTime(f, t); g.gain.setValueAtTime(vol || 0.07, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02); } catch (e) {} }
   function reset() { L = H / 2; R = H / 2; sL = 0; sR = 0; serve(1); state = 'ready'; }
@@ -39,7 +74,7 @@
     const sp = 8 * k;
     if (keys.w) L -= sp; if (keys.s) L += sp;
     if (mode === 'pvp') { if (keys.arrowup) R -= sp; if (keys.arrowdown) R += sp; }
-    else { const target = ball.vx > 0 ? ball.y + Math.sin(performance.now() / 400) * 25 : H / 2; R += Math.max(-5.5 * k, Math.min(5.5 * k, target - R)); }
+    else { cpuThink(k / 60); const sp2 = LV[lvl].speed * k, d = cpu.target - R; R += Math.abs(d) < 2 ? d : Math.max(-sp2, Math.min(sp2, d * 0.35 + Math.sign(d) * Math.min(Math.abs(d), sp2 * 0.65))); }
     L = Math.max(PH / 2, Math.min(H - PH / 2, L)); R = Math.max(PH / 2, Math.min(H - PH / 2, R));
     if (state !== 'run') return;
     ball.x += ball.vx * k; ball.y += ball.vy * k;
@@ -55,7 +90,7 @@
     if (ball.x < -20) { sR++; snd(150, 0.3); point(-1); }
     if (ball.x > W + 20) { sL++; snd(150, 0.3); point(1); }
   }
-  function point(dir) { if (sL >= 7 || sR >= 7) { state = 'over'; [523, 659, 784].forEach((f, i) => setTimeout(() => snd(f, 0.15), i * 120)); } else { state = 'ready'; } serve(dir); }
+  function point(dir) { if (sL >= 7 || sR >= 7) { state = 'over'; if (mode === 'cpu') { const k = 'pongRec' + lvl, r = JSON.parse(ld(k, '{"w":0,"l":0}')); r[sL > sR ? 'w' : 'l']++; sv(k, JSON.stringify(r)); showRec(); } [523, 659, 784].forEach((f, i) => setTimeout(() => snd(f, 0.15), i * 120)); } else { state = 'ready'; } serve(dir); }
   function draw() {
     ctx.fillStyle = '#05060e'; ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = '#24274a'; for (let y = 10; y < H; y += 30) ctx.fillRect(W / 2 - 2, y, 4, 16);
@@ -67,7 +102,7 @@
     ctx.globalAlpha = 1; ctx.shadowColor = '#fff'; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, 8, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
     if (state !== 'run') {
       ctx.fillStyle = '#ffcc33'; ctx.font = '22px "Press Start 2P", monospace';
-      ctx.fillText(state === 'over' ? (sL > sR ? (mode === 'cpu' ? 'YOU WIN!' : 'BLUE WINS!') : (mode === 'cpu' ? 'CPU WINS' : 'PINK WINS!')) : 'PONG', W / 2, H / 2 - 10);
+      ctx.fillText(state === 'over' ? (sL > sR ? (mode === 'cpu' ? 'YOU WIN!' : 'BLUE WINS!') : (mode === 'cpu' ? LV[lvl].n.toUpperCase() + ' CPU WINS' : 'PINK WINS!')) : 'PONG', W / 2, H / 2 - 10);
       ctx.fillStyle = '#f2f3ff'; ctx.font = '700 18px Rubik'; ctx.fillText(state === 'over' ? 'Press Space or tap to play again' : 'Press Space or tap to serve', W / 2, H / 2 + 30);
     }
   }
@@ -80,9 +115,11 @@
   cv.addEventListener('pointermove', move);
   function move(e) { const side = touches[e.pointerId]; if (!side) return; const r = cv.getBoundingClientRect(); const y = (e.clientY - r.top) * H / r.height; if (side === 'L') L = y; else if (mode === 'pvp') R = y; }
   cv.addEventListener('pointerup', e => { delete touches[e.pointerId]; });
-  document.getElementById('cpu').onclick = () => { mode = 'cpu'; document.getElementById('cpu').classList.add('on'); document.getElementById('pvp').classList.remove('on'); reset(); };
-  document.getElementById('pvp').onclick = () => { mode = 'pvp'; document.getElementById('pvp').classList.add('on'); document.getElementById('cpu').classList.remove('on'); reset(); };
-  reset(); requestAnimationFrame(loop);
+  document.getElementById('cpu').onclick = () => { mode = 'cpu'; document.getElementById('cpu').classList.add('on'); document.getElementById('pvp').classList.remove('on'); reset(); showRec(); };
+  document.querySelectorAll('#lvls button').forEach(b => b.onclick = () => { lvl = +b.dataset.l; sv('pongLvl', lvl); reset(); showRec(); });
+  document.getElementById('pvp').onclick = () => { mode = 'pvp'; document.getElementById('pvp').classList.add('on'); document.getElementById('cpu').classList.remove('on'); reset(); showRec(); };
+  window.__pong = { set: v => { lvl = v; }, st: () => ({ sL, sR, state }) };
+  reset(); showRec(); requestAnimationFrame(loop);
 })();
 </script>
 <script src="presence.js" defer></script>
