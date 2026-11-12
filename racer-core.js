@@ -147,7 +147,10 @@ export function buildTrack(def) {
     if (pc.type === 'tunnel') tunnels.push({ a: frames[0], b: frames[n] });
     if (pc.type === 'start' || pc.type === 'finish' || pc.type === 'check') gates.push({ type: pc.type, p: frames[1].p, f: frames[1].f, l: frames[1].l, pc: pc.i });
     if (pc.type === 'boost') pads.push({ p: mid.p, f: mid.f, l: mid.l });
-    if (pc.lv > 0 || pc.kind === 'up' || pc.kind === 'down') pillars.push({ x: mid.p[0], z: mid.p[2], y: mid.p[1] - 0.7 });
+    if (pc.lv > 0 || pc.kind === 'up' || pc.kind === 'down') { // support pillar, unless another piece of road sits underneath
+      const cxx = Math.round(mid.p[0] / CELL), czz = Math.round(mid.p[2] / CELL), topL = Math.floor((mid.p[1] - ROADY) / HSTEP + 0.01); let under = false;
+      for (let l = 0; l <= topL; l++) { const o = occ.get(cxx + ',' + czz + ',' + l); if (o != null && o !== pc.i) under = true; }
+      if (!under) pillars.push({ x: mid.p[0], z: mid.p[2], y: mid.p[1] - 0.7 }); }
   }
   // spatial grid for collision
   const T = new Float32Array(tris.length * 3); for (let i = 0; i < tris.length; i++) { T[i * 3] = tris[i][0]; T[i * 3 + 1] = tris[i][1]; T[i * 3 + 2] = tris[i][2]; }

@@ -50,8 +50,8 @@ function buildWorld(tr) {
     const mid = fr[Math.floor(n / 2)];
     if (pc.type === 'blockleft' || pc.type === 'blockright') { const s = pc.type === 'blockleft' ? 1 : -1, x1 = s * HW * 0.08, x2 = s * HW, hh = 2.3, B = (x, y, z) => [mid.p[0] + mid.l[0] * x + mid.u[0] * y + mid.f[0] * z, mid.p[1] + mid.l[1] * x + mid.u[1] * y + mid.f[1] * z, mid.p[2] + mid.l[2] * x + mid.u[2] * y + mid.f[2] * z];
       Q([B(x1, 0, -1.6), B(x2, 0, -1.6), B(x2, hh, -1.6), B(x1, hh, -1.6)], [250, 204, 26]); Q([B(x1, hh, -1.6), B(x2, hh, -1.6), B(x2, hh, 1.6), B(x1, hh, 1.6)], [200, 160, 20]); Q([B(x1, 0, -1.6), B(x1, 0, 1.6), B(x1, hh, 1.6), B(x1, hh, -1.6)], [40, 40, 46]); }
-    if (pc.lv > 0 || pc.kind === 'up' || pc.kind === 'down') { const x = mid.p[0], z = mid.p[2], y = mid.p[1] - 0.7; Q([[x - 1.5, 0, z], [x + 1.5, 0, z], [x + 1.5, y, z], [x - 1.5, y, z]], [185, 192, 204]); Q([[x, 0, z - 1.5], [x, 0, z + 1.5], [x, y, z + 1.5], [x, y, z - 1.5]], [165, 172, 186]); }
   }
+  for (const pl of tr.pillars) { const x = pl.x, z = pl.z, y = pl.y; Q([[x - 1.5, 0, z], [x + 1.5, 0, z], [x + 1.5, y, z], [x - 1.5, y, z]], [185, 192, 204]); Q([[x, 0, z - 1.5], [x, 0, z + 1.5], [x, y, z + 1.5], [x, y, z - 1.5]], [165, 172, 186]); }
   for (const gt of tr.gates) { const col = gt.type === 'start' ? [52, 211, 153] : gt.type === 'finish' ? [255, 90, 54] : [59, 155, 255], G2 = (x, y) => [gt.p[0] + gt.l[0] * x, gt.p[1] + y, gt.p[2] + gt.l[2] * x];
     Q([G2(-HW - 1.5, 6.8), G2(HW + 1.5, 6.8), G2(HW + 1.5, 8.4), G2(-HW - 1.5, 8.4)], col);
     for (const s of [1, -1]) Q([G2(s * (HW + 0.6), 0), G2(s * (HW + 1.5), 0), G2(s * (HW + 1.5), 7), G2(s * (HW + 0.6), 7)], [232, 236, 243]); }
