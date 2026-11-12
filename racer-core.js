@@ -408,5 +408,6 @@ export const TRACKS = [
   { name: 'Night Circuit', theme: 'night', par: 28.22, path: 'S B T T S KL T S OR S C HL S XL XR S GR T B S J1 S C WR S W S BR T S F' },
   { name: 'Gauntlet', theme: 'sunset', par: 32.95, path: 'S B BL BR S B S J2 S C BR BR S U S BL S D B S KL S C BL BR BL S2 BR U S D S BR S F' },
   { name: 'Stormbreaker', theme: 'night', par: 33.14, path: 'S B S OR S KR S C U S B S J1 S D S BL BR S B S OL S C KL S2 BR S B S OR S2 BR S F' },
-  { name: 'Titan', theme: 'desert', par: 43.51, path: 'S B S OL S HR HR S C B S J1 S WL S XR XL S GL C T T S KR B S OR S W S HL S C XL S GR S2 WR S BL S B S OL S F' }
+  { name: 'Titan', theme: 'desert', par: 43.51, path: 'S B S OL S HR HR S C B S J1 S WL S XR XL S GL C T T S KR B S OR S W S HL S C XL S GR S2 WR S BL S B S OL S F' },
+  { name: 'Sky Ladder', theme: 'sunset', par: 52.15, path: 'S HL HL HL B S OL B OL GL BL S HR HR HR S W HL HL C HL KL B S JD2 S S HL HL S GL B S J1 S B S JB2 S S C HL HL S S F' }
 ];
