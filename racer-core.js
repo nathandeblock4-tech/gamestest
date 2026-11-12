@@ -26,8 +26,17 @@ const CURVES = {
   up: u => ({ p: [0, HSTEP * sm(u), -h + CELL * u], t: [0, HSTEP * 6 * u * (1 - u), CELL], b: 0 }),
   down: u => ({ p: [0, -HSTEP * sm(u), -h + CELL * u], t: [0, -HSTEP * 6 * u * (1 - u), CELL], b: 0 }),
   jump: u => u < 0.6 ? { p: [0, 5.33 * u * u, -h + CELL * u], t: [0, 10.66 * u, CELL], b: 0 } : { p: [0, 1.92 + 6.4 * (u - 0.6), -h + CELL * u], t: [0, 6.4, CELL], b: 0 },   // curve up, then a straight lip so the car leaves cleanly
-  loopleft: u => loopCurve(u, 1), loopright: u => loopCurve(u, -1)
+  loopleft: u => loopCurve(u, 1), loopright: u => loopCurve(u, -1),
+  // spiral ramps: a wide turn that climbs (or drops) one level, lightly banked
+  helixleft: u => helix(CURVES.bigleft(u), u, 1, 1), helixright: u => helix(CURVES.bigright(u), u, -1, 1),
+  dropleft: u => helix(CURVES.bigleft(u), u, 1, -1), dropright: u => helix(CURVES.bigright(u), u, -1, -1),
+  // wall-ride turns: banked steeply enough that the car rides up the wall at speed
+  wallleft: u => { const c = CURVES.bigleft(u); c.b = 0.7 * Math.sin(PI * u); c.p[1] += (HW + RAILW) * Math.sin(c.b); return c; },
+  wallright: u => { const c = CURVES.bigright(u); c.b = -0.7 * Math.sin(PI * u); c.p[1] += (HW + RAILW) * Math.sin(-c.b); return c; },
+  // two rolling bumps
+  bumps: u => ({ p: [0, 0.55 * (1 - Math.cos(4 * PI * u)), -h + CELL * u], t: [0, 0.55 * 4 * PI * Math.sin(4 * PI * u), CELL], b: 0 })
 };
+function helix(c, u, s, dir) { const L = 1.5 * CELL * PI / 2; c.p[1] += dir * HSTEP * sm(u); c.t = [c.t[0] * L, dir * HSTEP * 6 * u * (1 - u), c.t[2] * L]; c.b = s * 0.16 * Math.sin(PI * u); c.p[1] += (HW + RAILW) * Math.sin(Math.abs(c.b)); return c; }
 // Loop shape: curvature starts at zero, peaks at the top and eases back to zero (so the car is fed into it smoothly).
 // It is two cells long and slides one cell sideways so the exit clears the entry.
 const LOOP = (() => { const N = 480, Rm = 11.57, L = 4 * PI * Rm, ds = L / N, z = [0], y = [0], th = [0]; let a = 0, zz = 0, yy = 0;
@@ -37,12 +46,12 @@ function loopCurve(u, s) {
   const f = clamp(u, 0, 1) * LOOP.N, i = Math.min(LOOP.N - 1, Math.floor(f)), k = f - i, lerp = a => a[i] + (a[i + 1] - a[i]) * k, a = lerp(LOOP.th);
   return { p: [s * CELL * sm(u), lerp(LOOP.y), -h + lerp(LOOP.z)], t: [s * CELL * 6 * u * (1 - u) / LOOP.L, Math.sin(a), Math.cos(a)], b: 0, r: [1, 0, 0] };
 }
-const KIND = { start: 'straight', finish: 'straight', check: 'straight', boost: 'straight', land: 'straight' };
-const SEGS = { straight: 4, left: 12, right: 12, bigleft: 22, bigright: 22, bankleft: 22, bankright: 22, up: 12, down: 12, jump: 10, loopleft: 96, loopright: 96 };
+const KIND = { start: 'straight', finish: 'straight', check: 'straight', boost: 'straight', land: 'straight', blockleft: 'straight', blockright: 'straight', tunnel: 'straight' };
+const SEGS = { straight: 4, left: 12, right: 12, bigleft: 22, bigright: 22, bankleft: 22, bankright: 22, up: 12, down: 12, jump: 10, loopleft: 96, loopright: 96, helixleft: 24, helixright: 24, dropleft: 24, dropright: 24, wallleft: 26, wallright: 26, bumps: 20 };
 // exit: [cells left, cells forward, turn (+1 = left), level change]; cells: extra occupied cells [left, forward]
-const EXIT = { straight: [0, 1, 0, 0], left: [1, 0, 1, 0], right: [-1, 0, 3, 0], bigleft: [2, 1, 1, 0], bigright: [-2, 1, 3, 0], bankleft: [2, 1, 1, 0], bankright: [-2, 1, 3, 0], up: [0, 1, 0, 1], down: [0, 1, 0, -1], jump: [0, 1, 0, 0], loopleft: [1, 2, 0, 0], loopright: [-1, 2, 0, 0] };
-const EXTRA = { bigleft: [[0, 1], [1, 1]], bigright: [[0, 1], [-1, 1]], bankleft: [[0, 1], [1, 1]], bankright: [[0, 1], [-1, 1]], loopleft: [[1, 0], [0, 1], [1, 1]], loopright: [[-1, 0], [0, 1], [-1, 1]] };
-const TOKEN = { S: 'straight', L: 'left', R: 'right', BL: 'bigleft', BR: 'bigright', KL: 'bankleft', KR: 'bankright', U: 'up', D: 'down', B: 'boost', C: 'check', F: 'finish', OL: 'loopleft', OR: 'loopright' };
+const EXIT = { straight: [0, 1, 0, 0], left: [1, 0, 1, 0], right: [-1, 0, 3, 0], bigleft: [2, 1, 1, 0], bigright: [-2, 1, 3, 0], bankleft: [2, 1, 1, 0], bankright: [-2, 1, 3, 0], up: [0, 1, 0, 1], down: [0, 1, 0, -1], jump: [0, 1, 0, 0], loopleft: [1, 2, 0, 0], loopright: [-1, 2, 0, 0], helixleft: [2, 1, 1, 1], helixright: [-2, 1, 3, 1], dropleft: [2, 1, 1, -1], dropright: [-2, 1, 3, -1], wallleft: [2, 1, 1, 0], wallright: [-2, 1, 3, 0], bumps: [0, 1, 0, 0] };
+const EXTRA = { bigleft: [[0, 1], [1, 1]], bigright: [[0, 1], [-1, 1]], bankleft: [[0, 1], [1, 1]], bankright: [[0, 1], [-1, 1]], loopleft: [[1, 0], [0, 1], [1, 1]], loopright: [[-1, 0], [0, 1], [-1, 1]], helixleft: [[0, 1], [1, 1]], helixright: [[0, 1], [-1, 1]], dropleft: [[0, 1], [1, 1]], dropright: [[0, 1], [-1, 1]], wallleft: [[0, 1], [1, 1]], wallright: [[0, 1], [-1, 1]] };
+const TOKEN = { S: 'straight', L: 'left', R: 'right', BL: 'bigleft', BR: 'bigright', KL: 'bankleft', KR: 'bankright', U: 'up', D: 'down', B: 'boost', C: 'check', F: 'finish', OL: 'loopleft', OR: 'loopright', HL: 'helixleft', HR: 'helixright', GL: 'dropleft', GR: 'dropright', WL: 'wallleft', WR: 'wallright', W: 'bumps', XL: 'blockleft', XR: 'blockright', T: 'tunnel' };
 
 function toWorld(pc, lp) { const a = pc.d * PI / 2, c = Math.cos(a), s = Math.sin(a); return [pc.gx * CELL + lp[0] * c + lp[2] * s, pc.lv * HSTEP + ROADY + lp[1], pc.gz * CELL - lp[0] * s + lp[2] * c]; }
 function toWorldDir(pc, lp) { const a = pc.d * PI / 2, c = Math.cos(a), s = Math.sin(a); return [lp[0] * c + lp[2] * s, lp[1], -lp[0] * s + lp[2] * c]; }
@@ -57,6 +66,8 @@ export function buildTrack(def) {
     const ex = EXIT[kind];
     claim(gx, gz, lv, pc.i); if (kind === 'up') claim(gx, gz, lv + 1, pc.i); if (kind === 'down') claim(gx, gz, lv - 1, pc.i);
     for (const e of EXTRA[kind] || []) claim(gx + e[0] * LX[d] + e[1] * DX[d], gz + e[0] * LZ[d] + e[1] * DZ[d], lv, pc.i);
+    if (kind.startsWith('helix') || kind.startsWith('drop')) for (const e of [[0, 0]].concat(EXTRA[kind])) { if (e[0] || e[1]) claim(gx + e[0] * LX[d] + e[1] * DX[d], gz + e[0] * LZ[d] + e[1] * DZ[d], lv + ex[3], pc.i); else claim(gx, gz, lv + ex[3], pc.i); }
+    if (kind.startsWith('wall')) for (const e of [[0, 0]].concat(EXTRA[kind])) claim(gx + e[0] * LX[d] + e[1] * DX[d], gz + e[0] * LZ[d] + e[1] * DZ[d], lv + 1, pc.i);
     if (kind === 'loopleft' || kind === 'loopright') for (let up = 1; up <= 4; up++) for (const e of [[0, 0]].concat(EXTRA[kind])) claim(gx + e[0] * LX[d] + e[1] * DX[d], gz + e[0] * LZ[d] + e[1] * DZ[d], lv + up, pc.i);
     gx += ex[0] * LX[d] + ex[1] * DX[d]; gz += ex[0] * LZ[d] + ex[1] * DZ[d]; lv += ex[3]; d = (d + ex[2]) % 4;
     if (lv < 0) throw new Error('Track "' + def.name + '" goes below ground');
@@ -72,7 +83,7 @@ export function buildTrack(def) {
   if (pieces[pieces.length - 1].type !== 'finish') put('finish');
 
   // geometry
-  const tris = [], mats = [], rp = [], rc = [], samples = [], gates = [], pads = [], pillars = [];
+  const tris = [], mats = [], rp = [], rc = [], samples = [], gates = [], pads = [], pillars = [], tunnels = [];
   const nrm = [];
   const quad = (a, b, c2, d2, col, mat, ref) => {
     if (mat === 0) { const m = [(a[0] + b[0] + c2[0] + d2[0]) / 4, (a[1] + b[1] + c2[1] + d2[1]) / 4, (a[2] + b[2] + c2[2] + d2[2]) / 4]; tris.push(a, b, m, b, d2, m, d2, c2, m, c2, a, m); mats.push(0, 0, 0, 0); nrm.push(ref, ref, ref, ref); }   // road: 4 triangles around the centre so twisted pieces are the same left and right
@@ -111,7 +122,9 @@ export function buildTrack(def) {
       strip(-HW - RAILW, -0.7, HW + RAILW, -0.7, C_UNDER);
       // centerline samples every ~2.5 m
       const segLen = len(sub(B.p, A.p)), ns = Math.max(1, Math.round(segLen / 2.5));
-      for (let k = 0; k < ns; k++) { const u = k / ns; samples.push({ p: add(A.p, mul(sub(B.p, A.p), u)), f: A.f, pc: pc.i, d: dist + segLen * u, loop: pc.kind === 'loopleft' || pc.kind === 'loopright' }); }
+      for (let k = 0; k < ns; k++) { const u = k / ns; let sp2 = add(A.p, mul(sub(B.p, A.p), u));
+        if (pc.type === 'blockleft' || pc.type === 'blockright') { const uu = (i + u) / n, off = (pc.type === 'blockleft' ? -1 : 1) * HW * 0.52 * Math.pow(Math.sin(PI * uu), 2); sp2 = add(sp2, mul(A.l, off)); }   // the racing line swerves around the block
+        samples.push({ p: sp2, f: A.f, pc: pc.i, d: dist + segLen * u, loop: pc.kind === 'loopleft' || pc.kind === 'loopright' }); }
       dist += segLen;
     }
     if (pc.kind === 'jump') { // end cap + air samples over the gap
@@ -120,6 +133,17 @@ export function buildTrack(def) {
       dist += gap;
     }
     const mid = frames[Math.floor(n / 2)];
+    if (pc.type === 'blockleft' || pc.type === 'blockright') { // a solid block covering one side of the road
+      const s = pc.type === 'blockleft' ? 1 : -1, x1 = s * HW * 0.08, x2 = s * HW, z1 = -1.6, z2 = 1.6, hh = 2.3, fr = mid;
+      const Q = (x, y, z) => [fr.p[0] + fr.l[0] * x + fr.u[0] * y + fr.f[0] * z, fr.p[1] + fr.l[1] * x + fr.u[1] * y + fr.f[1] * z, fr.p[2] + fr.l[2] * x + fr.u[2] * y + fr.f[2] * z];
+      const Y = [0.98, 0.80, 0.10], K = [0.12, 0.12, 0.14];
+      quad(Q(x1, 0, z1), Q(x2, 0, z1), Q(x1, hh, z1), Q(x2, hh, z1), Y, 1, mul(fr.f, -1));   // face the driver sees
+      quad(Q(x1, 0, z2), Q(x2, 0, z2), Q(x1, hh, z2), Q(x2, hh, z2), K, 1, fr.f);
+      quad(Q(x1, 0, z1), Q(x1, 0, z2), Q(x1, hh, z1), Q(x1, hh, z2), K, 1, mul(fr.l, -s));
+      quad(Q(x1, hh, z1), Q(x2, hh, z1), Q(x1, hh, z2), Q(x2, hh, z2), Y, 1, fr.u);
+      for (let k = 0; k < 3; k++) { const ya = 0.25 + k * 0.7; quad(Q(x1, ya, z1 - 0.02), Q(x2, ya, z1 - 0.02), Q(x1, ya + 0.35, z1 - 0.02), Q(x2, ya + 0.35, z1 - 0.02), K); }
+    }
+    if (pc.type === 'tunnel') tunnels.push({ a: frames[0], b: frames[n] });
     if (pc.type === 'start' || pc.type === 'finish' || pc.type === 'check') gates.push({ type: pc.type, p: frames[1].p, f: frames[1].f, l: frames[1].l, pc: pc.i });
     if (pc.type === 'boost') pads.push({ p: mid.p, f: mid.f, l: mid.l });
     if (pc.lv > 0 || pc.kind === 'up' || pc.kind === 'down') pillars.push({ x: mid.p[0], z: mid.p[2], y: mid.p[1] - 0.7 });
@@ -137,7 +161,7 @@ export function buildTrack(def) {
   for (const [k, i] of occ) { const [x, z] = k.split(','); const kk = x + ',' + z; let a = cells.get(kk); if (!a) cells.set(kk, a = []); if (a.indexOf(i) < 0) a.push(i); }
   const st = pieces[0], sp = toWorld(st, [0, 0, -h + 7]), sd = [DX[st.d], 0, DZ[st.d]];
   let minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9; for (const s of samples) { minX = Math.min(minX, s.p[0]); maxX = Math.max(maxX, s.p[0]); minZ = Math.min(minZ, s.p[2]); maxZ = Math.max(maxZ, s.p[2]); }
-  return { name: def.name, pieces, T, NR, mats, nT, grid, G, cells, samples, gates, pads, pillars, rend: { pos: rp, col: rc }, start: { p: sp, f: sd }, nCheck: pieces.filter(p => p.type === 'check').length, length: dist, bounds: { minX, maxX, minZ, maxZ } };
+  return { name: def.name, theme: def.theme || 'meadow', tunnels, pieces, T, NR, mats, nT, grid, G, cells, samples, gates, pads, pillars, rend: { pos: rp, col: rc }, start: { p: sp, f: sd }, nCheck: pieces.filter(p => p.type === 'check').length, length: dist, bounds: { minX, maxX, minZ, maxZ } };
 }
 
 // ---------- collision queries ----------
@@ -364,18 +388,24 @@ export function botInput(c, tr, skill) {
 
 // par = fastest clean run by the test driver (the "author" time)
 export const TRACKS = [
-  { name: 'First Lap', par: 11.93, path: 'S3 BL S2 C BL S3 BL S F' },
-  { name: 'Twister', par: 15.2, path: 'S BR S BL S BL C S BL S BR S BR S2 F' },
-  { name: 'Boost Alley', par: 15.97, path: 'S B S B S4 BL S C B S3 BR S2 BR S BL S F' },
-  { name: 'Hill Climb', par: 17.53, path: 'S U U S C D D S BR S BL S U S C BL D S F' },
-  { name: 'Bankers', par: 13.8, path: 'S B S KL S2 C KL B S KR S C KR S2 F' },
-  { name: 'Big Air', par: 16.98, path: 'S B S J1 S2 BL S C B J2 S2 BL S3 C BL S F' },
-  { name: 'Loop-de-Loop', par: 15.19, path: 'S B S OL S BL S C B S OR S BL S2 F' },
-  { name: 'Snake Pass', par: 18.75, path: 'S BL BR S BR BL S C BL S BR BR S C BL BR S F' },
-  { name: 'Rollercoaster', par: 20.08, path: 'S B S OL S U S KR S C D B S OR S BR S BL S F' },
-  { name: 'Sky Bridge', par: 24.27, path: 'S4 BR S C BR U S BR S4 D S C BL S U BL S D S F' },
-  { name: 'Corkscrew', par: 21.27, path: 'S B B J2 S B OL S C KL S B OR S U S BL D B J1 S F' },
-  { name: 'Canyon Run', par: 27.86, path: 'S B S KR S U S B J1 S C D S BL S BR S BL S B S KL C S U S BR D S BR S F' },
-  { name: 'Gauntlet', par: 32.95, path: 'S B BL BR S B S J2 S C BR BR S U S BL S D B S KL S C BL BR BL S2 BR U S D S BR S F' },
-  { name: 'Stormbreaker', par: 33.14, path: 'S B S OR S KR S C U S B S J1 S D S BL BR S B S OL S C KL S2 BR S B S OR S2 BR S F' }
+  { name: 'First Lap', theme: 'meadow', par: 11.93, path: 'S3 BL S2 C BL S3 BL S F' },
+  { name: 'Twister', theme: 'meadow', par: 15.2, path: 'S BR S BL S BL C S BL S BR S BR S2 F' },
+  { name: 'Boost Alley', theme: 'desert', par: 15.97, path: 'S B S B S4 BL S C B S3 BR S2 BR S BL S F' },
+  { name: 'Hill Climb', theme: 'snow', par: 17.53, path: 'S U U S C D D S BR S BL S U S C BL D S F' },
+  { name: 'Bankers', theme: 'sunset', par: 13.8, path: 'S B S KL S2 C KL B S KR S C KR S2 F' },
+  { name: 'Big Air', theme: 'desert', par: 16.98, path: 'S B S J1 S2 BL S C B J2 S2 BL S3 C BL S F' },
+  { name: 'Loop-de-Loop', theme: 'meadow', par: 15.19, path: 'S B S OL S BL S C B S OR S BL S2 F' },
+  { name: 'Snake Pass', theme: 'snow', par: 18.75, path: 'S BL BR S BR BL S C BL S BR BR S C BL BR S F' },
+  { name: 'Slalom Sprint', theme: 'meadow', par: 20.0, path: 'S B S XL S XR S XL S BL C S XR XL S W S BR S B S XR S XL S KR S F' },
+  { name: 'Rollercoaster', theme: 'sunset', par: 20.08, path: 'S B S OL S U S KR S C D B S OR S BR S BL S F' },
+  { name: 'Spiral Tower', theme: 'desert', par: 22.87, path: 'S B S HL HL HL S C B S J2 S2 GL S GL S C GR S B S KL S2 F' },
+  { name: 'Sky Bridge', theme: 'snow', par: 24.27, path: 'S4 BR S C BR U S BR S4 D S C BL S U BL S D S F' },
+  { name: 'Whoops Valley', theme: 'snow', par: 28.01, path: 'S W S BL S U W D S C BR W S B S J1 S KL S W W S C WR S F' },
+  { name: 'Corkscrew', theme: 'night', par: 21.27, path: 'S B B J2 S B OL S C KL S B OR S U S BL D B J1 S F' },
+  { name: 'Wall Rider', theme: 'sunset', par: 24.22, path: 'S B S WL S B S WR S C B S OL S WL S2 C WR S B S OR S F' },
+  { name: 'Canyon Run', theme: 'desert', par: 27.86, path: 'S B S KR S U S B J1 S C D S BL S BR S BL S B S KL C S U S BR D S BR S F' },
+  { name: 'Night Circuit', theme: 'night', par: 28.22, path: 'S B T T S KL T S OR S C HL S XL XR S GR T B S J1 S C WR S W S BR T S F' },
+  { name: 'Gauntlet', theme: 'sunset', par: 32.95, path: 'S B BL BR S B S J2 S C BR BR S U S BL S D B S KL S C BL BR BL S2 BR U S D S BR S F' },
+  { name: 'Stormbreaker', theme: 'night', par: 33.14, path: 'S B S OR S KR S C U S B S J1 S D S BL BR S B S OL S C KL S2 BR S B S OR S2 BR S F' },
+  { name: 'Titan', theme: 'desert', par: 43.51, path: 'S B S OL S HR HR S C B S J1 S WL S XR XL S GL C T T S KR B S OR S W S HL S C XL S GR S2 WR S BL S B S OL S F' }
 ];
