@@ -113,6 +113,7 @@ function load(key) { try { return localStorage.getItem(key); } catch (e) { retur
 function loadJ(key, d) { try { const v = JSON.parse(load(key) || 'null'); return v == null ? d : v; } catch (e) { return d; } }
 
 const GAMES = [
+  { id: 'casino', href: 'casino.html', t: 'Gambling Simulator', d: 'A full fake casino with play money only: slots, blackjack, roulette and more. Start with $10,000.', i: '🎰', cat: 'arcade', tags: ['NEW'], c: ['#6b2fd0', '#a3192a'], n: 40 },
   { id: 'pool', href: 'pool.html', t: '8-Ball Pool', d: 'Real ball physics with spin, a shot guide and full 8-ball rules. Play a friend or 4 computer levels that plan their shots.', i: '🎱', cat: 'puzzle', tags: ['NEW', '2P'], c: ['#0f6f45', '#4e2914'], n: 39 },
   { id: 'solitaire', href: 'solitaire.html', t: 'Solitaire', d: 'Classic Klondike. Drag or click cards, Draw 1 or Draw 3, unlimited undo, hints, auto-finish and the bouncing-cards win.', i: '🂡', cat: 'puzzle', tags: ['NEW'], c: ['#1f7a4d', '#0f3d27'], n: 38 },
   { id: 'racer', href: 'racer.html', t: 'Trackstorm', d: '3D low-poly time trial racing with real car physics. 34 tracks across 5 scenery themes with loops, corkscrews, spiral ramps, hoop jumps, skinny bridges and tunnels, plus air tricks, medals and a ghost car. Works without WebGL. Keyboard only.', i: '🏎️', cat: 'arcade', tags: ['BIG', '3D'], c: ['#ff5a36', '#3b9bff'], n: 37 },
