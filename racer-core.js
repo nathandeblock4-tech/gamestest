@@ -25,22 +25,23 @@ const CURVES = {
   bankright: u => { const c = CURVES.bigright(u); c.b = -0.38 * Math.sin(PI * u); c.p[1] += (HW + RAILW) * Math.sin(-c.b); return c; },
   up: u => ({ p: [0, HSTEP * sm(u), -h + CELL * u], t: [0, HSTEP * 6 * u * (1 - u), CELL], b: 0 }),
   down: u => ({ p: [0, -HSTEP * sm(u), -h + CELL * u], t: [0, -HSTEP * 6 * u * (1 - u), CELL], b: 0 }),
-  jump: u => ({ p: [0, 3.4 * u * u, -h + CELL * u], t: [0, 6.8 * u, CELL], b: 0 }),
+  jump: u => u < 0.6 ? { p: [0, 5.33 * u * u, -h + CELL * u], t: [0, 10.66 * u, CELL], b: 0 } : { p: [0, 1.92 + 6.4 * (u - 0.6), -h + CELL * u], t: [0, 6.4, CELL], b: 0 },   // curve up, then a straight lip so the car leaves cleanly
   loopleft: u => loopCurve(u, 1), loopright: u => loopCurve(u, -1)
 };
-export const LOOPR = 15;
-function loopCurve(u, s) { // straight in, one full vertical loop that slides one cell sideways, straight out
-  const C = 2 * PI * LOOPR, tot = CELL + C, d = u * tot;
-  if (d < h) return { p: [0, 0, -h + d], t: [0, 0, 1], b: 0, r: [1, 0, 0] };
-  if (d > h + C) return { p: [s * CELL, 0, d - h - C], t: [0, 0, 1], b: 0, r: [1, 0, 0] };
-  const w = (d - h) / C, a = w * 2 * PI;
-  return { p: [s * CELL * sm(w), LOOPR * (1 - Math.cos(a)), LOOPR * Math.sin(a)], t: [s * CELL * 6 * w * (1 - w) / (2 * PI), LOOPR * Math.sin(a), LOOPR * Math.cos(a)], b: 0, r: [1, 0, 0] };
+// Loop shape: curvature starts at zero, peaks at the top and eases back to zero (so the car is fed into it smoothly).
+// It is two cells long and slides one cell sideways so the exit clears the entry.
+const LOOP = (() => { const N = 480, Rm = 11.57, L = 4 * PI * Rm, ds = L / N, z = [0], y = [0], th = [0]; let a = 0, zz = 0, yy = 0;
+  for (let i = 0; i < N; i++) { const k = Math.pow(Math.sin(PI * (i + 0.5) / N), 2) / Rm; a += k * ds / 2; zz += Math.cos(a) * ds; yy += Math.sin(a) * ds; a += k * ds / 2; z.push(zz); y.push(yy); th.push(a); }
+  const sc = 2 * CELL / zz; return { N, L: L * sc, z: z.map(v => v * sc), y: y.map(v => v * sc), th }; })();
+function loopCurve(u, s) {
+  const f = clamp(u, 0, 1) * LOOP.N, i = Math.min(LOOP.N - 1, Math.floor(f)), k = f - i, lerp = a => a[i] + (a[i + 1] - a[i]) * k, a = lerp(LOOP.th);
+  return { p: [s * CELL * sm(u), lerp(LOOP.y), -h + lerp(LOOP.z)], t: [s * CELL * 6 * u * (1 - u) / LOOP.L, Math.sin(a), Math.cos(a)], b: 0, r: [1, 0, 0] };
 }
 const KIND = { start: 'straight', finish: 'straight', check: 'straight', boost: 'straight', land: 'straight' };
-const SEGS = { straight: 4, left: 12, right: 12, bigleft: 22, bigright: 22, bankleft: 22, bankright: 22, up: 12, down: 12, jump: 10, loopleft: 72, loopright: 72 };
+const SEGS = { straight: 4, left: 12, right: 12, bigleft: 22, bigright: 22, bankleft: 22, bankright: 22, up: 12, down: 12, jump: 10, loopleft: 96, loopright: 96 };
 // exit: [cells left, cells forward, turn (+1 = left), level change]; cells: extra occupied cells [left, forward]
-const EXIT = { straight: [0, 1, 0, 0], left: [1, 0, 1, 0], right: [-1, 0, 3, 0], bigleft: [2, 1, 1, 0], bigright: [-2, 1, 3, 0], bankleft: [2, 1, 1, 0], bankright: [-2, 1, 3, 0], up: [0, 1, 0, 1], down: [0, 1, 0, -1], jump: [0, 1, 0, 0], loopleft: [1, 1, 0, 0], loopright: [-1, 1, 0, 0] };
-const EXTRA = { bigleft: [[0, 1], [1, 1]], bigright: [[0, 1], [-1, 1]], bankleft: [[0, 1], [1, 1]], bankright: [[0, 1], [-1, 1]], loopleft: [[1, 0]], loopright: [[-1, 0]] };
+const EXIT = { straight: [0, 1, 0, 0], left: [1, 0, 1, 0], right: [-1, 0, 3, 0], bigleft: [2, 1, 1, 0], bigright: [-2, 1, 3, 0], bankleft: [2, 1, 1, 0], bankright: [-2, 1, 3, 0], up: [0, 1, 0, 1], down: [0, 1, 0, -1], jump: [0, 1, 0, 0], loopleft: [1, 2, 0, 0], loopright: [-1, 2, 0, 0] };
+const EXTRA = { bigleft: [[0, 1], [1, 1]], bigright: [[0, 1], [-1, 1]], bankleft: [[0, 1], [1, 1]], bankright: [[0, 1], [-1, 1]], loopleft: [[1, 0], [0, 1], [1, 1]], loopright: [[-1, 0], [0, 1], [-1, 1]] };
 const TOKEN = { S: 'straight', L: 'left', R: 'right', BL: 'bigleft', BR: 'bigright', KL: 'bankleft', KR: 'bankright', U: 'up', D: 'down', B: 'boost', C: 'check', F: 'finish', OL: 'loopleft', OR: 'loopright' };
 
 function toWorld(pc, lp) { const a = pc.d * PI / 2, c = Math.cos(a), s = Math.sin(a); return [pc.gx * CELL + lp[0] * c + lp[2] * s, pc.lv * HSTEP + ROADY + lp[1], pc.gz * CELL - lp[0] * s + lp[2] * c]; }
@@ -56,7 +57,7 @@ export function buildTrack(def) {
     const ex = EXIT[kind];
     claim(gx, gz, lv, pc.i); if (kind === 'up') claim(gx, gz, lv + 1, pc.i); if (kind === 'down') claim(gx, gz, lv - 1, pc.i);
     for (const e of EXTRA[kind] || []) claim(gx + e[0] * LX[d] + e[1] * DX[d], gz + e[0] * LZ[d] + e[1] * DZ[d], lv, pc.i);
-    if (kind === 'loopleft' || kind === 'loopright') for (let up = 1; up <= 4; up++) { claim(gx, gz, lv + up, pc.i); const e = EXTRA[kind][0]; claim(gx + e[0] * LX[d], gz + e[0] * LZ[d], lv + up, pc.i); }
+    if (kind === 'loopleft' || kind === 'loopright') for (let up = 1; up <= 4; up++) for (const e of [[0, 0]].concat(EXTRA[kind])) claim(gx + e[0] * LX[d] + e[1] * DX[d], gz + e[0] * LZ[d] + e[1] * DZ[d], lv + up, pc.i);
     gx += ex[0] * LX[d] + ex[1] * DX[d]; gz += ex[0] * LZ[d] + ex[1] * DZ[d]; lv += ex[3]; d = (d + ex[2]) % 4;
     if (lv < 0) throw new Error('Track "' + def.name + '" goes below ground');
     return pc;
@@ -74,7 +75,8 @@ export function buildTrack(def) {
   const tris = [], mats = [], rp = [], rc = [], samples = [], gates = [], pads = [], pillars = [];
   const nrm = [];
   const quad = (a, b, c2, d2, col, mat, ref) => {
-    if (mat != null) { tris.push(a, b, d2, a, d2, c2); mats.push(mat, mat); nrm.push(ref, ref); }
+    if (mat === 0) { const m = [(a[0] + b[0] + c2[0] + d2[0]) / 4, (a[1] + b[1] + c2[1] + d2[1]) / 4, (a[2] + b[2] + c2[2] + d2[2]) / 4]; tris.push(a, b, m, b, d2, m, d2, c2, m, c2, a, m); mats.push(0, 0, 0, 0); nrm.push(ref, ref, ref, ref); }   // road: 4 triangles around the centre so twisted pieces are the same left and right
+    else if (mat != null) { tris.push(a, b, d2, a, d2, c2); mats.push(mat, mat); nrm.push(ref, ref); }
     if (col) { rp.push(a, b, d2, a, d2, c2); rc.push(col, col, col, col, col, col); }
   };
   const C_ROAD = [0.20, 0.22, 0.27], C_ROAD2 = [0.23, 0.25, 0.30], C_LINE = [0.92, 0.93, 0.95], C_RED = [0.86, 0.17, 0.20], C_WHITE = [0.95, 0.95, 0.96], C_SIDE = [0.42, 0.45, 0.52], C_UNDER = [0.30, 0.32, 0.38], C_BOOST = [0.98, 0.78, 0.10], C_CHK = [0.10, 0.10, 0.12];
@@ -174,23 +176,32 @@ function closestOnTri(T, q, p) {
 }
 
 // ---------- car ----------
+// A rigid body on four independently simulated wheels: spring/damper suspension with bump stops and anti-roll bars,
+// spinning wheels with drive/brake torque (so they can lock up or spin), slip-angle tyres on a friction circle,
+// a geared engine with an automatic gearbox, and aero drag + downforce split between the axles.
 export const CAR = {
   mass: 1200, inertia: [1500, 1900, 520],           // about left (pitch), up (yaw), forward (roll) axes
-  wheels: [[0.92, -0.18, 1.42], [-0.92, -0.18, 1.42], [0.92, -0.18, -1.38], [-0.92, -0.18, -1.38]], // FL FR RL RR
-  radius: 0.37, rayLen: 0.98, k: 62000, damp: 5200, bumpAt: 0.42, bumpK: 520000,
-  gravity: 21, mu: 1.75, muGrass: 0.85, slipPeak: 0.11,
-  engine: 17500, power: 640000, brake: 34000, reverse: 9000, drag: 1.02, roll: 60, downforce: 5.2,
-  maxSteer: 0.52, steerSpeedRef: 21, steerRate: 5.5, steerReturn: 8, boost: 52000, vmax: 118,
-  spheres: [[0.82, 0.02, 1.95, 0.42], [-0.82, 0.02, 1.95, 0.42], [0.82, 0.02, -1.95, 0.42], [-0.82, 0.02, -1.95, 0.42], [0.62, 0.62, 0.7, 0.42], [-0.62, 0.62, 0.7, 0.42], [0.62, 0.62, -1.0, 0.42], [-0.62, 0.62, -1.0, 0.42], [0, 0.1, 0, 0.5]]
+  wheels: [[0.92, 0.51, 1.42], [-0.92, 0.51, 1.42], [0.92, 0.51, -1.38], [-0.92, 0.51, -1.38]], // FL FR RL RR (top of each strut)
+  wheelbase: 2.8, radius: 0.37, rayLen: 1.0, k: 90000, dampBump: 5600, dampReb: 8200, bumpAt: 0.22, bumpK: 1700000, bumpDamp: 32000, arb: [17000, 12000],
+  wheelI: 1.7, rollCentre: 0.3, gravity: 21, mu: 1.75, muGrass: 0.85, muSlide: 0.88, slipPeak: 0.105,
+  gears: [3.4, 2.35, 1.75, 1.36, 1.1, 0.92], final: 3.9, rpmIdle: 1300, rpmMax: 8200, torque: 800, split: [0.36, 0.64], shiftTime: 0.09,
+  brakeT: [5600, 3600], handT: 9500, drag: 0.95, roll: 0.012, rollGrass: 0.22, downforce: 5.2, aeroFront: 0.46,
+  maxSteer: 0.6, steerRate: 5.5, steerReturn: 8, boost: 52000, vmax: 118, airDamp: 0.3, aeroStab: 2.4, aeroDamp: 0.05,
+  spheres: [[0.82, 0.46, 1.85, 0.42], [-0.82, 0.46, 1.85, 0.42], [0.82, 0.46, -1.85, 0.42], [-0.82, 0.46, -1.85, 0.42], [0.62, 0.6, 0.6, 0.36], [-0.62, 0.6, 0.6, 0.36], [0.62, 0.6, -0.9, 0.36], [-0.62, 0.6, -0.9, 0.36], [0, 0.42, 0, 0.5]]
 };
+const RAYS = [[0, 0], [0.22, 0.0725], [-0.22, 0.0725]]; // extra rays ahead of / behind the axle so the round wheel meets ramps smoothly
+const engineTorque = rpm => { const x = clamp((rpm - 1000) / 7200, 0, 1); return CAR.torque * (0.74 + 0.26 * Math.sin(PI * Math.pow(x, 0.85))) * (rpm > CAR.rpmMax ? 0 : 1); };
+const tyreCurve = r => Math.sin(1.45 * Math.atan(1.9 * r)); // rises to 1 at the peak slip, then falls off as the tyre slides
 export function newCar(tr) {
-  const c = { p: [0, 0, 0], q: [0, 0, 0, 1], v: [0, 0, 0], w: [0, 0, 0], steer: 0, wheels: [0, 1, 2, 3].map(() => ({ comp: 0.3, hit: false, spin: 0, mat: 0, slip: 0 })), time: 0, cp: 0, cpSet: new Set(), finished: false, finishTime: 0, started: false, grounded: 0, boosting: 0, speed: 0, sIdx: 0, respawn: null, hitT: 0 };
+  const c = { p: [0, 0, 0], q: [0, 0, 0, 1], v: [0, 0, 0], w: [0, 0, 0], steer: 0, steerAngle: 0, wheels: [0, 1, 2, 3].map(() => ({ comp: 0.07, hit: false, spin: 0, omega: 0, mat: 0, slip: 0, abs: 1 })), gear: 1, rpm: CAR.rpmIdle, shiftT: 0,
+    time: 0, cp: 0, cpSet: new Set(), finished: false, finishTime: 0, started: false, grounded: 0, boosting: 0, speed: 0, sIdx: 0, respawn: null, hitT: 0 };
   placeCar(c, tr.start.p, tr.start.f); c.respawn = { p: tr.start.p.slice(), f: tr.start.f.slice() };
   return c;
 }
 export function placeCar(c, p, f) {
   const yaw = Math.atan2(f[0], f[2]);
-  c.p = [p[0], p[1] + 0.85, p[2]]; c.q = [0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)]; c.v = [0, 0, 0]; c.w = [0, 0, 0]; c.steer = 0;
+  c.p = [p[0], p[1] + 0.48, p[2]]; c.q = [0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)]; c.v = [0, 0, 0]; c.w = [0, 0, 0]; c.steer = 0; c.gear = 1; c.shiftT = 0;
+  for (const w of c.wheels) { w.omega = 0; w.comp = 0.07; w.abs = 1; }
 }
 export function axes(q) { // body axes in world space: [left, up, forward]
   const x = q[0], y = q[1], z = q[2], w = q[3];
@@ -203,15 +214,16 @@ function applyImpulse(c, A, r, J) { // J: impulse vector, r: offset from centre 
 }
 function invMassAt(A, r, n) { const rn = cross(r, n); let s = 1 / CAR.mass; for (let i = 0; i < 3; i++) { const k = dot(rn, A[i]); s += k * k / CAR.inertia[i]; } return s; }
 
-export function stepCar(c, inp, dt, tr) {
+export function stepCar(c, inp, dt, tr) { subStep(c, inp, dt / 2, tr); subStep(c, inp, dt / 2, tr); }
+function subStep(c, inp, dt, tr) {
   const P = CAR, A = axes(c.q), ax = A[0], ay = A[1], az = A[2];
   const vf = dot(c.v, az); c.speed = len(c.v);
-  // steering (less lock at speed), smoothed
-  const lock = P.maxSteer / (1 + Math.pow(Math.abs(vf) / P.steerSpeedRef, 1.35)), target = clamp(inp.steer || 0, -1, 1);
+  // steering: the lock shrinks with speed to roughly what the tyres can use
+  const aLat = P.mu * (P.gravity + P.downforce * vf * vf / P.mass), lock = Math.min(P.maxSteer, 1.5 * P.wheelbase * aLat / Math.max(vf * vf, 1)), target = clamp(inp.steer || 0, -1, 1);
   const rate = (Math.abs(target) < Math.abs(c.steer) || target * c.steer < 0) ? P.steerReturn : P.steerRate;
   c.steer += clamp(target - c.steer, -rate * dt, rate * dt);
-  const sa = c.steer * lock, hs = Math.sin(sa), hc = Math.cos(sa);
-  const thr = c.finished ? 0 : clamp(inp.throttle || 0, 0, 1), brk = c.finished ? 1 : clamp(inp.brake || 0, 0, 1);
+  const sa = c.steer * lock, hs = Math.sin(sa), hc = Math.cos(sa); c.steerAngle = sa;
+  let thr = c.finished ? 0 : clamp(inp.throttle || 0, 0, 1), brk = c.finished ? 1 : clamp(inp.brake || 0, 0, 1); const hand = !!inp.hand && !c.finished;
   // boost pads / checkpoints by cell
   const cellK = Math.round(c.p[0] / CELL) + ',' + Math.round(c.p[2] / CELL), here = tr.cells.get(cellK);
   let onBoost = false;
@@ -219,47 +231,78 @@ export function stepCar(c, inp, dt, tr) {
     if (pc.type === 'boost') onBoost = true;
     else if (pc.type === 'check' && !c.cpSet.has(i)) { c.cpSet.add(i); c.cp++; const g = tr.gates.find(g => g.pc === i); c.respawn = { p: g.p.slice(), f: g.f.slice() }; c.event = 'check'; }
     else if (pc.type === 'finish' && !c.finished && c.cp >= tr.nCheck) { const g = tr.gates.find(g => g.pc === i); if (dot(sub(c.p, g.p), g.f) > 0) { c.finished = true; c.finishTime = c.time; c.event = 'finish'; } } }
+  // drivetrain: engine speed follows the driven wheels through the current gear
+  const wAvg = (c.wheels[0].omega + c.wheels[1].omega) * 0.5 * P.split[0] + (c.wheels[2].omega + c.wheels[3].omega) * 0.5 * P.split[1];
+  let reverse = false, driveT = 0;
+  if (brk > 0 && thr === 0 && vf < 1.5 && !c.finished) { reverse = true; c.gear = 1; }
+  if (thr > 0 && vf < -1) { brk = Math.max(brk, thr); thr = 0; }             // rolling backwards: gas works as a brake first
+  const ratio = P.gears[c.gear - 1] * P.final, rpmW = Math.abs(wAvg) * ratio * 9.5493;
+  c.shiftT = Math.max(0, c.shiftT - dt);
+  if (!reverse && c.shiftT <= 0) {
+    if (rpmW > P.rpmMax * 0.955 && c.gear < P.gears.length) { c.gear++; c.shiftT = P.shiftTime; }
+    else if (c.gear > 1 && rpmW * P.gears[c.gear - 2] / P.gears[c.gear - 1] < P.rpmMax * 0.72) { c.gear--; c.shiftT = P.shiftTime * 0.6; }
+  }
+  const rpm = Math.max(P.rpmIdle, rpmW); c.rpm += (rpm - c.rpm) * Math.min(1, dt * 18);
+  if (reverse) driveT = -brk * engineTorque(rpm) * 3.0 * P.final * (vf < -15 ? 0 : 1);
+  else if (c.shiftT <= 0) driveT = thr * engineTorque(rpm) * ratio - (thr === 0 ? Math.min(1, rpmW / 3000) * 260 * ratio / P.gears[0] : 0);
+  // suspension: find each wheel's contact first (needed for the anti-roll bars)
+  const down = [-ay[0], -ay[1], -ay[2]], hits = [null, null, null, null], comps = [0, 0, 0, 0];
+  for (let i = 0; i < 4; i++) {
+    const L = P.wheels[i], hd = i < 2 ? [az[0] * hc + ax[0] * hs, az[1] * hc + ax[1] * hs, az[2] * hc + ax[2] * hs] : az; let best = null, bc = 0;
+    for (const R of RAYS) {
+      const O = [c.p[0] + ax[0] * L[0] + ay[0] * L[1] + az[0] * L[2] + hd[0] * R[0], c.p[1] + ax[1] * L[0] + ay[1] * L[1] + az[1] * L[2] + hd[1] * R[0], c.p[2] + ax[2] * L[0] + ay[2] * L[1] + az[2] * L[2] + hd[2] * R[0]];
+      const hit = rayTrack(tr, O, down, P.rayLen - R[1]); if (!hit || hit.mat === 1) continue;
+      const comp = P.rayLen - R[1] - hit.t; if (comp > bc || !best) { bc = comp; best = hit; best.cp = [O[0] + down[0] * hit.t - hd[0] * R[0], O[1] + down[1] * hit.t - hd[1] * R[0], O[2] + down[2] * hit.t - hd[2] * R[0]]; best.hd = hd; }
+    }
+    hits[i] = best; comps[i] = best ? bc : 0;
+  }
   let F = [0, -P.mass * P.gravity, 0], Tq = [0, 0, 0], grounded = 0;
   const addF = (f, at) => { F[0] += f[0]; F[1] += f[1]; F[2] += f[2]; const r = sub(at, c.p), t = cross(r, f); Tq[0] += t[0]; Tq[1] += t[1]; Tq[2] += t[2]; };
-  const down = [-ay[0], -ay[1], -ay[2]];
   for (let i = 0; i < 4; i++) {
-    const wl = c.wheels[i], L = P.wheels[i], O = [c.p[0] + ax[0] * L[0] + ay[0] * L[1] + az[0] * L[2], c.p[1] + ax[1] * L[0] + ay[1] * L[1] + az[1] * L[2], c.p[2] + ax[2] * L[0] + ay[2] * L[1] + az[2] * L[2]];
-    const hit = rayTrack(tr, O, down, P.rayLen);
-    if (!hit || hit.mat === 1) { wl.hit = false; wl.comp += (0 - wl.comp) * Math.min(1, dt * 12); wl.slip = 0; continue; }
+    const wl = c.wheels[i], hit = hits[i], front = i < 2, I = P.wheelI, r = P.radius;
+    let Td = driveT * P.split[front ? 0 : 1] * 0.5, Tb = brk * P.brakeT[front ? 0 : 1] * wl.abs * (reverse ? 0 : 1) + (hand && !front ? P.handT : 0);
+    if (!hit) { // wheel in the air: it just spins up or slows down
+      wl.hit = false; wl.slip = 0; wl.comp += (0 - wl.comp) * Math.min(1, dt * 14);
+      let w1 = wl.omega + Td / I * dt; const db = Tb / I * dt; w1 = Math.abs(w1) <= db ? 0 : w1 - Math.sign(w1) * db; wl.omega = w1 * Math.exp(-0.4 * dt); wl.spin += wl.omega * dt; continue;
+    }
     wl.hit = true; wl.mat = hit.mat; grounded++;
-    const comp = P.rayLen - hit.t, n = hit.n, cp = [O[0] + down[0] * hit.t, O[1] + down[1] * hit.t, O[2] + down[2] * hit.t], r = sub(cp, c.p), vc = add(c.v, cross(c.w, r));
-    wl.comp = comp;
-    const N = Math.max(0, P.k * comp + (comp > P.bumpAt ? P.bumpK * (comp - P.bumpAt) : 0) - P.damp * dot(vc, n)) * Math.max(0, dot(n, ay));
-    // wheel heading on the contact plane
-    let hd = i < 2 ? [az[0] * hc + ax[0] * hs, az[1] * hc + ax[1] * hs, az[2] * hc + ax[2] * hs] : az;
-    const f = norm(sub(hd, mul(n, dot(hd, n)))), s = cross(n, f), vl = dot(vc, f), vs = dot(vc, s);
-    const grass = hit.mat === 2, hand = inp.hand && i >= 2 && !c.finished, mu = (grass ? P.muGrass : P.mu) * (hand ? 0.42 : 1), maxF = mu * N;
-    let Fx = 0;
-    if (thr > 0) Fx += thr * Math.min(P.engine, P.power / Math.max(8, Math.abs(vf))) / 4 * (vf > P.vmax * 0.66 ? Math.max(0, 1 - (vf - P.vmax * 0.66) / (P.vmax * 0.06)) : 1);
-    if (brk > 0) { if (vl > 1.5) Fx -= brk * P.brake / 4; else if (!c.finished) Fx -= brk * P.reverse / 4 * (vf < -14 ? 0 : 1); else Fx -= vl * 900; }
-    Fx -= vl * (grass ? 420 : P.roll); if (hand) Fx -= Math.sign(vl) * Math.min(Math.abs(vl) * 2500, 5200);
-    if (onBoost) Fx += P.boost / 4;
-    let Fy = -maxF * clamp((vs / (Math.abs(vl) + 3.5)) / P.slipPeak, -1, 1);
+    const comp = comps[i], n = hit.n, cp = hit.cp, rr = sub(cp, c.p), vc = add(c.v, cross(c.w, rr)), vn = dot(vc, n); wl.comp = comp;
+    const other = comps[i ^ 1], arb = P.arb[front ? 0 : 1] * (comp - other);
+    let N = P.k * comp + (comp > P.bumpAt ? P.bumpK * (comp - P.bumpAt) - (vn < 0 ? P.bumpDamp * vn : 0) : 0) - (vn < 0 ? P.dampBump : P.dampReb) * vn + arb;
+    N = Math.max(0, N) * Math.max(0, dot(n, ay));
+    const hd = hit.hd, f = norm(sub(hd, mul(n, dot(hd, n)))), s = cross(n, f), vl = dot(vc, f), vs = dot(vc, s);
+    const grass = hit.mat === 2, mu = grass ? P.muGrass : P.mu, Fmax = mu * N;
+    // wheel spin: apply drive and brake torque, then let the tyre pull the wheel back toward road speed
+    let w1 = wl.omega + Td / I * dt; const db = Tb / I * dt; let locked = false; if (Math.abs(w1) <= db) { w1 = 0; locked = Tb > 0; } else w1 -= Math.sign(w1) * db;
+    const slipV = w1 * r - vl, Fneed = slipV * I / (r * r * dt);
+    // sideways grip from slip angle
+    const sy = (vs / (Math.abs(vl) + 1.2)) / P.slipPeak; let Fy = -Math.sign(sy) * Fmax * tyreCurve(Math.abs(sy));
     const cap = Math.abs(vs) * (P.mass / 4) / dt * 0.8; Fy = clamp(Fy, -cap, cap);
-    const m = Math.hypot(Fx, Fy); wl.slip = maxF > 1 ? Math.min(2, m / maxF) * Math.min(1, Math.abs(vs) / 4) : 0;
-    if (m > maxF && m > 0) { const k = maxF / m; Fx *= k + (1 - k) * 0.35; Fy *= k; }
+    let Fx, sliding = false;
+    if (Math.abs(Fneed) > Fmax * 0.98) { // wheel is spinning or locked: friction acts against the sliding direction
+      sliding = true; const hyp = Math.hypot(slipV, vs) || 1, Fk = Fmax * P.muSlide; Fx = Fk * slipV / hyp; const fy2 = -Fk * vs / hyp; Fy = Math.abs(fy2) < Math.abs(Fy) ? fy2 : Fy * P.muSlide;
+      if (brk > 0 && !hand && slipV < 0 && Math.abs(vl) > 4) wl.abs = Math.max(0.35, wl.abs * 0.9);
+    } else { Fx = Fneed; const room = Math.sqrt(Math.max(0, Fmax * Fmax - Fx * Fx)); Fy = clamp(Fy, -room, room); wl.abs = Math.min(1, wl.abs + dt * 2.5); }
+    wl.omega = w1 - Fx * r / I * dt; wl.spin += wl.omega * dt;
+    Fx -= Math.sign(vl) * Math.min(Math.abs(vl) * 400, (grass ? P.rollGrass : P.roll) * N);
+    wl.slip = sliding ? 1.3 : Math.min(1.2, Math.abs(sy) * 0.85);
     addF(mul(n, N), cp);
-    const lift = dot(sub(c.p, cp), ay) * 0.72, tp = [cp[0] + ay[0] * lift, cp[1] + ay[1] * lift, cp[2] + ay[2] * lift];
+    const lift = dot(sub(c.p, cp), ay) * P.rollCentre, tp = [cp[0] + ay[0] * lift, cp[1] + ay[1] * lift, cp[2] + ay[2] * lift];
     addF([f[0] * Fx + s[0] * Fy, f[1] * Fx + s[1] * Fy, f[2] * Fx + s[2] * Fy], tp);
-    wl.spin += vl / P.radius * dt;
   }
   c.grounded = grounded; c.boosting = onBoost && grounded ? 1 : Math.max(0, c.boosting - dt * 2);
-  // aero
+  if (onBoost && grounded) { F[0] += az[0] * P.boost; F[1] += az[1] * P.boost; F[2] += az[2] * P.boost; }
+  // aero: drag through the centre, downforce pressing on each axle
   const sp = c.speed; F[0] -= c.v[0] * sp * P.drag; F[1] -= c.v[1] * sp * P.drag * 0.25; F[2] -= c.v[2] * sp * P.drag;
-  if (grounded >= 2) { const df = P.downforce * vf * vf; F[0] -= ay[0] * df; F[1] -= ay[1] * df; F[2] -= ay[2] * df; }
+  if (grounded >= 1) { const df = P.downforce * vf * vf; addF(mul(ay, -df * P.aeroFront), add(c.p, mul(az, 1.42))); addF(mul(ay, -df * (1 - P.aeroFront)), add(c.p, mul(az, -1.38))); }
   // integrate
   c.v[0] += F[0] / P.mass * dt; c.v[1] += F[1] / P.mass * dt; c.v[2] += F[2] / P.mass * dt;
   const wl = [dot(c.w, ax), dot(c.w, ay), dot(c.w, az)], tl = [dot(Tq, ax), dot(Tq, ay), dot(Tq, az)], I = P.inertia;
   wl[0] += (tl[0] - (I[2] - I[1]) * wl[1] * wl[2]) / I[0] * dt; wl[1] += (tl[1] - (I[0] - I[2]) * wl[2] * wl[0]) / I[1] * dt; wl[2] += (tl[2] - (I[1] - I[0]) * wl[0] * wl[1]) / I[2] * dt;
-  if (grounded === 0) { // air: light damping, small pitch/roll control, gentle self-levelling
-    const k = Math.exp(-0.5 * dt); wl[0] *= k; wl[1] *= Math.exp(-1.2 * dt); wl[2] *= k;
-    wl[0] += ((inp.brake || 0) - (inp.throttle || 0)) * 0.9 * dt * 0; wl[2] += -ax[1] * 2.2 * dt; wl[0] += az[1] * 0.6 * dt;
-  } else { const k = Math.exp(-0.9 * dt); wl[0] *= k; wl[2] *= k; wl[1] *= Math.exp(-0.25 * dt); }
+  if (grounded === 0 && sp > 5) { // in the air the body acts like a dart: the wing and floor swing the nose toward the direction of travel
+    const vh = mul(c.v, 1 / sp), k = P.aeroStab * sp * sp, kdmp = Math.exp(-P.aeroDamp * sp * dt);
+    wl[0] += -dot(vh, ay) * k / I[0] * dt; wl[1] += dot(vh, ax) * k / I[1] * dt; wl[0] *= kdmp; wl[1] *= kdmp; wl[2] *= Math.exp(-P.airDamp * dt);
+  } else { const kd = Math.exp(-(grounded ? 0.25 : P.airDamp) * dt); wl[0] *= kd; wl[1] *= kd; wl[2] *= kd; }
   c.w = [ax[0] * wl[0] + ay[0] * wl[1] + az[0] * wl[2], ax[1] * wl[0] + ay[1] * wl[1] + az[1] * wl[2], ax[2] * wl[0] + ay[2] * wl[1] + az[2] * wl[2]];
   // chassis collisions (spheres against track triangles and the ground)
   for (const S of P.spheres) {
@@ -305,29 +348,34 @@ export function botInput(c, tr, skill) {
   for (let i = bi + 2; i < horizon; i += 2) {
     const a = S[i], b = S[Math.min(S.length - 1, i + 4)]; if (a.air || b.air || a.loop || b.loop) continue;
     const turn = Math.abs(Math.atan2(a.f[0] * b.f[2] - a.f[2] * b.f[0], a.f[0] * b.f[0] + a.f[2] * b.f[2]));
+    const dist = Math.max(0, a.d - S[bi].d - 6), crest = Math.asin(clamp(a.f[1], -1, 1)) - Math.asin(clamp(b.f[1], -1, 1));
+    if (crest > 0.03) { const Rv = (b.d - a.d) / crest, vc = Math.sqrt(CAR.gravity * 1.5 * k * Rv); allow = Math.min(allow, Math.sqrt(vc * vc + 2 * 17 * k * dist)); }   // slow for crests so the car stays on the road
     if (turn < 0.02) continue;
-    const R = (b.d - a.d) / turn, vmax = Math.sqrt((27 + R * 0.38) * k * R), dist = Math.max(0, a.d - S[bi].d - 6);
+    const R = (b.d - a.d) / turn, vmax = Math.sqrt((27 + R * 0.38) * k * R);
     allow = Math.min(allow, Math.sqrt(vmax * vmax + 2 * 17 * k * dist));
   }
   const inp = { steer, throttle: 0, brake: 0 };
   if (sp > allow + 1.5) inp.brake = 1; else if (sp < allow) inp.throttle = 1;
+  // stuck against a wall: back up for a moment
+  c.botT = (c.botT || 0); if (c.botRev > 0) { c.botRev--; return { steer: -steer, throttle: 0, brake: 1 }; }
+  if (sp < 1.5 && c.grounded >= 3 && c.time > 1) { if (++c.botT > 90) { c.botT = 0; c.botRev = 150; } } else c.botT = 0;
   return inp;
 }
 
 // par = fastest clean run by the test driver (the "author" time)
 export const TRACKS = [
-  { name: 'First Lap', par: 14.85, path: 'S3 BL S2 C BL S3 BL S F' },
-  { name: 'Twister', par: 17.36, path: 'S R S L S BL C S L S R S BR S2 F' },
-  { name: 'Boost Alley', par: 18.31, path: 'S B S B S4 BL S C B S3 BR S2 R S L S F' },
-  { name: 'Hill Climb', par: 19.38, path: 'S U U S C D D S R S L S U S C BL D S F' },
-  { name: 'Bankers', par: 17.06, path: 'S B S KL S2 C KL B S KR S C KR S2 F' },
-  { name: 'Big Air', par: 21.33, path: 'S B S J1 S2 BL S C B J2 S2 BL S3 C BL S F' },
-  { name: 'Loop-de-Loop', par: 19.54, path: 'S B S OL S BL S C B S OR S BL S2 F' },
-  { name: 'Snake Pass', par: 17.9, path: 'S L R S R L S C L S R R S C L R S F' },
-  { name: 'Rollercoaster', par: 23.26, path: 'S B S OL S U S KR S C D B S OR S R S L S F' },
-  { name: 'Sky Bridge', par: 26.42, path: 'S4 BR S C BR U S BR S4 D S C L S U BL S D S F' },
-  { name: 'Corkscrew', par: 25.19, path: 'S B B J2 S B OL S C KL S B OR S U S BL D B J1 S F' },
-  { name: 'Canyon Run', par: 30.37, path: 'S B S KR S U S B J1 S C D S L S R S BL S B S KL C S U S BR D S R S F' },
-  { name: 'Gauntlet', par: 34.84, path: 'S B L R S B J2 S C R R S U L S D B S KL S C L R L S B J1 S BR U S D R S F' },
-  { name: 'Stormbreaker', par: 40.36, path: 'S B S OR S KR S C U S B S J1 S D S L R S B S OL S C KL S2 BR S B S OR S2 R S F' }
+  { name: 'First Lap', par: 11.93, path: 'S3 BL S2 C BL S3 BL S F' },
+  { name: 'Twister', par: 15.52, path: 'S R S L S BL C S L S R S BR S2 F' },
+  { name: 'Boost Alley', par: 16.21, path: 'S B S B S4 BL S C B S3 BR S2 R S L S F' },
+  { name: 'Hill Climb', par: 17.46, path: 'S U U S C D D S R S L S U S C BL D S F' },
+  { name: 'Bankers', par: 13.44, path: 'S B S KL S2 C KL B S KR S C KR S2 F' },
+  { name: 'Big Air', par: 16.98, path: 'S B S J1 S2 BL S C B J2 S2 BL S3 C BL S F' },
+  { name: 'Loop-de-Loop', par: 15.12, path: 'S B S OL S BL S C B S OR S BL S2 F' },
+  { name: 'Snake Pass', par: 16.62, path: 'S L R S R L S C L S R R S C L R S F' },
+  { name: 'Rollercoaster', par: 20.17, path: 'S B S OL S U S KR S C D B S OR S R S L S F' },
+  { name: 'Sky Bridge', par: 23.62, path: 'S4 BR S C BR U S BR S4 D S C L S U BL S D S F' },
+  { name: 'Corkscrew', par: 20.96, path: 'S B B J2 S B OL S C KL S B OR S U S BL D B J1 S F' },
+  { name: 'Canyon Run', par: 27.72, path: 'S B S KR S U S B J1 S C D S L S R S BL S B S KL C S U S BR D S R S F' },
+  { name: 'Gauntlet', par: 33.51, path: 'S B L R S B J2 S C R R S U L S D B S KL S C L R L S B J1 S BR U S D R S F' },
+  { name: 'Stormbreaker', par: 33.92, path: 'S B S OR S KR S C U S B S J1 S D S L R S B S OL S C KL S2 BR S B S OR S2 R S F' }
 ];

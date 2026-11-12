@@ -16,6 +16,9 @@
   #sub { top: 70px; left: 50%; transform: translateX(-50%); font-weight: 800; font-size: 15px; background: rgba(15,20,40,.5); padding: 3px 12px; border-radius: 8px; white-space: nowrap; }
   #speed { right: 22px; bottom: 18px; text-align: right; font-weight: 900; font-size: 64px; line-height: 1; font-variant-numeric: tabular-nums; }
   #speed small { display: block; font-size: 16px; opacity: .85; }
+  #gear { right: 22px; bottom: 104px; display: none; align-items: center; gap: 8px; font-weight: 900; font-size: 26px; }
+  #gear.on { display: flex; }
+  #rpm { width: 150px; height: 10px; background: rgba(15,20,40,.6); border-radius: 6px; overflow: hidden; } #rpm i { display: block; height: 100%; width: 0; background: #ffe14d; }
   #cp { left: 22px; bottom: 22px; font-weight: 800; font-size: 18px; background: rgba(15,20,40,.5); padding: 6px 12px; border-radius: 10px; }
   #flash { top: 30%; left: 50%; transform: translateX(-50%); font-weight: 900; font-size: 34px; color: #ffe14d; opacity: 0; transition: opacity .25s; white-space: nowrap; }
   #map { top: 14px; right: 16px; left: auto; bottom: auto; width: 180px; height: 180px; border-radius: 14px; background: rgba(15,20,40,.5); }
@@ -46,6 +49,7 @@
 <div class="hud" id="time">0:00.00</div>
 <div class="hud" id="sub"></div>
 <div class="hud" id="speed">0<small>km/h</small></div>
+<div class="hud" id="gear"><b id="gearN">1</b><div id="rpm"><i id="rpmFill"></i></div></div>
 <div class="hud" id="cp"></div>
 <div class="hud" id="flash"></div>
 <div class="hud" id="keys">W/↑ gas · S/↓ brake · A D steer · Space handbrake · R restart · Enter checkpoint · C camera · Esc menu</div>
@@ -138,10 +142,9 @@ function makeCar(color, ghost) {
   grp.userData.wheels = wheels; return grp;
 }
 const carMesh = makeCar(0xff5a36), ghostMesh = makeCar(0x9fd0ff, true); scene.add(carMesh, ghostMesh); ghostMesh.visible = false;
-const steerLock = c => c.steer * CAR.maxSteer / (1 + Math.pow(Math.abs(c.speed) / CAR.steerSpeedRef, 1.35));
 function poseCar(mesh, p, q, c) {
   mesh.position.set(p[0], p[1], p[2]); mesh.quaternion.set(q[0], q[1], q[2], q[3]);
-  mesh.userData.wheels.forEach((w, i) => { const L = CAR.wheels[i], comp = c ? c.wheels[i].comp : 0.3; w.position.set(L[0], L[1] - (CAR.rayLen - comp - CAR.radius), L[2]); w.rotation.y = c && i < 2 ? steerLock(c) : 0; w.children[0].rotation.x = c ? c.wheels[i].spin : 0; w.children[1].rotation.x = c ? c.wheels[i].spin : 0; });
+  mesh.userData.wheels.forEach((w, i) => { const L = CAR.wheels[i], comp = c ? c.wheels[i].comp : 0.3; w.position.set(L[0], L[1] - (CAR.rayLen - comp - CAR.radius), L[2]); w.rotation.y = c && i < 2 ? c.steerAngle : 0; w.children[0].rotation.x = c ? c.wheels[i].spin : 0; w.children[1].rotation.x = c ? c.wheels[i].spin : 0; });
 }
 
 // ---------- particles + skid marks ----------
@@ -237,12 +240,12 @@ function drawMap() {
 function par(i) { return TRACKS[i].par || 60; }
 function loadTrack(i) {
   trackIdx = i; track = buildTrack(TRACKS[i]); buildWorld(track);
-  const g = ld('ts_ghost_' + tid(i), null); ghost = g && g.length > 20 ? g : null; bestSplits = ld('ts_split_' + tid(i), null);
+  const g = ld('ts2_ghost_' + tid(i), null); ghost = g && g.length > 20 ? g : null; bestSplits = ld('ts2_split_' + tid(i), null);
   state = 'play'; restart(); $('menu').classList.remove('on'); $('fin').classList.remove('on'); document.querySelectorAll('.hud').forEach(h => h.classList.add('on'));
 }
 function restart() {
   car = newCar(track); acc = 0; rec = []; recN = 0; camPos = null; camB = 0; splits = []; clearParts(); clearSkids(); $('fin').classList.remove('on'); if (state === 'done') state = 'play';
-  const best = ld('ts_best_' + tid(trackIdx), 0); let nextM = MED.find(m => !best || !beats(best, par(trackIdx) * m[2]));
+  const best = ld('ts2_best_' + tid(trackIdx), 0); let nextM = MED.find(m => !best || !beats(best, par(trackIdx) * m[2]));
   $('sub').textContent = TRACKS[trackIdx].name + (best ? ' · best ' + fmt(best) : '') + (nextM ? ' · next ' + nextM[0] + ' ' + fmt(par(trackIdx) * nextM[2]) : ' · all medals 💎');
 }
 function flash(html) { const f = $('flash'); f.innerHTML = html; f.style.opacity = 1; flashT = 1.6; }
@@ -263,9 +266,9 @@ function beep(fr, d, v) { if (!ac) return; try { const t = ac.currentTime, o = a
 function engineSound(on, thr) {
   if (!eng) return; const t = ac.currentTime;
   if (!on || !car) { eng.g.gain.setTargetAtTime(0, t, 0.05); eng.ng.gain.setTargetAtTime(0, t, 0.05); eng.wind.gain.setTargetAtTime(0, t, 0.05); return; }
-  const sp = car.speed, gear = Math.min(5, Math.floor(sp / 17)), rpm = 0.25 + 0.75 * ((sp - gear * 17) / 17), fr = 55 + rpm * 115 + gear * 7;
+  const sp = car.speed, rpm = Math.min(1, car.rpm / CAR.rpmMax), fr = 38 + rpm * 165;
   eng.o.frequency.setTargetAtTime(fr, t, 0.04); eng.o2.frequency.setTargetAtTime(fr * 0.5, t, 0.04); eng.f.frequency.setTargetAtTime(380 + rpm * 900 + (thr ? 500 : 0), t, 0.05);
-  eng.g.gain.setTargetAtTime(thr ? 0.055 : 0.03, t, 0.06); eng.wind.gain.setTargetAtTime(Math.min(0.05, sp * sp / 90000), t, 0.1);
+  eng.g.gain.setTargetAtTime(car.shiftT > 0 ? 0.02 : thr ? 0.055 : 0.03, t, 0.03); eng.wind.gain.setTargetAtTime(Math.min(0.05, sp * sp / 90000), t, 0.1);
   let slip = 0; for (const w of car.wheels) if (w.hit && w.mat === 0) slip = Math.max(slip, w.slip); eng.ng.gain.setTargetAtTime(slip > 0.75 && sp > 8 ? Math.min(0.07, (slip - 0.75) * 0.14) : 0, t, 0.05);
 }
 
@@ -284,8 +287,8 @@ function input() {
 let camPos = null, camLook = new THREE.Vector3(), camUp = new THREE.Vector3(0, 1, 0), last = 0;
 const DT = 1 / 120, V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 function finish() {
-  state = 'done'; const t = car.finishTime, id = tid(trackIdx), best = ld('ts_best_' + id, 0), pb = !best || t < best; splits.push(t);
-  if (pb) { sv('ts_best_' + id, +t.toFixed(3)); sv('ts_ghost_' + id, rec); sv('ts_split_' + id, splits.map(x => +x.toFixed(3))); ghost = rec.slice(); bestSplits = splits.slice(); }
+  state = 'done'; const t = car.finishTime, id = tid(trackIdx), best = ld('ts2_best_' + id, 0), pb = !best || t < best; splits.push(t);
+  if (pb) { sv('ts2_best_' + id, +t.toFixed(3)); sv('ts2_ghost_' + id, rec); sv('ts2_split_' + id, splits.map(x => +x.toFixed(3))); ghost = rec.slice(); bestSplits = splits.slice(); }
   let got = null; for (const m of MED) if (beats(t, par(trackIdx) * m[2])) got = m;
   $('finName').textContent = TRACKS[trackIdx].name; $('finTime').textContent = fmt(t); $('finMedal').textContent = got ? got[0] : '🏁';
   $('finNote').innerHTML = (got ? got[1] + ' medal! ' : 'Finished. ') + (pb ? (best ? 'New personal best' + diffHtml(t - best) : 'First finish!') : 'Best: ' + fmt(best) + diffHtml(t - best));
@@ -325,7 +328,7 @@ function frame(now) {
       cam.up.copy(camUp); cam.lookAt(camLook); }
     const fov = (camMode === 2 ? 74 : 62) + Math.min(26, sp * 0.3) + car.boosting * 7; if (Math.abs(cam.fov - fov) > 0.05) { cam.fov += (fov - cam.fov) * Math.min(1, dtR * 5); cam.updateProjectionMatrix(); }
     sun.position.set(car.p[0] + SUN.x * 160, car.p[1] + SUN.y * 160, car.p[2] + SUN.z * 160); sun.target.position.set(car.p[0], car.p[1], car.p[2]);
-    $('time').textContent = fmt(car.finished ? car.finishTime : car.time); $('speed').firstChild.textContent = Math.round(sp * 3.6);
+    $('time').textContent = fmt(car.finished ? car.finishTime : car.time); $('speed').firstChild.textContent = Math.round(sp * 3.6); $('gearN').textContent = car.gear; $('rpmFill').style.width = Math.min(100, car.rpm / CAR.rpmMax * 100) + '%'; $('rpmFill').style.background = car.rpm > CAR.rpmMax * 0.9 ? '#ff5a36' : '#ffe14d';
     $('cp').textContent = '🚩 ' + car.cp + ' / ' + track.nCheck; drawMap();
     if (flashT > 0) { flashT -= dtR; if (flashT <= 0) $('flash').style.opacity = 0; }
   } else if (state === 'menu' && track) { engineSound(false); const t = now / 1000 * 0.12, b = track.bounds, cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2, r = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) * 0.6 + 70; cam.up.set(0, 1, 0); cam.position.set(cx + Math.cos(t) * r, 75, cz + Math.sin(t) * r); cam.lookAt(cx, 0, cz); sun.position.set(cx + SUN.x * 160, SUN.y * 160, cz + SUN.z * 160); sun.target.position.set(cx, 0, cz); }
@@ -333,11 +336,11 @@ function frame(now) {
   renderer.render(scene, cam);
   requestAnimationFrame(frame);
 }
-function medalFor(i) { const b = ld('ts_best_' + tid(i), 0); if (!b) return ''; let m = ''; for (const x of MED) if (beats(b, par(i) * x[2])) m = x[0]; return m || '✔'; }
+function medalFor(i) { const b = ld('ts2_best_' + tid(i), 0); if (!b) return ''; let m = ''; for (const x of MED) if (beats(b, par(i) * x[2])) m = x[0]; return m || '✔'; }
 function menu() {
   state = 'menu'; $('fin').classList.remove('on'); $('menu').classList.add('on'); document.querySelectorAll('.hud').forEach(h => h.classList.remove('on')); ghostMesh.visible = false; carMesh.visible = false; clearParts();
   const el = $('tracks'); el.innerHTML = ''; let cnt = { '🥉': 0, '🥈': 0, '🥇': 0, '💎': 0 }, done = 0;
-  TRACKS.forEach((t, i) => { const b = ld('ts_best_' + tid(i), 0), md = medalFor(i), d = document.createElement('button'); if (b) done++; if (md) { for (const x of MED) { cnt[x[0]]++; if (x[0] === md) break; } }
+  TRACKS.forEach((t, i) => { const b = ld('ts2_best_' + tid(i), 0), md = medalFor(i), d = document.createElement('button'); if (b) done++; if (md) { for (const x of MED) { cnt[x[0]]++; if (x[0] === md) break; } }
     d.className = 'tk'; d.innerHTML = '<span class="md">' + md + '</span><b>' + (i + 1) + '. ' + t.name + '</b><small>' + (b ? 'Best ' + fmt(b) : 'Not finished yet') + ' · 🥇 ' + fmt(par(i) * 1.08) + '</small>'; d.onclick = () => { carMesh.visible = true; loadTrack(i); }; el.appendChild(d); });
   $('medalCount').textContent = 'Finished ' + done + ' / ' + TRACKS.length + ' · 🥉 ' + cnt['🥉'] + ' · 🥈 ' + cnt['🥈'] + ' · 🥇 ' + cnt['🥇'] + ' · 💎 ' + cnt['💎'];
   $('gfx').textContent = 'Graphics: ' + (lowQ ? 'Low (fast)' : 'High') + ' · click to change';
