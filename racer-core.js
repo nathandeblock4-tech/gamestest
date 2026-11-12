@@ -26,6 +26,7 @@ const CURVES = {
   up: u => ({ p: [0, HSTEP * sm(u), -h + CELL * u], t: [0, HSTEP * 6 * u * (1 - u), CELL], b: 0 }),
   down: u => ({ p: [0, -HSTEP * sm(u), -h + CELL * u], t: [0, -HSTEP * 6 * u * (1 - u), CELL], b: 0 }),
   jump: u => u < 0.6 ? { p: [0, 5.33 * u * u, -h + CELL * u], t: [0, 10.66 * u, CELL], b: 0 } : { p: [0, 1.92 + 6.4 * (u - 0.6), -h + CELL * u], t: [0, 6.4, CELL], b: 0 },   // curve up, then a straight lip so the car leaves cleanly
+  bigjump: u => u < 0.6 ? { p: [0, 8.33 * u * u, -h + CELL * u], t: [0, 16.66 * u, CELL], b: 0 } : { p: [0, 3.0 + 10 * (u - 0.6), -h + CELL * u], t: [0, 10, CELL], b: 0 },   // a taller, steeper launch ramp
   loopleft: u => loopCurve(u, 1), loopright: u => loopCurve(u, -1),
   // spiral ramps: a wide turn that climbs (or drops) one level, lightly banked
   helixleft: u => helix(CURVES.bigleft(u), u, 1, 1), helixright: u => helix(CURVES.bigright(u), u, -1, 1),
@@ -47,9 +48,9 @@ function loopCurve(u, s) {
   return { p: [s * CELL * sm(u), lerp(LOOP.y), -h + lerp(LOOP.z)], t: [s * CELL * 6 * u * (1 - u) / LOOP.L, Math.sin(a), Math.cos(a)], b: 0, r: [1, 0, 0] };
 }
 const KIND = { start: 'straight', finish: 'straight', check: 'straight', boost: 'straight', land: 'straight', blockleft: 'straight', blockright: 'straight', tunnel: 'straight' };
-const SEGS = { straight: 4, left: 12, right: 12, bigleft: 22, bigright: 22, bankleft: 22, bankright: 22, up: 12, down: 12, jump: 10, loopleft: 96, loopright: 96, helixleft: 24, helixright: 24, dropleft: 24, dropright: 24, wallleft: 26, wallright: 26, bumps: 20 };
+const SEGS = { straight: 4, left: 12, right: 12, bigleft: 22, bigright: 22, bankleft: 22, bankright: 22, up: 12, down: 12, jump: 10, bigjump: 12, loopleft: 96, loopright: 96, helixleft: 24, helixright: 24, dropleft: 24, dropright: 24, wallleft: 26, wallright: 26, bumps: 20 };
 // exit: [cells left, cells forward, turn (+1 = left), level change]; cells: extra occupied cells [left, forward]
-const EXIT = { straight: [0, 1, 0, 0], left: [1, 0, 1, 0], right: [-1, 0, 3, 0], bigleft: [2, 1, 1, 0], bigright: [-2, 1, 3, 0], bankleft: [2, 1, 1, 0], bankright: [-2, 1, 3, 0], up: [0, 1, 0, 1], down: [0, 1, 0, -1], jump: [0, 1, 0, 0], loopleft: [1, 2, 0, 0], loopright: [-1, 2, 0, 0], helixleft: [2, 1, 1, 1], helixright: [-2, 1, 3, 1], dropleft: [2, 1, 1, -1], dropright: [-2, 1, 3, -1], wallleft: [2, 1, 1, 0], wallright: [-2, 1, 3, 0], bumps: [0, 1, 0, 0] };
+const EXIT = { straight: [0, 1, 0, 0], left: [1, 0, 1, 0], right: [-1, 0, 3, 0], bigleft: [2, 1, 1, 0], bigright: [-2, 1, 3, 0], bankleft: [2, 1, 1, 0], bankright: [-2, 1, 3, 0], up: [0, 1, 0, 1], down: [0, 1, 0, -1], jump: [0, 1, 0, 0], bigjump: [0, 1, 0, 0], loopleft: [1, 2, 0, 0], loopright: [-1, 2, 0, 0], helixleft: [2, 1, 1, 1], helixright: [-2, 1, 3, 1], dropleft: [2, 1, 1, -1], dropright: [-2, 1, 3, -1], wallleft: [2, 1, 1, 0], wallright: [-2, 1, 3, 0], bumps: [0, 1, 0, 0] };
 const EXTRA = { bigleft: [[0, 1], [1, 1]], bigright: [[0, 1], [-1, 1]], bankleft: [[0, 1], [1, 1]], bankright: [[0, 1], [-1, 1]], loopleft: [[1, 0], [0, 1], [1, 1]], loopright: [[-1, 0], [0, 1], [-1, 1]], helixleft: [[0, 1], [1, 1]], helixright: [[0, 1], [-1, 1]], dropleft: [[0, 1], [1, 1]], dropright: [[0, 1], [-1, 1]], wallleft: [[0, 1], [1, 1]], wallright: [[0, 1], [-1, 1]] };
 const TOKEN = { S: 'straight', L: 'left', R: 'right', BL: 'bigleft', BR: 'bigright', KL: 'bankleft', KR: 'bankright', U: 'up', D: 'down', B: 'boost', C: 'check', F: 'finish', OL: 'loopleft', OR: 'loopright', HL: 'helixleft', HR: 'helixright', GL: 'dropleft', GR: 'dropright', WL: 'wallleft', WR: 'wallright', W: 'bumps', XL: 'blockleft', XR: 'blockright', T: 'tunnel' };
 
@@ -77,7 +78,7 @@ export function buildTrack(def) {
   for (const tok of def.path.trim().split(/\s+/)) {
     const m = /^([A-Z]+)(\d*)$/.exec(tok); if (!m) throw new Error('Bad token ' + tok);
     const n = m[2] ? +m[2] : 1;
-    if (m[1] === 'J') { const j = put('jump'); j.gap = n; gx += n * DX[d]; gz += n * DZ[d]; put('land'); }
+    if (m[1] === 'J' || m[1] === 'JB' || m[1] === 'JD') { const j = put(m[1] === 'JB' ? 'bigjump' : 'jump'); j.gap = n; gx += n * DX[d]; gz += n * DZ[d]; if (m[1] === 'JD') { lv -= 1; if (lv < 0) throw new Error('Track "' + def.name + '" drops below ground'); } put('land'); }   // J = jump, JB = big jump, JD = jump that lands one level lower
     else { const t = TOKEN[m[1]]; if (!t) throw new Error('Bad token ' + tok); for (let k = 0; k < n; k++) put(t); }
   }
   if (pieces[pieces.length - 1].type !== 'finish') put('finish');
@@ -127,7 +128,7 @@ export function buildTrack(def) {
         samples.push({ p: sp2, f: A.f, pc: pc.i, d: dist + segLen * u, loop: pc.kind === 'loopleft' || pc.kind === 'loopright' }); }
       dist += segLen;
     }
-    if (pc.kind === 'jump') { // end cap + air samples over the gap
+    if (pc.kind === 'jump' || pc.kind === 'bigjump') { // end cap + air samples over the gap
       const E = frames[n], nx = pieces[pc.i + 1], L0 = toWorld(nx, CURVES.straight(0).p), gap = len(sub(L0, E.p)), ns = Math.round(gap / 2.5);
       for (let k = 0; k < ns; k++) { const u = k / ns; const p = add(E.p, mul(sub(L0, E.p), u)); p[1] += 5 * Math.sin(PI * u); samples.push({ p, f: E.f, pc: pc.i, d: dist + gap * u, air: true }); }
       dist += gap;
