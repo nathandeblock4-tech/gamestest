@@ -3,39 +3,41 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Game Room</title>
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;600;700;800&display=swap" rel="stylesheet">
+<title>Arcade</title>
 <style>
-  :root { --bg: #0e0f1c; --panel: #17192f; --panel-2: #212447; --line: #262a4d; --text: #f2f3ff; --muted: #8f95c2; --accent: #ffcc33; color-scheme: dark; }
+  :root { --bg: #101114; --panel: #1a1c21; --panel-2: #24272e; --line: #2a2d35; --text: #eef0f4; --muted: #8b909c; --accent: #f5f6f8; color-scheme: dark; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Rubik', system-ui, sans-serif; min-height: 100vh; }
-  .wrap { max-width: 980px; margin: 0 auto; padding: 28px 16px 50px; }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 22px; }
-  h1 { font-family: 'Press Start 2P', monospace; font-size: clamp(20px, 4.5vw, 30px); color: var(--accent); cursor: pointer; user-select: none; -webkit-user-select: none; }
-  .me { background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 99px; padding: 8px 14px; font: 700 14px Rubik, sans-serif; cursor: pointer; }
-  .me:hover { border-color: var(--accent); }
-  .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
-  .search { flex: 1; min-width: 200px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; color: var(--text); font: 600 15px Rubik, sans-serif; padding: 11px 14px; }
-  .search:focus { outline: none; border-color: var(--accent); }
-  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-  .chip { background: var(--panel); border: 1px solid var(--line); color: #cfd3ff; border-radius: 99px; padding: 8px 13px; font: 700 13px Rubik, sans-serif; cursor: pointer; }
-  .chip.on { background: var(--accent); border-color: var(--accent); color: #1a1300; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
-  .card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; text-decoration: none; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px 10px 14px; transition: transform .12s, border-color .12s; cursor: pointer; }
-  .card:hover, .card:focus-visible { transform: translateY(-3px); border-color: var(--c); outline: none; }
-  .ic { width: 64px; height: 64px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 34px; background: var(--c); }
-  .card h4 { font-size: 15px; font-weight: 800; line-height: 1.2; }
-  .card small { color: var(--muted); font-size: 12px; font-weight: 600; }
-  .fav { position: absolute; top: 6px; right: 6px; background: none; border: none; font-size: 16px; cursor: pointer; opacity: .35; padding: 4px; }
+  body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; min-height: 100vh; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 36px 20px 60px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 26px; }
+  h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; cursor: pointer; user-select: none; -webkit-user-select: none; }
+  h1 span { color: var(--muted); font-weight: 500; font-size: 15px; margin-left: 8px; letter-spacing: 0; }
+  .me { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 7px 12px; font: 600 13px system-ui, sans-serif; cursor: pointer; }
+  .me:hover { color: var(--text); border-color: #444955; }
+  .controls { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+  .search { flex: 0 1 300px; min-width: 200px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: 500 14px system-ui, sans-serif; padding: 9px 12px; }
+  .search:focus { outline: none; border-color: #555b68; }
+  .chips { display: flex; gap: 4px; flex-wrap: wrap; }
+  .chip { background: none; border: none; color: var(--muted); border-radius: 6px; padding: 7px 11px; font: 600 14px system-ui, sans-serif; cursor: pointer; }
+  .chip:hover { color: var(--text); }
+  .chip.on { background: var(--panel-2); color: var(--text); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
+  .card { position: relative; display: flex; flex-direction: column; gap: 10px; text-decoration: none; color: var(--text); border-radius: 12px; padding: 0 0 6px; cursor: pointer; }
+  .ic { aspect-ratio: 16 / 10; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 44px; background: var(--c); transition: transform .15s, filter .15s; }
+  .card:hover .ic, .card:focus-visible .ic { transform: translateY(-2px); filter: brightness(1.12); }
+  .card:focus-visible { outline: none; }
+  .card h4 { font-size: 15px; font-weight: 650; line-height: 1.25; padding: 0 2px; }
+  .card small { color: var(--muted); font-size: 12.5px; font-weight: 500; padding: 0 2px; margin-top: -6px; min-height: 15px; }
+  .fav { position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,.35); border: none; border-radius: 6px; color: #fff; font-size: 14px; cursor: pointer; opacity: 0; padding: 3px 6px; }
   .fav.on, .card:hover .fav { opacity: 1; }
-  .empty { color: var(--muted); text-align: center; padding: 30px; font-weight: 700; display: none; }
-  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 40px; }
+  .empty { color: var(--muted); text-align: center; padding: 40px; font-weight: 500; display: none; }
+  footer { text-align: center; color: #5d626e; font-size: 13px; margin-top: 50px; }
   /* name popup */
   .modal { position: fixed; inset: 0; background: rgba(5, 6, 15, .75); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
   .modal.on { display: flex; }
   .box { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 24px; width: min(380px, 100%); display: flex; flex-direction: column; gap: 12px; text-align: center; }
   .box h2 { font-size: 20px; }
-  .box input { background: var(--bg); border: 2px solid var(--panel-2); border-radius: 10px; color: #fff; font: 700 17px Rubik, sans-serif; padding: 11px 14px; text-align: center; }
+  .box input { background: var(--bg); border: 2px solid var(--panel-2); border-radius: 10px; color: #fff; font: 700 17px system-ui, sans-serif; padding: 11px 14px; text-align: center; }
   .box input:focus { outline: none; border-color: var(--accent); }
   .box p { color: var(--muted); font-size: 13px; line-height: 1.5; }
   /* embedded mini games */
@@ -45,12 +47,12 @@
   .topbar h2 { font-size: 22px; }
   .stats { display: flex; gap: 18px; justify-content: center; margin-bottom: 14px; color: var(--muted); font-weight: 600; flex-wrap: wrap; }
   .stats b { color: var(--accent); }
-  button.btn { background: var(--accent); color: #1a1300; border: none; border-radius: 10px; padding: 10px 18px; font: 700 15px 'Rubik', sans-serif; cursor: pointer; }
+  button.btn { background: var(--accent); color: #111; border: none; border-radius: 10px; padding: 10px 18px; font: 700 15px system-ui, sans-serif; cursor: pointer; }
   button.btn.ghost { background: var(--panel-2); color: var(--text); }
   button:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .msg { min-height: 26px; margin: 12px 0; font-weight: 700; font-size: 18px; }
   .ttt { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 320px; margin: 0 auto; }
-  .ttt button { aspect-ratio: 1; background: #0a0b17; border: 2px solid var(--panel-2); border-radius: 12px; font: 800 52px 'Rubik', sans-serif; cursor: pointer; color: var(--text); }
+  .ttt button { aspect-ratio: 1; background: #0a0b17; border: 2px solid var(--panel-2); border-radius: 12px; font: 800 52px system-ui, sans-serif; cursor: pointer; color: var(--text); }
   .ttt button.x { color: #60a5fa; } .ttt button.o { color: #f472b6; } .ttt button.win { background: #2d3a1c; border-color: #4ade80; }
   .mode { display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; }
   .mode button.on { background: var(--accent); color: #1a1300; }
@@ -62,13 +64,13 @@
 <body>
 <div class="wrap">
   <header>
-    <h1 id="logo" onclick="show('home')">🎮 GAME ROOM</h1>
-    <button class="me" id="meBtn">👤 <span id="meName">Guest</span> ✎</button>
+    <h1 id="logo" onclick="show('home')">Arcade<span id="count"></span></h1>
+    <button class="me" id="meBtn"><span id="meName">Guest</span></button>
   </header>
 
   <section id="home" class="screen active">
     <div class="controls">
-      <input class="search" id="q" type="search" placeholder="🔍 Search games..." autocomplete="off" aria-label="Search games">
+      <input class="search" id="q" type="search" placeholder="Search games" autocomplete="off" aria-label="Search games">
       <div class="chips" id="chips"></div>
     </div>
     <div class="grid" id="grid"></div>
@@ -94,7 +96,7 @@
     </div>
   </section>
 
-  <footer id="foot">GAME ROOM</footer>
+  <footer id="foot"></footer>
 </div>
 
 <div class="modal" id="nameModal"><div class="box">
@@ -111,16 +113,16 @@ function load(key) { try { return localStorage.getItem(key); } catch (e) { retur
 function loadJ(key, d) { try { const v = JSON.parse(load(key) || 'null'); return v == null ? d : v; } catch (e) { return d; } }
 
 const GAMES = [
-  { id: 'racer', href: 'racer.html', t: 'Trackstorm', d: '3D low-poly time trial racing with real car physics. 34 tracks across 5 scenery themes with loops, corkscrews, spiral ramps, hoop jumps, skinny bridges and tunnels, plus air tricks, medals and a ghost car. Works without WebGL. Keyboard only.', i: '🏎️', cat: 'arcade', tags: ['NEW', 'BIG', '3D'], c: ['#ff5a36', '#3b9bff'], n: 37 },
-  { id: 'towers', href: 'towers.html', t: 'Tower Siege', d: 'Tower defense: 6 towers with upgrades, 8 enemy types, bosses, 30 waves, 3 maps and 3 difficulties.', i: '🏰', cat: 'puzzle', tags: ['NEW', 'BIG'], c: ['#16a34a', '#facc15'], n: 36 },
-  { id: 'survivors', href: 'survivors.html', t: 'Neon Survivors', d: 'Survive 10 minutes of a huge swarm. 6 auto-firing weapons, level-up choices, bosses, 3 characters and permanent upgrades.', i: '⚡', cat: 'arcade', tags: ['NEW', 'BIG'], c: ['#22d3ee', '#a855f7'], n: 35 },
-  { id: 'four', href: 'four.html', t: 'Four in a Row', d: 'Drop discs and connect four. Play a friend or 4 computer bots from Easy to Expert.', i: '🔴', cat: 'puzzle', tags: ['NEW', '2P'], c: ['#2647d8', '#ff3b5c'], n: 34 },
-  { id: 'blocks', href: 'blocks.html', t: 'Block Drop', d: 'Stack falling blocks and clear lines. Hold piece, ghost piece, and it speeds up every 10 lines.', i: '🧩', cat: 'arcade', tags: ['NEW'], c: ['#38bdf8', '#a855f7'], n: 33 },
-  { id: 'memory', href: 'memory.html', t: 'Memory Match', d: 'Flip cards and find the pairs in as few moves as you can. Three board sizes.', i: '🃏', cat: 'puzzle', tags: ['NEW'], c: ['#f472b6', '#7c3aed'], n: 32 },
-  { id: 'hopper', href: 'hopper.html', t: 'Road Hopper', d: 'Hop across busy roads, rivers and train tracks in 3D. Collect coins to unlock 6 characters.', i: '🐔', cat: 'arcade', tags: ['NEW', '3D'], c: ['#38c95c', '#1f7a8c'], n: 27 },
-  { id: 'fakele', href: 'fakele.html', t: 'Fakele', d: 'Guess the secret 5-letter word in 6 tries. New daily word every day, plus unlimited mode.', i: '🟩', cat: 'puzzle', tags: ['NEW', 'DAILY'], c: ['#22c55e', '#a16207'], n: 26 },
-  { id: 'chess', href: 'chess.html', t: 'Chess', d: 'Play a friend on one device, 10 computer bots from beginner to grandmaster, or online with a room code.', i: '♞', cat: 'puzzle', tags: ['NEW', 'ONLINE', '2P'], c: ['#769656', '#2b3a1c'], n: 25 },
-  { id: 'dash', href: 'dash.html', t: 'Neon Dash', d: 'Jump to the beat across 10 levels: ship tunnels, ball mode, gravity flips and secret coins.', i: '🟦', cat: 'arcade', tags: ['NEW'], c: ['#00e5ff', '#7b2cff'], n: 24 },
+  { id: 'racer', href: 'racer.html', t: 'Trackstorm', d: '3D low-poly time trial racing with real car physics. 34 tracks across 5 scenery themes with loops, corkscrews, spiral ramps, hoop jumps, skinny bridges and tunnels, plus air tricks, medals and a ghost car. Works without WebGL. Keyboard only.', i: '🏎️', cat: 'arcade', tags: ['BIG', '3D'], c: ['#ff5a36', '#3b9bff'], n: 37 },
+  { id: 'towers', href: 'towers.html', t: 'Tower Siege', d: 'Tower defense: 6 towers with upgrades, 8 enemy types, bosses, 30 waves, 3 maps and 3 difficulties.', i: '🏰', cat: 'puzzle', tags: ['BIG'], c: ['#16a34a', '#facc15'], n: 36 },
+  { id: 'survivors', href: 'survivors.html', t: 'Neon Survivors', d: 'Survive 10 minutes of a huge swarm. 6 auto-firing weapons, level-up choices, bosses, 3 characters and permanent upgrades.', i: '⚡', cat: 'arcade', tags: ['BIG'], c: ['#22d3ee', '#a855f7'], n: 35 },
+  { id: 'four', href: 'four.html', t: 'Four in a Row', d: 'Drop discs and connect four. Play a friend or 4 computer bots from Easy to Expert.', i: '🔴', cat: 'puzzle', tags: ['2P'], c: ['#2647d8', '#ff3b5c'], n: 34 },
+  { id: 'blocks', href: 'blocks.html', t: 'Block Drop', d: 'Stack falling blocks and clear lines. Hold piece, ghost piece, and it speeds up every 10 lines.', i: '🧩', cat: 'arcade', tags: [], c: ['#38bdf8', '#a855f7'], n: 33 },
+  { id: 'memory', href: 'memory.html', t: 'Memory Match', d: 'Flip cards and find the pairs in as few moves as you can. Three board sizes.', i: '🃏', cat: 'puzzle', tags: [], c: ['#f472b6', '#7c3aed'], n: 32 },
+  { id: 'hopper', href: 'hopper.html', t: 'Road Hopper', d: 'Hop across busy roads, rivers and train tracks in 3D. Collect coins to unlock 6 characters.', i: '🐔', cat: 'arcade', tags: ['3D'], c: ['#38c95c', '#1f7a8c'], n: 27 },
+  { id: 'fakele', href: 'fakele.html', t: 'Fakele', d: 'Guess the secret 5-letter word in 6 tries. New daily word every day, plus unlimited mode.', i: '🟩', cat: 'puzzle', tags: ['DAILY'], c: ['#22c55e', '#a16207'], n: 26 },
+  { id: 'chess', href: 'chess.html', t: 'Chess', d: 'Play a friend on one device, 10 computer bots from beginner to grandmaster, or online with a room code.', i: '♞', cat: 'puzzle', tags: ['ONLINE', '2P'], c: ['#769656', '#2b3a1c'], n: 25 },
+  { id: 'dash', href: 'dash.html', t: 'Neon Dash', d: 'Jump to the beat across 10 levels: ship tunnels, ball mode, gravity flips and secret coins.', i: '🟦', cat: 'arcade', tags: [], c: ['#00e5ff', '#7b2cff'], n: 24 },
   { id: 'catch', href: 'catch.html', t: 'Banana Catch', d: 'Move Demetrius to catch falling bananas and dodge the coconuts. Golden bananas are worth 5.', i: '🍌', cat: 'demetrius', tags: [], c: ['#ffd23f', '#1b4a3a'], n: 23 },
   { id: 'invaders', href: 'invaders.html', t: 'Banana Invaders', d: 'A space shooter where you fire bananas at an invading army of Demetriuses.', i: '🚀', cat: 'arcade', tags: [], c: ['#2b1d6b', '#05060e'], n: 22 },
   { id: 'simon', href: 'simon.html', t: 'Demetrius Says', d: 'Watch the colors flash, then repeat the pattern. It gets longer every round.', i: '🎨', cat: 'demetrius', tags: [], c: ['#ff5a5a', '#60a5fa'], n: 21 },
@@ -133,19 +135,18 @@ const GAMES = [
   { id: '2048', href: '2048.html', t: '2048', d: 'Slide and merge matching tiles. Can you reach 2048?', i: '🔢', cat: 'puzzle', tags: [], c: ['#edc22e', '#8f7a66'], n: 14 },
   { id: 'flappy', href: 'flappy.html', t: 'Flappy Demetrius', d: 'His shocked face flies through the zoo cages. Tap to flap. Every tap, he gasps.', i: '🪽', cat: 'demetrius', tags: [], c: ['#38bdf8', '#0f766e'], n: 13 },
   { id: 'snake', href: 'snake.html', t: 'Snake Deluxe', d: 'The upgraded Snake: golden apples, speed modes, wrap-around walls, particles and sound.', i: '🐍', cat: 'arcade', tags: [], c: ['#4ade80', '#14532d'], n: 12 },
-  { id: 'stack', href: 'stack.html', t: 'Stack Tower', d: 'Drop sliding blocks to build the tallest tower. Line them up perfectly for bonuses.', i: '🏗️', cat: 'arcade', tags: ['NEW'], c: ['#f59e0b', '#7c3aed'], n: 29 },
-  { id: 'connerclicker', href: 'connerclicker.html', t: 'Conner Clicker', d: 'Locked. Click Conner, buy buildings and out-stare a boss in each of 10 areas. Rebirths, tiers and a leaderboard. Needs the password.', i: '🔒', cat: 'demetrius', tags: ['NEW', 'BIG'], c: ['#2f7bff', '#0b1d3f'], n: 30 },
-  { id: 'tungconner', href: 'tungconner.html', t: 'Tung Tung Conner', d: 'Locked. Bonk the sahur drum with a bat, chain 9 TUNGs for a SAHUR bonus, buy drummers. Needs the password.', i: '🔒', cat: 'demetrius', tags: ['NEW'], c: ['#ffb547', '#2a1748'], n: 31 },
-  { id: 'conner', href: 'conner.html', t: "Five Nights at Conner's", d: 'Locked. Survive five nights at the school while Conner hunts you. Needs the password.', i: '🔒', cat: 'demetrius', tags: ['NEW', 'SCARY'], c: ['#1d5fc4', '#000000'], n: 28 },
+  { id: 'stack', href: 'stack.html', t: 'Stack Tower', d: 'Drop sliding blocks to build the tallest tower. Line them up perfectly for bonuses.', i: '🏗️', cat: 'arcade', tags: [], c: ['#f59e0b', '#7c3aed'], n: 29 },
+  { id: 'connerclicker', href: 'connerclicker.html', t: 'Conner Clicker', d: 'Locked. Click Conner, buy buildings and out-stare a boss in each of 10 areas. Rebirths, tiers and a leaderboard. Needs the password.', i: '🔒', cat: 'demetrius', tags: ['BIG'], c: ['#2f7bff', '#0b1d3f'], n: 30 },
+  { id: 'tungconner', href: 'tungconner.html', t: 'Tung Tung Conner', d: 'Locked. Bonk the sahur drum with a bat, chain 9 TUNGs for a SAHUR bonus, buy drummers. Needs the password.', i: '🔒', cat: 'demetrius', tags: [], c: ['#ffb547', '#2a1748'], n: 31 },
+  { id: 'conner', href: 'conner.html', t: "Five Nights at Conner's", d: 'Locked. Survive five nights at the school while Conner hunts you. Needs the password.', i: '🔒', cat: 'demetrius', tags: ['SCARY'], c: ['#1d5fc4', '#000000'], n: 28 },
   { id: 'fnad2', href: 'fnad2.html', t: 'Five Nights at Demetrius 2', d: 'The Lure. Play sounds on the cameras to lead him away. Doors overheat, systems break, vents are open.', i: '🔊', cat: 'demetrius', tags: ['SCARY'], c: ['#450a0a', '#000000'], n: 11 },
   { id: 'dontlook', href: 'dontlook.html', t: "Don't Look At Demetrius", d: "Lost in the dark zoo with a flashlight. He only moves when you can't see him... and you have to blink.", i: '👁️', cat: 'demetrius', tags: ['SCARY', '3D'], c: ['#1c1917', '#000000'], n: 10 },
   { id: 'fnad', href: 'fnad.html', t: 'Five Nights at Demetrius', d: "Survive 12 AM to 6 AM. Watch the cameras. Close the doors. Don't let him get close to your face.", i: '🐒', cat: 'demetrius', tags: ['SCARY'], c: ['#7f1d1d', '#000000'], n: 9 },
   { id: 'hog', href: 'hog.html', t: 'Hog Wild 3000', d: 'A fully 3D pig dodges tractors and hay in the dumbest, most dramatic farm race ever.', i: '🐖', cat: 'arcade', tags: ['3D'], c: ['#f9a8d4', '#be185d'], n: 8 },
   { id: 'pig', href: 'pig.html', t: 'Pig Run', d: 'Race through the farm as a muddy pig. Jump hay bales and fences, grab apples.', i: '🐷', cat: 'arcade', tags: [], c: ['#fda4af', '#65a30d'], n: 7 },
-  { id: 'ttt', href: '#ttt', t: 'Tic-Tac-Toe', d: 'Play against the computer or a friend. Three in a row wins.', i: '❌', cat: 'puzzle', tags: ['2P'], c: ['#60a5fa', '#f472b6'], n: 2 },
-  { id: 'memory', href: '#memory', t: 'Memory Match', d: 'Flip cards and find all the matching pairs in as few moves as you can.', i: '🃏', cat: 'puzzle', tags: [], c: ['#a78bfa', '#4c1d95'], n: 1 }
+  { id: 'ttt', href: '#ttt', t: 'Tic-Tac-Toe', d: 'Play against the computer or a friend. Three in a row wins.', i: '❌', cat: 'puzzle', tags: ['2P'], c: ['#60a5fa', '#f472b6'], n: 2 }
 ];
-const CHIPS = [['all', 'All'], ['fav', '⭐ Favorites'], ['arcade', '🕹️ Arcade'], ['puzzle', '🧩 Puzzle'], ['demetrius', '🐒 Demetrius'], ['multi', '👥 With friends']];
+const CHIPS = [['all', 'All'], ['fav', 'Favorites'], ['arcade', 'Action'], ['puzzle', 'Puzzle'], ['demetrius', 'Characters'], ['multi', 'With friends']];
 let filter = 'all', query = '', favs = loadJ('gr_favs', []);
 const plays = id => parseInt(load('gr_open_' + id) || '0', 10);
 function opened(id) { save('gr_open_' + id, String(plays(id) + 1)); }
@@ -164,8 +165,8 @@ function render() {
     const ic = document.createElement('div'); ic.className = 'ic'; ic.textContent = g.i; ic.style.background = 'linear-gradient(135deg,' + g.c[0] + ',' + g.c[1] + ')';
     const h = document.createElement('h4'); h.textContent = g.t;
     const sm = document.createElement('small'); const n = plays(g.id);
-    sm.textContent = g.tags.indexOf('NEW') >= 0 && !n ? '✨ New' : g.tags.indexOf('ONLINE') >= 0 ? '🌐 Online' : g.tags.indexOf('2P') >= 0 ? '👥 2 players' : (n ? 'Played ' + n + 'x' : '');
-    const f = document.createElement('button'); const isFav = favs.indexOf(g.id) >= 0; f.className = 'fav' + (isFav ? ' on' : ''); f.textContent = isFav ? '⭐' : '☆'; f.setAttribute('aria-label', 'Favorite ' + g.t);
+    sm.textContent = g.tags.indexOf('NEW') >= 0 && !n ? 'New' : g.tags.indexOf('ONLINE') >= 0 ? 'Online' : g.tags.indexOf('2P') >= 0 ? '2 players' : (n ? 'Played ' + n + '×' : '');
+    const f = document.createElement('button'); const isFav = favs.indexOf(g.id) >= 0; f.className = 'fav' + (isFav ? ' on' : ''); f.textContent = isFav ? '★' : '☆'; f.setAttribute('aria-label', 'Favorite ' + g.t);
     f.onclick = e => { e.preventDefault(); e.stopPropagation(); const k = favs.indexOf(g.id); if (k >= 0) favs.splice(k, 1); else favs.push(g.id); save('gr_favs', JSON.stringify(favs)); render(); };
     a.append(f, ic, h, sm);
     a.addEventListener('click', e => { opened(g.id); if (g.href[0] === '#') { e.preventDefault(); show(g.id); } });
@@ -176,7 +177,7 @@ function render() {
   em.textContent = filter === 'fav' && !query ? 'No favorites yet. Tap the ☆ on a game.' : 'No games found.';
   const ch = document.getElementById('chips'); ch.innerHTML = '';
   CHIPS.forEach(([id, label]) => { const b = document.createElement('button'); b.className = 'chip' + (filter === id ? ' on' : ''); b.textContent = label; b.onclick = () => { filter = id; render(); }; ch.appendChild(b); });
-  document.getElementById('foot').textContent = 'GAME ROOM · ' + GAMES.length + ' games';
+  document.getElementById('count').textContent = GAMES.length + ' games';
 }
 document.getElementById('q').addEventListener('input', e => { query = e.target.value.trim(); render(); });
 window.addEventListener('pageshow', render);

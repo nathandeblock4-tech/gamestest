@@ -1,4 +1,4 @@
-// Game Room presence: tells the admin panel (if it's open) who is on the site and what they're playing.
+// Arcade presence: tells the admin panel (if it's open) who is on the site and what they're playing.
 (function () {
   'use strict';
   if (window.__grPresence) return; window.__grPresence = true;

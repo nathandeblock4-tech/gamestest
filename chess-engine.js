@@ -1,4 +1,4 @@
-// Game Room chess engine (runs in a Web Worker).
+// Arcade chess engine (runs in a Web Worker).
 // 0x88 board, zobrist hashing, transposition table, PVS + null move + LMR, quiescence, tapered eval.
 (function (root) {
   'use strict';
