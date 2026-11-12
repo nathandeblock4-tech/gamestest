@@ -77,11 +77,16 @@
 // Shows what went wrong instead of a blank page.
 window.__errs = [];
 function tsFail(msg, det) { var e = document.getElementById('err'); e.style.display = 'flex'; document.getElementById('errMsg').textContent = msg; document.getElementById('errDet').textContent = 'Details: ' + (det || 'none') + ' · ' + navigator.userAgent.replace(/\) .*/, ')'); document.getElementById('menu').classList.remove('on'); }
-window.addEventListener('error', function (ev) { window.__errs.push((ev.message || 'load error') + (ev.filename ? ' @ ' + ev.filename.split('/').pop() + ':' + ev.lineno : (ev.target && ev.target.src ? ' loading ' + ev.target.src.split('/').pop() : ''))); if (!window.__tsReady && !window.__noGL) setTimeout(function () { if (!window.__tsReady && !window.__noGL) tsFail('Something stopped the game from loading on this device.', window.__errs.join(' | ')); }, 300); }, true);
+window.addEventListener('error', function (ev) { if (String(ev.message).indexOf('TS_SOFT') >= 0) return; window.__errs.push((ev.message || 'load error') + (ev.filename ? ' @ ' + ev.filename.split('/').pop() + ':' + ev.lineno : (ev.target && ev.target.src ? ' loading ' + ev.target.src.split('/').pop() : ''))); if (!window.__tsReady) setTimeout(function () { if (!window.__tsReady) tsFail('Something stopped the game from loading on this device.', window.__errs.join(' | ')); }, 300); }, true);
 window.addEventListener('unhandledrejection', function (ev) { window.__errs.push(String(ev.reason && ev.reason.message || ev.reason)); });
-setTimeout(function () { if (!window.__tsReady && !window.__noGL && document.getElementById('err').style.display === 'none') tsFail('The game files did not finish loading. Check the connection and refresh the page.', window.__errs.join(' | ') || 'timed out after 12 seconds'); }, 12000);
+setTimeout(function () { if (!window.__tsReady && document.getElementById('err').style.display === 'none') tsFail('The game files did not finish loading. Check the connection and refresh the page.', window.__errs.join(' | ') || 'timed out after 12 seconds'); }, 12000);
 (function () { var ok = false, why = ''; try { var c = document.createElement('canvas'); ok = !!(c.getContext('webgl2') || c.getContext('webgl')); if (!ok) why = 'getContext returned null'; } catch (e) { why = e.message; }
-  if (!ok) { window.__noGL = true; tsFail('This device has 3D graphics (WebGL) turned off, and Trackstorm needs it. On a school Chromebook that is usually a setting the school controls. It may work on another computer or at home.', 'WebGL unavailable: ' + why); } })();
+  if (!ok) window.__noGL = true;   // no WebGL: the game switches to its Basic 2D graphics instead
+  var forced = false; try { forced = JSON.parse(localStorage.getItem('ts_soft') || 'false') === true; } catch (e) {}
+  window.__soft = !ok || forced; })();
+</script>
+<script type="module">
+if (window.__soft) import('./racer2d.js').catch(function (e) { tsFail('The Basic graphics version could not load.', String(e && e.message || e)); });
 </script>
 <script type="module">
 import * as THREE from './lib/three.module.min.js';
@@ -96,7 +101,7 @@ const MED = [['🥉', 'Bronze', 1.5], ['🥈', 'Silver', 1.22], ['🥇', 'Gold',
 const lowQ = !!ld('ts_low', false), tid = i => { let h = 0; for (const ch of TRACKS[i].path) h = (h * 31 + ch.charCodeAt(0)) | 0; return TRACKS[i].name.replace(/\W/g, '') + (h >>> 0).toString(36); }, beats = (t, target) => Math.round(t * 100) <= Math.round(target * 100);
 
 // ---------- renderer ----------
-if (window.__noGL) throw new Error('no WebGL');
+if (window.__soft) throw new Error('TS_SOFT');   // the 2D version is running instead; stop here
 const renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: !lowQ, powerPreference: 'high-performance' });
 renderer.setPixelRatio(lowQ ? 1 : Math.min(2, devicePixelRatio || 1)); renderer.shadowMap.enabled = !lowQ; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene(); scene.background = new THREE.Color(0xcfe6fb); scene.fog = new THREE.Fog(0xcfe6fb, 320, 1200);
@@ -368,7 +373,7 @@ function menu() {
   $('medalCount').textContent = 'Finished ' + done + ' / ' + TRACKS.length + ' · 🥉 ' + cnt['🥉'] + ' · 🥈 ' + cnt['🥈'] + ' · 🥇 ' + cnt['🥇'] + ' · 💎 ' + cnt['💎'];
   $('gfx').textContent = 'Graphics: ' + (lowQ ? 'Low (fast)' : 'High') + ' · click to change';
 }
-$('gfx').onclick = () => { sv('ts_low', !lowQ); location.reload(); };
+$('gfx').onclick = () => { if (!lowQ) sv('ts_low', true); else { sv('ts_low', false); sv('ts_soft', true); } location.reload(); };   // High -> Low -> Basic (no WebGL) -> High
 $('again').onclick = restart; $('toMenu').onclick = menu; $('next').onclick = () => loadTrack(trackIdx + 1);
 window.__ts = { load: i => { carMesh.visible = true; loadTrack(i); }, auto: v => { auto = v; }, cam: m => { camMode = m; camPos = null; }, st: () => ({ state, t: car && car.time, sp: car && car.speed, cp: car && car.cp, fin: car && car.finished, p: car && car.p, up: car && axes(car.q)[1][1] }) };
 trackIdx = 0; track = buildTrack(TRACKS[0]); buildWorld(track); menu(); window.__tsReady = true; requestAnimationFrame(frame);
