@@ -447,5 +447,6 @@ export const TRACKS = [
   { name: 'Hoop Dreams', theme: 'meadow', par: 25.65, path: 'S B B S JB4 S2 C BR S B S JB4 S2 BL S U S C B JB4 S3 D S F' },
   { name: 'Needle Bridge', theme: 'night', par: 20.99, path: 'S B S N N S BL S N S C U U S N N N S BR B S DD S C N S F' },
   { name: 'Plunge', theme: 'snow', par: 29.61, path: 'S B UU S UU S C BR S B S DD S2 DD S C BL S UU S B QL S DD S F' },
-  { name: 'Stunt Park', theme: 'sunset', par: 31.69, path: 'S B S OL S C B JB4 S2 HR S B S QR S C BL B S JB3 S2 WR S D S B OR S F' }
+  { name: 'Stunt Park', theme: 'sunset', par: 31.69, path: 'S B S OL S C B JB4 S2 HR S B S QR S C BL B S JB3 S2 WR S D S B OR S F' },
+  { name: 'Insanity', theme: 'night', par: 43.65, path: 'S B UU S B QL S N N S C B S JD2 S2 KR S B S OL S C HL S2 B QR S BR B S JB4 S2 DD S C N W S B J2 S F' }
 ];
