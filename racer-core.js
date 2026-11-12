@@ -443,5 +443,6 @@ export const TRACKS = [
   { name: 'Leapfrog', theme: 'meadow', par: 89.58, path: 'S B S OL B B S JB4 S S B B S JB4 S B S JB2 S S B S JB2 S B S JB2 S S HL S C XR XL S XR S WR KL HR HR HR S B S OL B OL S WR B S OL S C B S OR B OR S B S OL S WR S HR S B S JD2 S S WL B B S JB3 S S C B S JD2 S B B S JB3 S S B S OL S KL S S F' },
   { name: 'Stratosphere', theme: 'sunset', par: 88.72, path: 'S B S JB2 S HR HR HR S B S OL B OR T T BL S W B S OR S C HR HR HR HR B S JB2 S B S J1 S S B B S JB4 S S BL B S OR S C BL WR S B S OL B OR S W S B S OL B OL B S OL B OL S XR XL S XR S C B S JB2 S S WL S HL HL S F' },
   { name: 'Madhouse', theme: 'night', par: 60.72, path: 'S B S JB2 S S HR T T S B B S JB4 S S B S J2 S B S OL HL S C HL HL HL B S JD2 S S KL B S J1 S S XR XL S XR S XL S XR S B S OR B OL S C GL HL HL HL S W WL S XR XL S XR S F' },
-  { name: 'Barrel Roll Bay', theme: 'sunset', par: 31.91, path: 'S B S UU S B S QL S C BR B S JB4 S2 KL S B S QR S C BL S DD S B J2 S F' }
+  { name: 'Barrel Roll Bay', theme: 'sunset', par: 31.91, path: 'S B S UU S B S QL S C BR B S JB4 S2 KL S B S QR S C BL S DD S B J2 S F' },
+  { name: 'Hoop Dreams', theme: 'meadow', par: 25.65, path: 'S B B S JB4 S2 C BR S B S JB4 S2 BL S U S C B JB4 S3 D S F' }
 ];
