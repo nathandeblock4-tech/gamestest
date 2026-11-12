@@ -445,5 +445,6 @@ export const TRACKS = [
   { name: 'Madhouse', theme: 'night', par: 60.72, path: 'S B S JB2 S S HR T T S B B S JB4 S S B S J2 S B S OL HL S C HL HL HL B S JD2 S S KL B S J1 S S XR XL S XR S XL S XR S B S OR B OL S C GL HL HL HL S W WL S XR XL S XR S F' },
   { name: 'Barrel Roll Bay', theme: 'sunset', par: 31.91, path: 'S B S UU S B S QL S C BR B S JB4 S2 KL S B S QR S C BL S DD S B J2 S F' },
   { name: 'Hoop Dreams', theme: 'meadow', par: 25.65, path: 'S B B S JB4 S2 C BR S B S JB4 S2 BL S U S C B JB4 S3 D S F' },
-  { name: 'Needle Bridge', theme: 'night', par: 20.99, path: 'S B S N N S BL S N S C U U S N N N S BR B S DD S C N S F' }
+  { name: 'Needle Bridge', theme: 'night', par: 20.99, path: 'S B S N N S BL S N S C U U S N N N S BR B S DD S C N S F' },
+  { name: 'Plunge', theme: 'snow', par: 29.61, path: 'S B UU S UU S C BR S B S DD S2 DD S C BL S UU S B QL S DD S F' }
 ];
