@@ -52,7 +52,7 @@
 <div class="hud" id="gear"><b id="gearN">1</b><div id="rpm"><i id="rpmFill"></i></div></div>
 <div class="hud" id="cp"></div>
 <div class="hud" id="flash"></div>
-<div class="hud" id="keys">W/↑ gas · S/↓ brake · A D steer · Space handbrake · R restart · Enter checkpoint · C camera · Esc menu</div>
+<div class="hud" id="keys">W/↑ gas · S/↓ brake · A D steer · Space handbrake · in the air: Space+A/D roll, Space+W/S flip · R restart · Enter checkpoint · C camera · Esc menu</div>
 <canvas class="hud" id="map" width="180" height="180"></canvas>
 
 <div class="ov on" id="menu"><div class="box">
@@ -61,7 +61,7 @@
   <div class="tracks" id="tracks"></div>
   <div style="margin-top:14px"><button class="btn g" id="gfx"></button></div>
   <div class="help" id="medalCount"></div>
-  <div class="help">W or ↑ gas · S or ↓ brake / reverse · A D or ← → steer · Space handbrake (drift)<br>R restart · Enter back to last checkpoint · C change camera · G ghost on/off · Esc menu</div>
+  <div class="help">W or ↑ gas · S or ↓ brake / reverse · A D or ← → steer · Space handbrake (drift) · in the air hold Space + A/D to barrel roll, Space + W/S to flip<br>R restart · Enter back to last checkpoint · C change camera · G ghost on/off · Esc menu</div>
 </div></div>
 <div class="ov" id="fin"><div class="box">
   <div class="tag" id="finName"></div>
@@ -202,6 +202,7 @@ function buildWorld(tr) {
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.computeVertexNormals();
   const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })); mesh.receiveShadow = true; mesh.castShadow = true; world.add(mesh);
   const lam = c => new THREE.MeshLambertMaterial({ color: c, flatShading: true });
+  for (const h of (tr.hoops || [])) { const m = new THREE.Mesh(new THREE.TorusGeometry(6.9, 0.55, 10, 40), new THREE.MeshStandardMaterial({ color: 0xff8c1a, emissive: 0xff6a00, emissiveIntensity: 0.6, roughness: 0.4 })); m.position.set(h.p[0], h.p[1], h.p[2]); m.rotation.y = Math.atan2(h.f[0], h.f[2]); world.add(m); }
   for (const g of tr.gates) { // arch over the road
     const colr = g.type === 'start' ? 0x34d399 : g.type === 'finish' ? 0xff5a36 : 0x3b9bff, grp = new THREE.Group();
     for (const s of [1, -1]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.9, 7.4, 0.9), lam(0xe8ecf3)); post.position.set(s * (HWR + 1), 3.7, 0); post.castShadow = true; grp.add(post); const fl = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.6, 2.2), lam(colr)); fl.position.set(s * (HWR + 1), 9.2, 1.1); grp.add(fl); }
@@ -332,6 +333,7 @@ function frame(now) {
       if (car.started && !car.finished && (recN++ % 6) === 0) rec.push(+car.p[0].toFixed(2), +car.p[1].toFixed(2), +car.p[2].toFixed(2), +car.q[0].toFixed(3), +car.q[1].toFixed(3), +car.q[2].toFixed(3), +car.q[3].toFixed(3));
       if (car.event === 'check') { car.event = null; splits.push(car.time); const bs = bestSplits && bestSplits[splits.length - 1]; flash('CHECKPOINT ' + car.cp + '/' + track.nCheck + (bs ? diffHtml(car.time - bs) : '')); beep(880, 0.15); setTimeout(() => beep(1320, 0.2), 90); }
       if (car.event === 'finish') { car.event = null; finish(); }
+      if (car.event === 'trick') { car.event = null; flash('🌀 ' + car.trick + '!'); beep(660, 0.12); setTimeout(() => beep(990, 0.12), 80); setTimeout(() => beep(1480, 0.2), 160); }
     }
     if (acc > DT * 4) acc = 0;
     poseCar(carMesh, car.p, car.q, car); engineSound(state === 'play', keys.w || keys.arrowup || auto); effects(dtR);

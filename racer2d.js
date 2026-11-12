@@ -37,7 +37,7 @@ function buildWorld(tr) {
     const fr = pc.frames, n = fr.length - 1, step = pc.kind === 'straight' ? 2 : 1;
     for (let i = 0; i < n; i += step) {
       const A = fr[i], B = fr[Math.min(n, i + step)], alt = (segN++ & 1);
-      const P = (f, x, y) => [f.p[0] + f.l[0] * x + f.u[0] * y, f.p[1] + f.l[1] * x + f.u[1] * y, f.p[2] + f.l[2] * x + f.u[2] * y];
+      const P = (f, x0, y) => { const x = x0 * (f.w || 1); return [f.p[0] + f.l[0] * x + f.u[0] * y, f.p[1] + f.l[1] * x + f.u[1] * y, f.p[2] + f.l[2] * x + f.u[2] * y]; };
       let road = alt ? [52, 56, 68] : [59, 63, 76];
       if (pc.type === 'boost') road = alt ? [250, 200, 26] : [217, 158, 13];
       if ((pc.type === 'start' || pc.type === 'finish') && i === 0) road = [235, 235, 240];
@@ -52,6 +52,7 @@ function buildWorld(tr) {
       Q([B(x1, 0, -1.6), B(x2, 0, -1.6), B(x2, hh, -1.6), B(x1, hh, -1.6)], [250, 204, 26]); Q([B(x1, hh, -1.6), B(x2, hh, -1.6), B(x2, hh, 1.6), B(x1, hh, 1.6)], [200, 160, 20]); Q([B(x1, 0, -1.6), B(x1, 0, 1.6), B(x1, hh, 1.6), B(x1, hh, -1.6)], [40, 40, 46]); }
   }
   for (const pl of tr.pillars) { const x = pl.x, z = pl.z, y = pl.y; Q([[x - 1.5, 0, z], [x + 1.5, 0, z], [x + 1.5, y, z], [x - 1.5, y, z]], [185, 192, 204]); Q([[x, 0, z - 1.5], [x, 0, z + 1.5], [x, y, z + 1.5], [x, y, z - 1.5]], [165, 172, 186]); }
+  for (const h of (tr.hoops || [])) { const R = 7.5, T = 1.1, lx = -h.f[2], lz = h.f[0], N = 12; for (let k = 0; k < N; k++) { const a0 = k / N * 6.2832, a1 = (k + 1) / N * 6.2832, pt = (a, r) => [h.p[0] + lx * Math.cos(a) * r, h.p[1] + Math.sin(a) * r, h.p[2] + lz * Math.cos(a) * r]; Q([pt(a0, R), pt(a1, R), pt(a1, R - T), pt(a0, R - T)], k & 1 ? [255, 140, 26] : [255, 205, 60]); } }
   for (const gt of tr.gates) { const col = gt.type === 'start' ? [52, 211, 153] : gt.type === 'finish' ? [255, 90, 54] : [59, 155, 255], G2 = (x, y) => [gt.p[0] + gt.l[0] * x, gt.p[1] + y, gt.p[2] + gt.l[2] * x];
     Q([G2(-HW - 1.5, 6.8), G2(HW + 1.5, 6.8), G2(HW + 1.5, 8.4), G2(-HW - 1.5, 8.4)], col);
     for (const s of [1, -1]) Q([G2(s * (HW + 0.6), 0), G2(s * (HW + 1.5), 0), G2(s * (HW + 1.5), 7), G2(s * (HW + 0.6), 7)], [232, 236, 243]); }
@@ -177,6 +178,7 @@ function frame(now) {
       if (car.started && !car.finished && (recN++ % 6) === 0) rec.push(+car.p[0].toFixed(2), +car.p[1].toFixed(2), +car.p[2].toFixed(2), +car.q[0].toFixed(3), +car.q[1].toFixed(3), +car.q[2].toFixed(3), +car.q[3].toFixed(3));
       if (car.event === 'check') { car.event = null; splits.push(car.time); const bs = bestSplits && bestSplits[splits.length - 1]; flash('CHECKPOINT ' + car.cp + '/' + track.nCheck + (bs ? diffHtml(car.time - bs) : '')); beep(880, 0.15); setTimeout(() => beep(1320, 0.2), 90); }
       if (car.event === 'finish') { car.event = null; finish(); }
+      if (car.event === 'trick') { car.event = null; flash('🌀 ' + car.trick + '!'); beep(660, 0.12); setTimeout(() => beep(990, 0.12), 80); setTimeout(() => beep(1480, 0.2), 160); }
     }
     if (acc > DT * 4) acc = 0;
     engineSound(state === 'play', keys.w || keys.arrowup || auto);

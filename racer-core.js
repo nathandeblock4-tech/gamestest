@@ -28,6 +28,13 @@ const CURVES = {
   jump: u => u < 0.6 ? { p: [0, 5.33 * u * u, -h + CELL * u], t: [0, 10.66 * u, CELL], b: 0 } : { p: [0, 1.92 + 6.4 * (u - 0.6), -h + CELL * u], t: [0, 6.4, CELL], b: 0 },   // curve up, then a straight lip so the car leaves cleanly
   bigjump: u => u < 0.6 ? { p: [0, 8.33 * u * u, -h + CELL * u], t: [0, 16.66 * u, CELL], b: 0 } : { p: [0, 3.0 + 10 * (u - 0.6), -h + CELL * u], t: [0, 10, CELL], b: 0 },   // a taller, steeper launch ramp
   loopleft: u => loopCurve(u, 1), loopright: u => loopCurve(u, -1),
+  // corkscrew: the road winds once around an axis above it while running straight ahead, rolling the car all the way over
+  screwleft: u => screw(u, 1), screwright: u => screw(u, -1),
+  // very steep ramps: two levels in one block
+  steepup: u => ({ p: [0, 2 * HSTEP * sm(u), -h + CELL * u], t: [0, 2 * HSTEP * 6 * u * (1 - u), CELL], b: 0 }),
+  steepdown: u => ({ p: [0, -2 * HSTEP * sm(u), -h + CELL * u], t: [0, -2 * HSTEP * 6 * u * (1 - u), CELL], b: 0 }),
+  // narrow bridge: the road squeezes to under half width in the middle
+  narrow: u => ({ p: [0, 0, -h + CELL * u], t: [0, 0, 1], b: 0, w: 1 - 0.56 * Math.pow(Math.sin(PI * u), 2) }),
   // spiral ramps: a wide turn that climbs (or drops) one level, lightly banked
   helixleft: u => helix(CURVES.bigleft(u), u, 1, 1), helixright: u => helix(CURVES.bigright(u), u, -1, 1),
   dropleft: u => helix(CURVES.bigleft(u), u, 1, -1), dropright: u => helix(CURVES.bigright(u), u, -1, -1),
@@ -37,6 +44,8 @@ const CURVES = {
   // two rolling bumps
   bumps: u => ({ p: [0, 0.55 * (1 - Math.cos(4 * PI * u)), -h + CELL * u], t: [0, 0.55 * 4 * PI * Math.sin(4 * PI * u), CELL], b: 0 })
 };
+const SCREW_R = 12, SCREW_CELLS = 5;
+function screw(u, s) { const a = 2 * PI * sm(u), da = 2 * PI * 6 * u * (1 - u), r = SCREW_R, L = SCREW_CELLS * CELL; return { p: [-s * r * Math.sin(a), r * (1 - Math.cos(a)), -h + L * u], t: [-s * r * Math.cos(a) * da, r * Math.sin(a) * da, L], b: 0, r: [Math.cos(a), -s * Math.sin(a), 0] }; }
 function helix(c, u, s, dir) { const L = 1.5 * CELL * PI / 2; c.p[1] += dir * HSTEP * sm(u); c.t = [c.t[0] * L, dir * HSTEP * 6 * u * (1 - u), c.t[2] * L]; c.b = s * 0.16 * Math.sin(PI * u); c.p[1] += (HW + RAILW) * Math.sin(Math.abs(c.b)); return c; }
 // Loop shape: curvature starts at zero, peaks at the top and eases back to zero (so the car is fed into it smoothly).
 // It is two cells long and slides one cell sideways so the exit clears the entry.
@@ -48,11 +57,12 @@ function loopCurve(u, s) {
   return { p: [s * CELL * sm(u), lerp(LOOP.y), -h + lerp(LOOP.z)], t: [s * CELL * 6 * u * (1 - u) / LOOP.L, Math.sin(a), Math.cos(a)], b: 0, r: [1, 0, 0] };
 }
 const KIND = { start: 'straight', finish: 'straight', check: 'straight', boost: 'straight', land: 'straight', blockleft: 'straight', blockright: 'straight', tunnel: 'straight' };
-const SEGS = { straight: 4, left: 12, right: 12, bigleft: 22, bigright: 22, bankleft: 22, bankright: 22, up: 12, down: 12, jump: 10, bigjump: 12, loopleft: 96, loopright: 96, helixleft: 24, helixright: 24, dropleft: 24, dropright: 24, wallleft: 26, wallright: 26, bumps: 20 };
+const SEGS = { straight: 4, left: 12, right: 12, bigleft: 22, bigright: 22, bankleft: 22, bankright: 22, up: 12, down: 12, jump: 10, bigjump: 12, loopleft: 96, loopright: 96, helixleft: 24, helixright: 24, dropleft: 24, dropright: 24, wallleft: 26, wallright: 26, bumps: 20, screwleft: 110, screwright: 110, steepup: 14, steepdown: 14, narrow: 10 };
 // exit: [cells left, cells forward, turn (+1 = left), level change]; cells: extra occupied cells [left, forward]
-const EXIT = { straight: [0, 1, 0, 0], left: [1, 0, 1, 0], right: [-1, 0, 3, 0], bigleft: [2, 1, 1, 0], bigright: [-2, 1, 3, 0], bankleft: [2, 1, 1, 0], bankright: [-2, 1, 3, 0], up: [0, 1, 0, 1], down: [0, 1, 0, -1], jump: [0, 1, 0, 0], bigjump: [0, 1, 0, 0], loopleft: [1, 2, 0, 0], loopright: [-1, 2, 0, 0], helixleft: [2, 1, 1, 1], helixright: [-2, 1, 3, 1], dropleft: [2, 1, 1, -1], dropright: [-2, 1, 3, -1], wallleft: [2, 1, 1, 0], wallright: [-2, 1, 3, 0], bumps: [0, 1, 0, 0] };
-const EXTRA = { bigleft: [[0, 1], [1, 1]], bigright: [[0, 1], [-1, 1]], bankleft: [[0, 1], [1, 1]], bankright: [[0, 1], [-1, 1]], loopleft: [[1, 0], [0, 1], [1, 1]], loopright: [[-1, 0], [0, 1], [-1, 1]], helixleft: [[0, 1], [1, 1]], helixright: [[0, 1], [-1, 1]], dropleft: [[0, 1], [1, 1]], dropright: [[0, 1], [-1, 1]], wallleft: [[0, 1], [1, 1]], wallright: [[0, 1], [-1, 1]] };
-const TOKEN = { S: 'straight', L: 'left', R: 'right', BL: 'bigleft', BR: 'bigright', KL: 'bankleft', KR: 'bankright', U: 'up', D: 'down', B: 'boost', C: 'check', F: 'finish', OL: 'loopleft', OR: 'loopright', HL: 'helixleft', HR: 'helixright', GL: 'dropleft', GR: 'dropright', WL: 'wallleft', WR: 'wallright', W: 'bumps', XL: 'blockleft', XR: 'blockright', T: 'tunnel' };
+const EXIT = { straight: [0, 1, 0, 0], left: [1, 0, 1, 0], right: [-1, 0, 3, 0], bigleft: [2, 1, 1, 0], bigright: [-2, 1, 3, 0], bankleft: [2, 1, 1, 0], bankright: [-2, 1, 3, 0], up: [0, 1, 0, 1], down: [0, 1, 0, -1], jump: [0, 1, 0, 0], bigjump: [0, 1, 0, 0], loopleft: [1, 2, 0, 0], loopright: [-1, 2, 0, 0], helixleft: [2, 1, 1, 1], helixright: [-2, 1, 3, 1], dropleft: [2, 1, 1, -1], dropright: [-2, 1, 3, -1], wallleft: [2, 1, 1, 0], wallright: [-2, 1, 3, 0], bumps: [0, 1, 0, 0], screwleft: [0, 5, 0, 0], screwright: [0, 5, 0, 0], steepup: [0, 1, 0, 2], steepdown: [0, 1, 0, -2], narrow: [0, 1, 0, 0] };
+const EXTRA = { bigleft: [[0, 1], [1, 1]], bigright: [[0, 1], [-1, 1]], bankleft: [[0, 1], [1, 1]], bankright: [[0, 1], [-1, 1]], loopleft: [[1, 0], [0, 1], [1, 1]], loopright: [[-1, 0], [0, 1], [-1, 1]], helixleft: [[0, 1], [1, 1]], helixright: [[0, 1], [-1, 1]], dropleft: [[0, 1], [1, 1]], dropright: [[0, 1], [-1, 1]], wallleft: [[0, 1], [1, 1]], wallright: [[0, 1], [-1, 1]],
+  screwleft: [[0, 1], [0, 2], [0, 3], [0, 4], [1, 0], [1, 1], [1, 2], [1, 3], [1, 4], [-1, 0], [-1, 1], [-1, 2], [-1, 3], [-1, 4]], screwright: [[0, 1], [0, 2], [0, 3], [0, 4], [1, 0], [1, 1], [1, 2], [1, 3], [1, 4], [-1, 0], [-1, 1], [-1, 2], [-1, 3], [-1, 4]] };
+const TOKEN = { S: 'straight', L: 'left', R: 'right', BL: 'bigleft', BR: 'bigright', KL: 'bankleft', KR: 'bankright', U: 'up', D: 'down', B: 'boost', C: 'check', F: 'finish', OL: 'loopleft', OR: 'loopright', HL: 'helixleft', HR: 'helixright', GL: 'dropleft', GR: 'dropright', WL: 'wallleft', WR: 'wallright', W: 'bumps', XL: 'blockleft', XR: 'blockright', T: 'tunnel', QL: 'screwleft', QR: 'screwright', UU: 'steepup', DD: 'steepdown', N: 'narrow' };
 
 function toWorld(pc, lp) { const a = pc.d * PI / 2, c = Math.cos(a), s = Math.sin(a); return [pc.gx * CELL + lp[0] * c + lp[2] * s, pc.lv * HSTEP + ROADY + lp[1], pc.gz * CELL - lp[0] * s + lp[2] * c]; }
 function toWorldDir(pc, lp) { const a = pc.d * PI / 2, c = Math.cos(a), s = Math.sin(a); return [lp[0] * c + lp[2] * s, lp[1], -lp[0] * s + lp[2] * c]; }
@@ -66,6 +76,8 @@ export function buildTrack(def) {
     const kind = KIND[type] || type, pc = { type, kind, gx, gz, lv, d, i: pieces.length }; pieces.push(pc);
     const ex = EXIT[kind];
     claim(gx, gz, lv, pc.i); if (kind === 'up') claim(gx, gz, lv + 1, pc.i); if (kind === 'down') claim(gx, gz, lv - 1, pc.i);
+    if (kind === 'steepup') { claim(gx, gz, lv + 1, pc.i); claim(gx, gz, lv + 2, pc.i); } if (kind === 'steepdown') { claim(gx, gz, lv - 1, pc.i); claim(gx, gz, lv - 2, pc.i); }
+    if (kind.startsWith('screw')) { if (lv < 1) throw new Error('Track "' + def.name + '": a corkscrew must be at least one level up'); for (const e of [[0, 0]].concat(EXTRA[kind])) for (const dl of [-1, 1, 2, 3]) claim(gx + e[0] * LX[d] + e[1] * DX[d], gz + e[0] * LZ[d] + e[1] * DZ[d], lv + dl, pc.i); }
     for (const e of EXTRA[kind] || []) claim(gx + e[0] * LX[d] + e[1] * DX[d], gz + e[0] * LZ[d] + e[1] * DZ[d], lv, pc.i);
     if (kind.startsWith('helix') || kind.startsWith('drop')) for (const e of [[0, 0]].concat(EXTRA[kind])) { if (e[0] || e[1]) claim(gx + e[0] * LX[d] + e[1] * DX[d], gz + e[0] * LZ[d] + e[1] * DZ[d], lv + ex[3], pc.i); else claim(gx, gz, lv + ex[3], pc.i); }
     if (kind.startsWith('wall')) for (const e of [[0, 0]].concat(EXTRA[kind])) claim(gx + e[0] * LX[d] + e[1] * DX[d], gz + e[0] * LZ[d] + e[1] * DZ[d], lv + 1, pc.i);
@@ -84,7 +96,7 @@ export function buildTrack(def) {
   if (pieces[pieces.length - 1].type !== 'finish') put('finish');
 
   // geometry
-  const tris = [], mats = [], rp = [], rc = [], samples = [], gates = [], pads = [], pillars = [], tunnels = [];
+  const tris = [], mats = [], rp = [], rc = [], samples = [], gates = [], pads = [], pillars = [], tunnels = [], hoops = [];
   const nrm = [];
   const quad = (a, b, c2, d2, col, mat, ref) => {
     if (mat === 0) { const m = [(a[0] + b[0] + c2[0] + d2[0]) / 4, (a[1] + b[1] + c2[1] + d2[1]) / 4, (a[2] + b[2] + c2[2] + d2[2]) / 4]; tris.push(a, b, m, b, d2, m, d2, c2, m, c2, a, m); mats.push(0, 0, 0, 0); nrm.push(ref, ref, ref, ref); }   // road: 4 triangles around the centre so twisted pieces are the same left and right
@@ -100,10 +112,10 @@ export function buildTrack(def) {
       let l = norm(cross([0, 1, 0], fw)), up = cross(fw, l);
       if (c.r) { const R = toWorldDir(pc, c.r); l = norm(sub(R, mul(fw, dot(R, fw)))); up = cross(fw, l); }
       if (c.b) { const cb = Math.cos(c.b), sb = Math.sin(c.b), l2 = sub(mul(l, cb), mul(up, sb)), u2 = add(mul(up, cb), mul(l, sb)); l = l2; up = u2; }
-      frames.push({ p, f: fw, l, u: up });
+      frames.push({ p, f: fw, l, u: up, w: c.w || 1 });
     }
     pc.frames = frames; pc.y = toWorld(pc, f(0.5).p)[1];
-    const P = (fr, x, y) => [fr.p[0] + fr.l[0] * x + fr.u[0] * y, fr.p[1] + fr.l[1] * x + fr.u[1] * y, fr.p[2] + fr.l[2] * x + fr.u[2] * y];
+    const P = (fr, x0, y) => { const x = x0 * fr.w; return [fr.p[0] + fr.l[0] * x + fr.u[0] * y, fr.p[1] + fr.l[1] * x + fr.u[1] * y, fr.p[2] + fr.l[2] * x + fr.u[2] * y]; };
     for (let i = 0; i < n; i++) {
       const A = frames[i], B = frames[i + 1], alt = (segN++ & 1);
       const strip = (x1, y1, x2, y2, col, mat, ref) => quad(P(A, x1, y1), P(A, x2, y2), P(B, x1, y1), P(B, x2, y2), col, mat, ref);
@@ -125,11 +137,12 @@ export function buildTrack(def) {
       const segLen = len(sub(B.p, A.p)), ns = Math.max(1, Math.round(segLen / 2.5));
       for (let k = 0; k < ns; k++) { const u = k / ns; let sp2 = add(A.p, mul(sub(B.p, A.p), u));
         if (pc.type === 'blockleft' || pc.type === 'blockright') { const uu = (i + u) / n, off = (pc.type === 'blockleft' ? -1 : 1) * HW * 0.52 * Math.pow(Math.sin(PI * uu), 2); sp2 = add(sp2, mul(A.l, off)); }   // the racing line swerves around the block
-        samples.push({ p: sp2, f: A.f, pc: pc.i, d: dist + segLen * u, loop: pc.kind === 'loopleft' || pc.kind === 'loopright' }); }
+        samples.push({ p: sp2, f: A.f, pc: pc.i, d: dist + segLen * u, loop: pc.kind === 'loopleft' || pc.kind === 'loopright' || pc.kind.startsWith('screw') }); }
       dist += segLen;
     }
     if (pc.kind === 'jump' || pc.kind === 'bigjump') { // end cap + air samples over the gap
       const E = frames[n], nx = pieces[pc.i + 1], L0 = toWorld(nx, CURVES.straight(0).p), gap = len(sub(L0, E.p)), ns = Math.round(gap / 2.5);
+      if (pc.kind === 'bigjump') hoops.push({ p: [E.p[0] + E.f[0] * 13, E.p[1] + 5.2, E.p[2] + E.f[2] * 13], f: [E.f[0], 0, E.f[2]] });   // a hoop to fly through just after take-off
       for (let k = 0; k < ns; k++) { const u = k / ns; const p = add(E.p, mul(sub(L0, E.p), u)); p[1] += 5 * Math.sin(PI * u); samples.push({ p, f: E.f, pc: pc.i, d: dist + gap * u, air: true }); }
       dist += gap;
     }
@@ -165,7 +178,7 @@ export function buildTrack(def) {
   for (const [k, i] of occ) { const [x, z] = k.split(','); const kk = x + ',' + z; let a = cells.get(kk); if (!a) cells.set(kk, a = []); if (a.indexOf(i) < 0) a.push(i); }
   const st = pieces[0], sp = toWorld(st, [0, 0, -h + 7]), sd = [DX[st.d], 0, DZ[st.d]];
   let minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9; for (const s of samples) { minX = Math.min(minX, s.p[0]); maxX = Math.max(maxX, s.p[0]); minZ = Math.min(minZ, s.p[2]); maxZ = Math.max(maxZ, s.p[2]); }
-  return { name: def.name, theme: def.theme || 'meadow', tunnels, pieces, T, NR, mats, nT, grid, G, cells, samples, gates, pads, pillars, rend: { pos: rp, col: rc }, start: { p: sp, f: sd }, nCheck: pieces.filter(p => p.type === 'check').length, length: dist, bounds: { minX, maxX, minZ, maxZ } };
+  return { name: def.name, theme: def.theme || 'meadow', tunnels, hoops, pieces, T, NR, mats, nT, grid, G, cells, samples, gates, pads, pillars, rend: { pos: rp, col: rc }, start: { p: sp, f: sd }, nCheck: pieces.filter(p => p.type === 'check').length, length: dist, bounds: { minX, maxX, minZ, maxZ } };
 }
 
 // ---------- collision queries ----------
@@ -214,7 +227,7 @@ export const CAR = {
   wheelI: 1.7, rollCentre: 0.3, gravity: 21, mu: 1.75, muGrass: 0.85, muSlide: 0.88, slipPeak: 0.105,
   gears: [3.4, 2.35, 1.75, 1.36, 1.1, 0.92], final: 3.9, rpmIdle: 1300, rpmMax: 8200, torque: 800, split: [0.36, 0.64], shiftTime: 0.09,
   brakeT: [5600, 3600], handT: 9500, drag: 0.95, roll: 0.012, rollGrass: 0.22, downforce: 5.2, aeroFront: 0.46,
-  maxSteer: 0.6, steerRate: 5.5, steerReturn: 8, boost: 52000, vmax: 118, airDamp: 0.3, aeroStab: 2.4, aeroDamp: 0.05,
+  maxSteer: 0.6, steerRate: 5.5, steerReturn: 8, boost: 52000, vmax: 118, airDamp: 0.3, aeroStab: 2.4, aeroDamp: 0.05, airRoll: 14, airFlip: 9,
   spheres: [[0.82, 0.46, 1.85, 0.42], [-0.82, 0.46, 1.85, 0.42], [0.82, 0.46, -1.85, 0.42], [-0.82, 0.46, -1.85, 0.42], [0.62, 0.6, 0.6, 0.36], [-0.62, 0.6, 0.6, 0.36], [0.62, 0.6, -0.9, 0.36], [-0.62, 0.6, -0.9, 0.36], [0, 0.42, 0, 0.5]]
 };
 const RAYS = [[0, 0], [0.22, 0.0725], [-0.22, 0.0725]]; // extra rays ahead of / behind the axle so the round wheel meets ramps smoothly
@@ -327,7 +340,17 @@ function subStep(c, inp, dt, tr) {
   c.v[0] += F[0] / P.mass * dt; c.v[1] += F[1] / P.mass * dt; c.v[2] += F[2] / P.mass * dt;
   const wl = [dot(c.w, ax), dot(c.w, ay), dot(c.w, az)], tl = [dot(Tq, ax), dot(Tq, ay), dot(Tq, az)], I = P.inertia;
   wl[0] += (tl[0] - (I[2] - I[1]) * wl[1] * wl[2]) / I[0] * dt; wl[1] += (tl[1] - (I[0] - I[2]) * wl[2] * wl[0]) / I[1] * dt; wl[2] += (tl[2] - (I[1] - I[0]) * wl[0] * wl[1]) / I[2] * dt;
-  if (grounded === 0 && sp > 5) { // in the air the body acts like a dart: the wing and floor swing the nose toward the direction of travel
+  if (grounded === 0) { // air tricks: hold the handbrake and steer to barrel-roll, gas/brake to flip. Rotation is counted and announced on landing.
+    const st = clamp(inp.steer || 0, -1, 1);
+    if (inp.hand && !c.finished) { wl[2] += -st * P.airRoll * dt; wl[0] += ((inp.throttle || 0) - (inp.brake || 0)) * P.airFlip * dt; } else wl[1] += st * 1.2 * dt;
+    c.airT = (c.airT || 0) + dt; c.airRoll = (c.airRoll || 0) + wl[2] * dt; c.airPitch = (c.airPitch || 0) + wl[0] * dt; c.airYaw = (c.airYaw || 0) + wl[1] * dt;
+  } else if (grounded >= 2 && c.airT) {
+    const n = v => Math.floor(Math.abs(v) / (2 * PI) + 0.22), r = n(c.airRoll), f = n(c.airPitch), y = n(c.airYaw), parts = [];
+    if (r) parts.push((r > 1 ? r + 'x ' : '') + 'BARREL ROLL'); if (f) parts.push((f > 1 ? f + 'x ' : '') + (c.airPitch > 0 ? 'FRONT FLIP' : 'BACKFLIP')); if (y) parts.push((y * 360) + ' SPIN');
+    if (parts.length && ay[1] > 0.5 && !c.event) { c.event = 'trick'; c.trick = parts.join(' + '); c.tricks = (c.tricks || 0) + r + f + y; }
+    c.airT = 0; c.airRoll = 0; c.airPitch = 0; c.airYaw = 0;
+  }
+  if (grounded === 0 && sp > 5 && !(inp.hand && !c.finished)) { // in the air the body acts like a dart: the wing and floor swing the nose toward the direction of travel
     const vh = mul(c.v, 1 / sp), k = P.aeroStab * sp * sp, kdmp = Math.exp(-P.aeroDamp * sp * dt);
     wl[0] += -dot(vh, ay) * k / I[0] * dt; wl[1] += dot(vh, ax) * k / I[1] * dt; wl[0] *= kdmp; wl[1] *= kdmp; wl[2] *= Math.exp(-P.airDamp * dt);
   } else { const kd = Math.exp(-(grounded ? 0.25 : P.airDamp) * dt); wl[0] *= kd; wl[1] *= kd; wl[2] *= kd; }
