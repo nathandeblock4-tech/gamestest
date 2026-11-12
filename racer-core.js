@@ -414,5 +414,6 @@ export const TRACKS = [
   { name: 'Titan', theme: 'desert', par: 43.51, path: 'S B S OL S HR HR S C B S J1 S WL S XR XL S GL C T T S KR B S OR S W S HL S C XL S GR S2 WR S BL S B S OL S F' },
   { name: 'Sky Ladder', theme: 'sunset', par: 52.15, path: 'S HL HL HL B S OL B OL GL BL S HR HR HR S W HL HL C HL KL B S JD2 S S HL HL S GL B S J1 S B S JB2 S S C HL HL S S F' },
   { name: 'Thunder Coil', theme: 'night', par: 47.12, path: 'S B S J2 S B S OR B OL S B S OL S KR HL XL S XR S WL C XL S XR W S HL HL S KL S HR HR S HL HL S WR S C GL S F' },
-  { name: 'Freefall', theme: 'snow', par: 77.5, path: 'S WL HL HL HL S B S JD1 S B S OR S B S JD2 S B S JD2 S B S OR S C KR S HL HL HL S W S KL S B S JB2 S S T T S B S OL S C B S JD2 S S B S JB2 S B S JD1 S B S OL S B S OL B OL W S HL HL HL C S F' }
+  { name: 'Freefall', theme: 'snow', par: 77.5, path: 'S WL HL HL HL S B S JD1 S B S OR S B S JD2 S B S JD2 S B S OR S C KR S HL HL HL S W S KL S B S JB2 S S T T S B S OL S C B S JD2 S S B S JB2 S B S JD1 S B S OL S B S OL B OL W S HL HL HL C S F' },
+  { name: 'Loop Factory', theme: 'night', par: 72.61, path: 'S B B S JB4 S S HL S B S OR B OL HR HR S B S J1 S S W B B S JB4 S C B S OR B B S JB3 S WL S B S JB2 S S B S OL B S OL B OL B S OR C B S OR B OR B S OR S WR S HR HR HR S S F' }
 ];
