@@ -365,17 +365,17 @@ export function botInput(c, tr, skill) {
 // par = fastest clean run by the test driver (the "author" time)
 export const TRACKS = [
   { name: 'First Lap', par: 11.93, path: 'S3 BL S2 C BL S3 BL S F' },
-  { name: 'Twister', par: 15.52, path: 'S R S L S BL C S L S R S BR S2 F' },
-  { name: 'Boost Alley', par: 16.21, path: 'S B S B S4 BL S C B S3 BR S2 R S L S F' },
-  { name: 'Hill Climb', par: 17.46, path: 'S U U S C D D S R S L S U S C BL D S F' },
+  { name: 'Twister', par: 15.67, path: 'S BR S BL S BL C S BL S BR S BR S2 F' },
+  { name: 'Boost Alley', par: 16.06, path: 'S B S B S4 BL S C B S3 BR S2 BR S BL S F' },
+  { name: 'Hill Climb', par: 17.53, path: 'S U U S C D D S BR S BL S U S C BL D S F' },
   { name: 'Bankers', par: 13.44, path: 'S B S KL S2 C KL B S KR S C KR S2 F' },
   { name: 'Big Air', par: 16.98, path: 'S B S J1 S2 BL S C B J2 S2 BL S3 C BL S F' },
   { name: 'Loop-de-Loop', par: 15.12, path: 'S B S OL S BL S C B S OR S BL S2 F' },
-  { name: 'Snake Pass', par: 16.62, path: 'S L R S R L S C L S R R S C L R S F' },
-  { name: 'Rollercoaster', par: 20.17, path: 'S B S OL S U S KR S C D B S OR S R S L S F' },
-  { name: 'Sky Bridge', par: 23.62, path: 'S4 BR S C BR U S BR S4 D S C L S U BL S D S F' },
+  { name: 'Snake Pass', par: 19.0, path: 'S BL BR S BR BL S C BL S BR BR S C BL BR S F' },
+  { name: 'Rollercoaster', par: 20.06, path: 'S B S OL S U S KR S C D B S OR S BR S BL S F' },
+  { name: 'Sky Bridge', par: 24.72, path: 'S4 BR S C BR U S BR S4 D S C BL S U BL S D S F' },
   { name: 'Corkscrew', par: 20.96, path: 'S B B J2 S B OL S C KL S B OR S U S BL D B J1 S F' },
-  { name: 'Canyon Run', par: 27.72, path: 'S B S KR S U S B J1 S C D S L S R S BL S B S KL C S U S BR D S R S F' },
-  { name: 'Gauntlet', par: 33.51, path: 'S B L R S B J2 S C R R S U L S D B S KL S C L R L S B J1 S BR U S D R S F' },
-  { name: 'Stormbreaker', par: 33.92, path: 'S B S OR S KR S C U S B S J1 S D S L R S B S OL S C KL S2 BR S B S OR S2 R S F' }
+  { name: 'Canyon Run', par: 27.85, path: 'S B S KR S U S B J1 S C D S BL S BR S BL S B S KL C S U S BR D S BR S F' },
+  { name: 'Gauntlet', par: 34.12, path: 'S B BL BR S B S J2 S C BR BR S U S BL S D B S KL S C BL BR BL S2 BR U S D S BR S F' },
+  { name: 'Stormbreaker', par: 32.39, path: 'S B S OR S KR S C U S B S J1 S D S BL BR S B S OL S C KL S2 BR S B S OR S2 BR S F' }
 ];

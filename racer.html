@@ -92,7 +92,7 @@ function ld(k, d) { try { const v = JSON.parse(localStorage.getItem(k) || 'null'
 function sv(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 const fmt = t => Math.floor(t / 60) + ':' + (t % 60).toFixed(2).padStart(5, '0');
 const MED = [['🥉', 'Bronze', 1.5], ['🥈', 'Silver', 1.22], ['🥇', 'Gold', 1.08], ['💎', 'Author', 1.0]];
-const lowQ = !!ld('ts_low', false), tid = i => TRACKS[i].name.replace(/\W/g, ''), beats = (t, target) => Math.round(t * 100) <= Math.round(target * 100);
+const lowQ = !!ld('ts_low', false), tid = i => { let h = 0; for (const ch of TRACKS[i].path) h = (h * 31 + ch.charCodeAt(0)) | 0; return TRACKS[i].name.replace(/\W/g, '') + (h >>> 0).toString(36); }, beats = (t, target) => Math.round(t * 100) <= Math.round(target * 100);
 
 // ---------- renderer ----------
 if (window.__noGL) throw new Error('no WebGL');
