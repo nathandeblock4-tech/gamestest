@@ -4,7 +4,7 @@
 (function () {
   'use strict';
   if (window.__grPresence) return; window.__grPresence = true;
-  var FB = '';
+  var FB = 'https://game-site-2a81e-default-rtdb.firebaseio.com';
   var HUB = 'gameroom-hub-f8417eabf5faff202eed';
   function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
