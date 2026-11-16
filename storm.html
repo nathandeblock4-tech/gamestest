@@ -78,7 +78,7 @@
   .coins { background: rgba(0,0,0,.35); border: 1px solid rgba(255,210,58,.4); border-radius: 10px; padding: 7px 14px; font-size: 18px; } .coins b { color: #ffd23a; }
   #prev { position: absolute; left: 4%; top: 80px; width: 44vw; height: calc(100vh - 100px); pointer-events: none; }
   .tab { position: absolute; inset: 68px 0 0 0; } .tab.off { display: none; }
-  .side { position: absolute; right: 4%; top: 30px; width: 400px; background: rgba(14,18,36,.82); border: 1px solid #2e3654; border-radius: 16px; padding: 20px; text-align: left; }
+  .side { position: absolute; right: 4%; top: 20px; max-height: calc(100% - 30px); overflow: auto; width: 400px; background: rgba(14,18,36,.82); border: 1px solid #2e3654; border-radius: 16px; padding: 20px; text-align: left; }
   .side h3 { font-size: 16px; color: #aab3c8; margin-bottom: 10px; letter-spacing: .05em; }
   .modes { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
   .mode { background: #1b2033; border: 2px solid #2e3654; border-radius: 12px; padding: 10px 14px; cursor: pointer; text-align: left; color: #fff; font: inherit; }
@@ -609,6 +609,7 @@ function startMatch() {
   for (const p of PIECES.slice()) { scene.remove(p.mesh); if (p.col) COLS.splice(COLS.indexOf(p.col), 1); } PIECES.length = 0;
   const myName = (window.GR && window.GR.name && window.GR.name()) || 'You';
   ME = newFighter(true, myName); FIGHTERS = [ME];
+  if (MODE === '1v1') { T = 0; phase = 'play'; setup1v1(); $('sStart').classList.add('off'); $('sEnd').classList.add('off'); $('buyM').classList.add('off'); $('hud').style.display = 'block'; $('back').style.display = 'none'; ui(); lock(); return; }
   const names = BOT_NAMES.slice().sort(() => Math.random() - .5);
   for (let i = 0; i < 24; i++) { const b = newFighter(false, names[i]); b.jumpAt = 2 + Math.random() * 14; b.skill = [0.35, 0.6, 0.85][DIFF] * (0.75 + Math.random() * 0.5); FIGHTERS.push(b); }
   const a = Math.random() * Math.PI * 2; busA = [Math.cos(a) * HALF * 1.2, Math.sin(a) * HALF * 1.2]; busB = [-busA[0], -busA[1]]; busT = 0;
@@ -616,6 +617,48 @@ function startMatch() {
   storm = { x: 0, z: 0, r: HALF * 1.5, tx: c0[0], tz: c0[1], tr: 190, ph: 0, t: 0, mode: 'wait', from: null, dmg: 1 };
   T = 0; phase = 'play'; ME.state = 'bus'; $('sStart').classList.add('off'); $('sEnd').classList.add('off'); $('buyM').classList.add('off'); $('hud').style.display = 'block'; $('back').style.display = 'none';
   msg('Press SPACE to jump out of the airship!', 4); ui(); lock();
+}
+// ================= 1v1 build fight =================
+const ARENA = { x: 0, z: 330, y: 30, half: 36 }; let arenaBuilt = false, V1 = null;
+function buildArena() {
+  if (arenaBuilt) return; arenaBuilt = true; const A = ARENA, h = A.half;
+  const tc = document.createElement('canvas'); tc.width = tc.height = 256; const x = tc.getContext('2d'); x.fillStyle = '#4a5068'; x.fillRect(0, 0, 256, 256); x.strokeStyle = '#6a7290'; x.lineWidth = 4; for (let i = 0; i <= 256; i += 64) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, 256); x.stroke(); x.beginPath(); x.moveTo(0, i); x.lineTo(256, i); x.stroke(); }
+  const tex = new THREE.CanvasTexture(tc); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(h / 8, h / 8); tex.colorSpace = THREE.SRGBColorSpace;
+  const top = boxMesh(A.x - h, A.y - 3, A.z - h, A.x + h, A.y, A.z + h, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 })); addCol(A.x - h, A.y - 3, A.z - h, A.x + h, A.y, A.z + h, 'house');
+  boxMesh(A.x - h + 2, A.y - 14, A.z - h + 2, A.x + h - 2, A.y - 3, A.z + h - 2, std('#3a3f52'));
+  const neon = new THREE.MeshBasicMaterial({ color: '#c79bff' });
+  for (const [a, b, c, d] of [[-h, -h, h, -h + 0.4], [-h, h - 0.4, h, h], [-h, -h, -h + 0.4, h], [h - 0.4, -h, h, h]]) { boxMesh(A.x + a, A.y, A.z + b, A.x + c, A.y + 0.15, A.z + d, neon, false); }
+  for (const [a, b, c, d] of [[-h - 1, -h - 1, h + 1, -h], [-h - 1, h, h + 1, h + 1], [-h - 1, -h, -h, h], [h, -h, h + 1, h]]) addCol(A.x + a, A.y - 3, A.z + b, A.x + c, A.y + 60, A.z + d, 'house');
+}
+function setup1v1() {
+  buildArena(); FIGHTERS = [ME]; const bot = newFighter(false, 'Build Bot'); bot.skill = [0.5, 0.72, 0.92][DIFF]; FIGHTERS.push(bot);
+  V1 = { me: 0, bot: 0, to: 5, wait: 0, round: 1 }; storm = { x: ARENA.x, z: ARENA.z, r: 9999, tx: ARENA.x, tz: ARENA.z, tr: 9999, ph: 0, t: 0, mode: 'wait', dmg: 0 }; busT = 2; busA = [0, -3000]; busB = [0, -3000];
+  resetRound(); msg('1v1 BUILD FIGHT · first to 5', 3);
+}
+function loadout(f) {
+  f.inv = [{ t: 'gun', k: 'ar', rar: 3, clip: 30 }, { t: 'gun', k: 'shotgun', rar: 3, clip: 5 }, { t: 'gun', k: 'smg', rar: 2, clip: 30 }, null, null];
+  f.ammo = { light: 240, medium: 240, shells: 60, heavy: 0 }; f.wood = 500; f.hp = 100; f.sh = 100; f.sel = f.isPlayer ? 2 : 1; f.reloadT = 0; f.useT = 0; f.emoteT = 0;
+}
+function resetRound() {
+  for (const p of PIECES.slice()) { scene.remove(p.mesh); if (p.col) COLS.splice(COLS.indexOf(p.col), 1); } PIECES.length = 0;
+  const [me, bot] = FIGHTERS, side = V1.round % 2 ? 1 : -1;
+  for (const [f, s] of [[me, -side], [bot, side]]) { loadout(f); f.alive = true; f.model.g.visible = true; f.state = 'ground'; f.x = ARENA.x + s * 22; f.z = ARENA.z + (Math.random() - .5) * 10; f.y = ARENA.y; f.vx = f.vy = f.vz = 0; f.yaw = s > 0 ? Math.PI / 2 : -Math.PI / 2; f.attacker = null; f.target = null; }
+  me.pitch = 0; V1.wait = 0; ui();
+}
+function roundOver(loser) {
+  if (loser === ME) V1.bot++; else V1.me++;
+  const done = V1.me >= V1.to || V1.bot >= V1.to;
+  msg(loser === ME ? 'Round lost · ' + V1.me + ' – ' + V1.bot : 'Round won! · ' + V1.me + ' – ' + V1.bot, 2.2); sfx(loser === ME ? 'hurt' : 'elim');
+  if (done) { setTimeout(() => end1v1(V1.me > V1.bot), 1500); return; }
+  V1.round++; V1.wait = 2.6;
+}
+function end1v1(win) {
+  if (phase !== 'play') return; phase = 'end'; unlock(); if (win) sfx('win');
+  const coins = V1.me * 60 + (win ? 300 : 0), xp = V1.me * 120 + ME.kills * 40 + (win ? 400 : 0); PROF.coins += coins; PROF.xp += xp; let ups = 0; while (PROF.xp >= xpNeed(PROF.level)) { PROF.xp -= xpNeed(PROF.level); PROF.level++; ups++; PROF.coins += 300; } saveProf();
+  REC.v1w = (REC.v1w || 0) + (win ? 1 : 0); REC.v1g = (REC.v1g || 0) + 1; sv('si_rec', REC);
+  $('eTitle').innerHTML = win ? '🏆 You won the 1v1!' : 'Build Bot wins'; $('eTitle').style.color = win ? '#ffd23a' : '#fff';
+  $('eInfo').innerHTML = 'Final score ' + V1.me + ' – ' + V1.bot + ' · 1v1 record ' + REC.v1w + ' / ' + REC.v1g + '<div class="rew"><div>🪙 +' + coins + '</div><div>⭐ +' + xp + ' XP</div></div>' + (ups ? '<div style="color:#7affd8;font-weight:900;font-size:20px">LEVEL UP! You are now level ' + PROF.level + ' (+' + ups * 300 + ' bonus coins)</div>' : '');
+  $('sEnd').classList.remove('off'); $('back').style.display = '';
 }
 const PH = [{ w: 45, s: 30, r: 190, d: 1 }, { w: 35, s: 25, r: 110, d: 2 }, { w: 30, s: 22, r: 60, d: 4 }, { w: 25, s: 18, r: 28, d: 6 }, { w: 20, s: 15, r: 10, d: 8 }, { w: 15, s: 15, r: 0, d: 10 }];
 function updateStorm(dt) {
@@ -635,6 +678,7 @@ function hurt(f, d, by, head, storm) {
   if (f === ME) ui();
 }
 function kill(f, by) {
+  if (MODE === '1v1') { if (!f.alive) return; f.alive = false; f.hp = 0; f.model.g.visible = false; spark(f.x, f.y + 1, f.z, '#c79bff', 22, 7, 0.8, 0.9); if (by && by !== f) by.kills++; feed((by === ME ? '<b style="color:#ffd23a">You</b>' : esc(by ? by.name : '?')) + ' eliminated ' + (f === ME ? '<b style="color:#ff6a6a">You</b>' : esc(f.name))); roundOver(f); ui(); return; }
   f.alive = false; f.hp = 0; f.model.g.visible = false; spark(f.x, f.y + 1, f.z, '#c79bff', 22, 7, 0.8, 0.9);
   for (const it of f.inv) if (it) dropLoot(it, f.x + (Math.random() - .5) * 2, f.y, f.z + (Math.random() - .5) * 2);
   if (f.wood > 0) dropLoot({ t: 'wood', n: Math.min(200, f.wood) }, f.x, f.y, f.z);
@@ -759,6 +803,11 @@ function botThink(b, dt) {
     // choose best gun for range
     if (b.target) { const d = Math.hypot(b.target.x - b.x, b.target.z - b.z); let bi = 0, bs = -1; b.inv.forEach((it, k) => { if (!it || it.t !== 'gun') return; const G = GUNS[it.k]; if (it.clip <= 0 && b.ammo[G.ammo] <= 0) return; const fit = d < 12 ? (it.k === 'shotgun' ? 3 : it.k === 'smg' ? 2 : 1) : d < 50 ? (it.k === 'ar' ? 3 : it.k === 'smg' ? 2 : 1) : (it.k === 'sniper' ? 3 : it.k === 'ar' ? 2 : 0.5); const s = fit * RAR[it.rar].m; if (s > bs) { bs = s; bi = k + 1; } }); b.sel = bi; }
     else if (b.sel === 0) { const k = b.inv.findIndex(i => i && i.t === 'gun'); if (k >= 0) b.sel = k + 1; }
+    if (MODE === '1v1' && b.target && b.wood >= 10 && b.ground) { const d = Math.hypot(b.target.x - b.x, b.target.z - b.z), keep = b.yaw; b.yaw = Math.atan2(-(b.target.x - b.x), -(b.target.z - b.z));
+      if (d > 12 && Math.random() < 0.55 * b.skill) placePiece(b, piecePlan(b, 'ramp'));
+      if (b.target.y > b.y + 2.5 && Math.random() < 0.5 * b.skill) placePiece(b, piecePlan(b, 'ramp'));
+      if (T - b.lastHit < 0.8 && Math.random() < 0.7 * b.skill) { placePiece(b, piecePlan(b, 'wall')); if (Math.random() < 0.5) { b.yaw += Math.PI / 2; placePiece(b, piecePlan(b, 'wall')); b.yaw -= Math.PI; placePiece(b, piecePlan(b, 'wall')); } }
+      b.yaw = keep; }
     // build a wall when getting shot
     if (b.target && T - b.lastHit < 0.6 && b.wood >= 10 && Math.random() < [0.15, 0.35, 0.6][DIFF] && b.ground) { const yawTo = Math.atan2(-(b.target.x - b.x), -(b.target.z - b.z)); const keep = b.yaw; b.yaw = yawTo; placePiece(b, piecePlan(b, 'wall')); if (Math.random() < 0.4) placePiece(b, piecePlan(b, 'ramp')); b.yaw = keep; }
   }
@@ -818,7 +867,7 @@ function interact() { const c = nearest(CHESTS.filter(c => !c.open), ME, 3); if 
 function ui() {
   if (!ME) return;
   $('hpB').style.width = Math.max(0, ME.hp) + '%'; $('hpT').textContent = Math.max(0, Math.ceil(ME.hp)); $('shB').style.width = ME.sh + '%'; $('shT').textContent = Math.ceil(ME.sh); $('wood').textContent = ME.wood;
-  $('alive').textContent = '👤 ' + FIGHTERS.filter(f => f.alive).length; $('kills').textContent = '💀 ' + ME.kills;
+  $('alive').textContent = MODE === '1v1' && V1 ? '🏆 You ' + V1.me + ' – ' + V1.bot + ' Bot' : '👤 ' + FIGHTERS.filter(f => f.alive).length; $('kills').textContent = '💀 ' + ME.kills;
   const s = $('slots'); s.innerHTML = '';
   const mk = (k, it, on) => { const d = document.createElement('div'); d.className = 'slot' + (on ? ' on' : ''); let ic = '⛏️', nm = 'Pickaxe', n = '';
     if (it) { if (it.t === 'gun') { ic = GUNS[it.k].ic; nm = GUNS[it.k].n; d.style.background = 'linear-gradient(transparent 40%, ' + RAR[it.rar].c + '88)'; d.style.borderColor = on ? '#fff' : RAR[it.rar].c; n = it.clip; } else { ic = HEALS[it.k].ic; nm = HEALS[it.k].n; n = '×' + it.n; } } else if (k > 1) { ic = ''; nm = ''; }
@@ -897,7 +946,7 @@ function profUI() {
 let TAB = 'play';
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { TAB = b.dataset.t; document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b)); ['play', 'shop', 'locker', 'set'].forEach(t => $('t-' + t).classList.toggle('off', t !== TAB)); $('prev').style.display = TAB === 'play' || TAB === 'locker' ? '' : 'none'; if (TAB === 'shop') renderShop(); if (TAB === 'locker') renderLocker(); sfx('pickup'); });
 // modes
-const MODES = [{ k: 'br', n: 'Battle Royale', d: '25 players · loot, build, survive the storm' }, { k: '1v1', n: '1v1 Build Fight', d: 'Coming soon', off: true }, { k: 'box', n: 'Box Fight', d: 'Coming soon', off: true }, { k: 'free', n: 'Free Build', d: 'Coming soon', off: true }];
+const MODES = [{ k: 'br', n: 'Battle Royale', d: '25 players · loot, build, survive the storm' }, { k: '1v1', n: '1v1 Build Fight', d: 'You vs Build Bot · first to 5 rounds' }, { k: 'box', n: 'Box Fight', d: 'Coming soon', off: true }, { k: 'free', n: 'Free Build', d: 'Coming soon', off: true }];
 let MODE = 'br'; $('modes').innerHTML = ''; for (const m of MODES) { const b = document.createElement('button'); b.className = 'mode' + (m.k === MODE ? ' on' : ''); b.disabled = !!m.off; b.innerHTML = '<b>' + m.n + '</b><small>' + m.d + '</small>'; b.onclick = () => { MODE = m.k; document.querySelectorAll('.mode').forEach(x => x.classList.toggle('on', x === b)); }; $('modes').appendChild(b); }
 // item shop: rotates every day (same for everyone on the same date)
 function shopToday() {
@@ -973,7 +1022,8 @@ function step(dt) {
   // bus
   busT += dt / 24; const bx = busA[0] + (busB[0] - busA[0]) * busT, bz = busA[1] + (busB[1] - busA[1]) * busT; bus.position.set(bx, 120, bz); bus.rotation.y = Math.atan2(busB[0] - busA[0], busB[1] - busA[1]) + Math.PI / 2; bus.visible = busT < 1.05;
   for (const f of FIGHTERS) if (f.state === 'bus') { f.x = bx; f.z = bz; f.y = 118; if ((f === ME && keys.Space) || (!f.isPlayer && busT * 24 > f.jumpAt) || busT >= 1) { f.state = 'fall'; f.vy = 0; f.vx = f.vz = 0; if (f === ME) { sfx('jump'); msg('', 0); } } }
-  if (phase === 'play') updateStorm(dt);
+  if (phase === 'play' && MODE === 'br') updateStorm(dt);
+  if (MODE === '1v1' && V1 && V1.wait > 0) { V1.wait -= dt; if (V1.wait <= 0) resetRound(); }
   // player
   if (ME.alive) {
     const fw = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), st = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
@@ -1021,7 +1071,7 @@ function step(dt) {
     else { ghost.scale.set(b[3] - b[0], b[4] - b[1], b[5] - b[2]); ghost.position.set((b[0] + b[3]) / 2, (b[1] + b[4]) / 2, (b[2] + b[5]) / 2); } } else ghost.visible = false;
   // HUD bits
   const out = ME.alive && ME.state !== 'bus' && Math.hypot(ME.x - storm.x, ME.z - storm.z) > storm.r; $('stormFx').style.background = out ? 'rgba(120,40,200,.28)' : 'rgba(120,40,200,0)';
-  const P = PH[Math.min(storm.ph, PH.length - 1)], left = storm.mode === 'wait' ? P.w - storm.t : P.s - storm.t; $('stormt').textContent = (storm.mode === 'wait' ? '⏳ Storm moves in ' : '🌀 Closing: ') + Math.max(0, Math.ceil(left)) + 's' + (out ? ' · ⚠️ IN STORM' : '');
+  $('stormt').style.display = MODE === 'br' ? '' : 'none'; const P = PH[Math.min(storm.ph, PH.length - 1)], left = storm.mode === 'wait' ? P.w - storm.t : P.s - storm.t; $('stormt').textContent = (storm.mode === 'wait' ? '⏳ Storm moves in ' : '🌀 Closing: ') + Math.max(0, Math.ceil(left)) + 's' + (out ? ' · ⚠️ IN STORM' : '');
   if (ME.useT > 0) { $('use').style.display = 'block'; $('useB').style.width = (100 * (1 - ME.useT / ME.useMax)) + '%'; } else $('use').style.display = 'none';
   if (msgT > 0) { msgT -= dt; if (msgT <= 0) $('msg').textContent = ''; }
   if (ME.reloadT > 0) $('ammo').innerHTML = 'Reloading…';
