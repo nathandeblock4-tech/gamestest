@@ -602,6 +602,7 @@ function canSee(a, b) { const o = [a.x, a.y + 1.6, a.z], dx = b.x - a.x, dy = (b
 let FIGHTERS = [], ME = null, phase = 'menu', T = 0, storm, busT = 0, busA, busB, paused = false, DIFF = 1, mapBig = false, feedQ = [];
 const keys = {}; let mouseDown = false, aiming = false, buildType = null;
 function startMatch() {
+  MODE = MODE_PICK || 'br';
   DIFF = +$('diff').value; sv('si_diff', DIFF); sv('si_sens', +$('sens').value); GFX = +$('gfx').value; sv('si_gfx', GFX);
   scene.fog.near = [90, 140, 220][GFX]; scene.fog.far = [300, 560, 900][GFX]; renderer.setPixelRatio(Math.min([0.7, 1.15, 1.8][GFX], devicePixelRatio || 1)); renderer.shadowMap.enabled = GFX >= 1; tufts.visible = GFX >= 1; resize();
   for (const f of FIGHTERS) scene.remove(f.model.g);
@@ -609,7 +610,7 @@ function startMatch() {
   for (const p of PIECES.slice()) { scene.remove(p.mesh); if (p.col) COLS.splice(COLS.indexOf(p.col), 1); } PIECES.length = 0;
   const myName = (window.GR && window.GR.name && window.GR.name()) || 'You';
   ME = newFighter(true, myName); FIGHTERS = [ME];
-  if (MODE === '1v1') { T = 0; phase = 'play'; setup1v1(); $('sStart').classList.add('off'); $('sEnd').classList.add('off'); $('buyM').classList.add('off'); $('hud').style.display = 'block'; $('back').style.display = 'none'; ui(); lock(); return; }
+  if (MODE === '1v1' || MODE === 'box' || MODE === 'free') { const kind = MODE; MODE = '1v1'; T = 0; phase = 'play'; setup1v1(kind === '1v1' ? 'build' : kind); MODE_PICK = kind; $('sStart').classList.add('off'); $('sEnd').classList.add('off'); $('buyM').classList.add('off'); $('hud').style.display = 'block'; $('back').style.display = 'none'; ui(); lock(); return; }
   const names = BOT_NAMES.slice().sort(() => Math.random() - .5);
   for (let i = 0; i < 24; i++) { const b = newFighter(false, names[i]); b.jumpAt = 2 + Math.random() * 14; b.skill = [0.35, 0.6, 0.85][DIFF] * (0.75 + Math.random() * 0.5); FIGHTERS.push(b); }
   const a = Math.random() * Math.PI * 2; busA = [Math.cos(a) * HALF * 1.2, Math.sin(a) * HALF * 1.2]; busB = [-busA[0], -busA[1]]; busT = 0;
@@ -630,20 +631,23 @@ function buildArena() {
   for (const [a, b, c, d] of [[-h, -h, h, -h + 0.4], [-h, h - 0.4, h, h], [-h, -h, -h + 0.4, h], [h - 0.4, -h, h, h]]) { boxMesh(A.x + a, A.y, A.z + b, A.x + c, A.y + 0.15, A.z + d, neon, false); }
   for (const [a, b, c, d] of [[-h - 1, -h - 1, h + 1, -h], [-h - 1, h, h + 1, h + 1], [-h - 1, -h, -h, h], [h, -h, h + 1, h]]) addCol(A.x + a, A.y - 3, A.z + b, A.x + c, A.y + 60, A.z + d, 'house');
 }
-function setup1v1() {
-  buildArena(); FIGHTERS = [ME]; const bot = newFighter(false, 'Build Bot'); bot.skill = [0.5, 0.72, 0.92][DIFF]; FIGHTERS.push(bot);
-  V1 = { me: 0, bot: 0, to: 5, wait: 0, round: 1 }; storm = { x: ARENA.x, z: ARENA.z, r: 9999, tx: ARENA.x, tz: ARENA.z, tr: 9999, ph: 0, t: 0, mode: 'wait', dmg: 0 }; busT = 2; busA = [0, -3000]; busB = [0, -3000];
-  resetRound(); msg('1v1 BUILD FIGHT · first to 5', 3);
+function setup1v1(kind) {
+  buildArena(); FIGHTERS = [ME]; const bot = newFighter(false, kind === 'free' ? 'Target Dummy' : kind === 'box' ? 'Box Bot' : 'Build Bot'); bot.skill = [0.5, 0.72, 0.92][DIFF]; bot.dummy = kind === 'free'; FIGHTERS.push(bot);
+  V1 = { me: 0, bot: 0, to: 5, wait: 0, round: 1, kind }; storm = { x: ARENA.x, z: ARENA.z, r: 9999, tx: ARENA.x, tz: ARENA.z, tr: 9999, ph: 0, t: 0, mode: 'wait', dmg: 0 }; busT = 2; busA = [0, -3000]; busB = [0, -3000];
+  resetRound(); msg(kind === 'free' ? 'FREE BUILD · unlimited wood · press Esc to leave' : kind === 'box' ? 'BOX FIGHT · first to 5' : '1v1 BUILD FIGHT · first to 5', 3);
 }
 function loadout(f) {
-  f.inv = [{ t: 'gun', k: 'ar', rar: 3, clip: 30 }, { t: 'gun', k: 'shotgun', rar: 3, clip: 5 }, { t: 'gun', k: 'smg', rar: 2, clip: 30 }, null, null];
+  f.inv = f.dummy ? [null, null, null, null, null] : [{ t: 'gun', k: 'ar', rar: 3, clip: 30 }, { t: 'gun', k: 'shotgun', rar: 3, clip: 5 }, { t: 'gun', k: 'smg', rar: 2, clip: 30 }, null, null];
   f.ammo = { light: 240, medium: 240, shells: 60, heavy: 0 }; f.wood = 500; f.hp = 100; f.sh = 100; f.sel = f.isPlayer ? 2 : 1; f.reloadT = 0; f.useT = 0; f.emoteT = 0;
 }
 function resetRound() {
   for (const p of PIECES.slice()) { scene.remove(p.mesh); if (p.col) COLS.splice(COLS.indexOf(p.col), 1); } PIECES.length = 0;
   const [me, bot] = FIGHTERS, side = V1.round % 2 ? 1 : -1;
-  for (const [f, s] of [[me, -side], [bot, side]]) { loadout(f); f.alive = true; f.model.g.visible = true; f.state = 'ground'; f.x = ARENA.x + s * 22; f.z = ARENA.z + (Math.random() - .5) * 10; f.y = ARENA.y; f.vx = f.vy = f.vz = 0; f.yaw = s > 0 ? Math.PI / 2 : -Math.PI / 2; f.attacker = null; f.target = null; }
-  me.pitch = 0; V1.wait = 0; ui();
+  const gap = V1.kind === 'box' ? 6 : 22;
+  for (const [f, s] of [[me, -side], [bot, side]]) { loadout(f); f.alive = true; f.model.g.visible = true; f.state = 'ground'; f.x = ARENA.x + s * gap; f.z = V1.kind === 'box' ? ARENA.z + 2 : ARENA.z + (Math.random() - .5) * 10; f.y = ARENA.y; f.vx = f.vy = f.vz = 0; f.yaw = s > 0 ? Math.PI / 2 : -Math.PI / 2; f.attacker = null; f.target = null; }
+  me.pitch = 0; V1.wait = 0;
+  if (V1.kind === 'box') for (const f of [me, bot]) { f.x = Math.floor(f.x / CELL) * CELL + CELL / 2; f.z = Math.floor(f.z / CELL) * CELL + CELL / 2; const keep = f.yaw; for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) { f.yaw = a; f.wood += 10; placePiece(f, piecePlan(f, 'wall')); } f.yaw = keep; }
+  ui();
 }
 function roundOver(loser) {
   if (loser === ME) V1.bot++; else V1.me++;
@@ -678,6 +682,7 @@ function hurt(f, d, by, head, storm) {
   if (f === ME) ui();
 }
 function kill(f, by) {
+  if (MODE === '1v1' && V1 && V1.kind === 'free') { if (!f.alive) return; f.alive = false; f.model.g.visible = false; spark(f.x, f.y + 1, f.z, '#c79bff', 22, 7, 0.8, 0.9); if (by === ME) { ME.kills++; sfx('elim'); } setTimeout(() => { if (phase !== 'play') return; f.alive = true; f.model.g.visible = true; f.hp = 100; f.sh = 100; f.x = ARENA.x + (Math.random() - .5) * 50; f.z = ARENA.z + (Math.random() - .5) * 50; f.y = ARENA.y + 2; f.vy = 0; }, 1500); ui(); return; }
   if (MODE === '1v1') { if (!f.alive) return; f.alive = false; f.hp = 0; f.model.g.visible = false; spark(f.x, f.y + 1, f.z, '#c79bff', 22, 7, 0.8, 0.9); if (by && by !== f) by.kills++; feed((by === ME ? '<b style="color:#ffd23a">You</b>' : esc(by ? by.name : '?')) + ' eliminated ' + (f === ME ? '<b style="color:#ff6a6a">You</b>' : esc(f.name))); roundOver(f); ui(); return; }
   f.alive = false; f.hp = 0; f.model.g.visible = false; spark(f.x, f.y + 1, f.z, '#c79bff', 22, 7, 0.8, 0.9);
   for (const it of f.inv) if (it) dropLoot(it, f.x + (Math.random() - .5) * 2, f.y, f.z + (Math.random() - .5) * 2);
@@ -781,6 +786,7 @@ function openChest(f, c) { if (c.open) return; c.open = true; if (f === ME) ME.c
 
 // ================= bots =================
 function botThink(b, dt) {
+  if (b.dummy) { moveFighter(b, 0, 0, dt); return; }
   if (b.emoteT > 0 && !b.see) { b.vx *= 0.8; b.vz *= 0.8; return; }
   b.think = (b.think || 0) - dt; let mx = 0, mz = 0, jump = false, wantShoot = false;
   if (b.state === 'bus') return;
@@ -867,7 +873,7 @@ function interact() { const c = nearest(CHESTS.filter(c => !c.open), ME, 3); if 
 function ui() {
   if (!ME) return;
   $('hpB').style.width = Math.max(0, ME.hp) + '%'; $('hpT').textContent = Math.max(0, Math.ceil(ME.hp)); $('shB').style.width = ME.sh + '%'; $('shT').textContent = Math.ceil(ME.sh); $('wood').textContent = ME.wood;
-  $('alive').textContent = MODE === '1v1' && V1 ? '🏆 You ' + V1.me + ' – ' + V1.bot + ' Bot' : '👤 ' + FIGHTERS.filter(f => f.alive).length; $('kills').textContent = '💀 ' + ME.kills;
+  $('alive').textContent = MODE === '1v1' && V1 && V1.kind === 'free' ? '🛠️ Free Build · 🎯 ' + ME.kills : MODE === '1v1' && V1 ? '🏆 You ' + V1.me + ' – ' + V1.bot + ' Bot' : '👤 ' + FIGHTERS.filter(f => f.alive).length; $('kills').textContent = '💀 ' + ME.kills;
   const s = $('slots'); s.innerHTML = '';
   const mk = (k, it, on) => { const d = document.createElement('div'); d.className = 'slot' + (on ? ' on' : ''); let ic = '⛏️', nm = 'Pickaxe', n = '';
     if (it) { if (it.t === 'gun') { ic = GUNS[it.k].ic; nm = GUNS[it.k].n; d.style.background = 'linear-gradient(transparent 40%, ' + RAR[it.rar].c + '88)'; d.style.borderColor = on ? '#fff' : RAR[it.rar].c; n = it.clip; } else { ic = HEALS[it.k].ic; nm = HEALS[it.k].n; n = '×' + it.n; } } else if (k > 1) { ic = ''; nm = ''; }
@@ -946,8 +952,8 @@ function profUI() {
 let TAB = 'play';
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { TAB = b.dataset.t; document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b)); ['play', 'shop', 'locker', 'set'].forEach(t => $('t-' + t).classList.toggle('off', t !== TAB)); $('prev').style.display = TAB === 'play' || TAB === 'locker' ? '' : 'none'; if (TAB === 'shop') renderShop(); if (TAB === 'locker') renderLocker(); sfx('pickup'); });
 // modes
-const MODES = [{ k: 'br', n: 'Battle Royale', d: '25 players · loot, build, survive the storm' }, { k: '1v1', n: '1v1 Build Fight', d: 'You vs Build Bot · first to 5 rounds' }, { k: 'box', n: 'Box Fight', d: 'Coming soon', off: true }, { k: 'free', n: 'Free Build', d: 'Coming soon', off: true }];
-let MODE = 'br'; $('modes').innerHTML = ''; for (const m of MODES) { const b = document.createElement('button'); b.className = 'mode' + (m.k === MODE ? ' on' : ''); b.disabled = !!m.off; b.innerHTML = '<b>' + m.n + '</b><small>' + m.d + '</small>'; b.onclick = () => { MODE = m.k; document.querySelectorAll('.mode').forEach(x => x.classList.toggle('on', x === b)); }; $('modes').appendChild(b); }
+const MODES = [{ k: 'br', n: 'Battle Royale', d: '25 players · loot, build, survive the storm' }, { k: '1v1', n: '1v1 Build Fight', d: 'You vs Build Bot · first to 5 rounds' }, { k: 'box', n: 'Box Fight', d: 'Start boxed up next to Box Bot · first to 5' }, { k: 'free', n: 'Free Build', d: 'Practice building and aim on a dummy · unlimited wood' }];
+let MODE = 'br', MODE_PICK = 'br'; $('modes').innerHTML = ''; for (const m of MODES) { const b = document.createElement('button'); b.className = 'mode' + (m.k === MODE ? ' on' : ''); b.disabled = !!m.off; b.innerHTML = '<b>' + m.n + '</b><small>' + m.d + '</small>'; b.onclick = () => { MODE = MODE_PICK = m.k; document.querySelectorAll('.mode').forEach(x => x.classList.toggle('on', x === b)); }; $('modes').appendChild(b); }
 // item shop: rotates every day (same for everyone on the same date)
 function shopToday() {
   const d = new Date(), seed0 = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); let sd = seed0; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
@@ -1024,6 +1030,7 @@ function step(dt) {
   for (const f of FIGHTERS) if (f.state === 'bus') { f.x = bx; f.z = bz; f.y = 118; if ((f === ME && keys.Space) || (!f.isPlayer && busT * 24 > f.jumpAt) || busT >= 1) { f.state = 'fall'; f.vy = 0; f.vx = f.vz = 0; if (f === ME) { sfx('jump'); msg('', 0); } } }
   if (phase === 'play' && MODE === 'br') updateStorm(dt);
   if (MODE === '1v1' && V1 && V1.wait > 0) { V1.wait -= dt; if (V1.wait <= 0) resetRound(); }
+  if (MODE === '1v1' && V1 && V1.kind === 'free') { ME.wood = 999; for (const it of ME.inv) if (it && it.t === 'gun') { const G = GUNS[it.k]; ME.ammo[G.ammo] = 999; } if (ME.y < ARENA.y - 20) { ME.x = ARENA.x; ME.z = ARENA.z; ME.y = ARENA.y + 1; ME.vy = 0; } }
   // player
   if (ME.alive) {
     const fw = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), st = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
@@ -1061,6 +1068,12 @@ function step(dt) {
   let back = cameraMode === 'normal' ? (ME.emoteT > 0 ? 4.6 : 3.6) : 1.8, side = ME.emoteT > 0 ? 0 : 0.75, up = 0.35; if (ME.state === 'fall') { back = 9; side = 0; up = 2; } if (ME.state === 'bus') { back = 26; side = 0; up = 8; }
   if (cameraMode === 'scope') { back = 0; side = 0; up = 0.05; }
   camPos.copy(head).addScaledVector(fwd, -back).addScaledVector(right, side); camPos.y += up;
+  { // keep the camera out of walls: slide it toward the head if something is in the way
+    const dx = camPos.x - head.x, dy = camPos.y - head.y, dz = camPos.z - head.z, L = Math.hypot(dx, dy, dz);
+    if (L > 0.3) { const d = [dx / L, dy / L, dz / L], o = [head.x, head.y, head.z]; let tmin = L;
+      for (const c of COLS) { if (c.kind === 'tree') continue; const t = rayBox(o, d, { a: [c.a[0] - 0.2, c.a[1] - 0.2, c.a[2] - 0.2], b: [c.b[0] + 0.2, c.b[1] + 0.2, c.b[2] + 0.2] }, tmin); if (t != null && t < tmin && t > 0.05) tmin = t; }
+      if (tmin < L) camPos.set(head.x + d[0] * Math.max(0.35, tmin - 0.15), head.y + d[1] * Math.max(0.35, tmin - 0.15), head.z + d[2] * Math.max(0.35, tmin - 0.15)); }
+  }
   const minY = Math.max(terrainH(camPos.x, camPos.z), WATER) + 0.4; if (camPos.y < minY) camPos.y = minY;
   camera.position.copy(camPos); camera.lookAt(camPos.clone().add(fwd));
   const fov = cameraMode === 'scope' ? 22 : cameraMode === 'aim' ? 58 : 75; if (Math.abs(camera.fov - fov) > 0.1) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 14); camera.updateProjectionMatrix(); }
