@@ -87,6 +87,10 @@
   .row select { background: #1b2033; color: #fff; border: 1px solid #2e3654; border-radius: 8px; padding: 6px 8px; font: 600 14px system-ui; }
   .btn.big { width: 100%; font-size: 24px; padding: 16px; margin: 6px 0 0; }
   .statsg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 14px; } .statsg div { background: #1b2033; border-radius: 8px; padding: 6px; text-align: center; font-size: 11px; color: #8f99b3; } .statsg b { display: block; color: #fff; font-size: 16px; }
+  .chal { position: absolute; right: calc(4% + 420px); top: 20px; width: 290px; max-height: calc(100% - 30px); overflow: auto; background: rgba(14,18,36,.82); border: 1px solid #2e3654; border-radius: 16px; padding: 16px; text-align: left; } .chal h3 { font-size: 16px; color: #aab3c8; letter-spacing: .05em; } .chh { display: flex; justify-content: space-between; align-items: baseline; } .chh h3 { margin-bottom: 8px; } .chh small { color: #8f99b3; font-size: 11px; }
+  .chq { background: #1b2033; border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; } .chq small { color: #ffd23a; font-size: 11px; font-weight: 700; } .chq.done { opacity: .55; } .chq.bonus { display: flex; justify-content: space-between; align-items: center; background: linear-gradient(90deg,#2a2160,#1b2033); }
+  .cht { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 13px; } .rr { background: #2e3654; border: 0; color: #fff; border-radius: 6px; width: 24px; height: 24px; cursor: pointer; font-size: 14px; } .rr:hover { background: #4a3fb0; }
+  .chb { position: relative; height: 14px; background: #0e1224; border-radius: 7px; margin: 6px 0 4px; overflow: hidden; } .chb i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg,#7a5cff,#2fd2ff); } .chb span { position: relative; display: block; text-align: center; font-size: 10px; line-height: 14px; font-weight: 800; }
   .side .keys { text-align: left; margin-top: 12px; font-size: 11.5px; }
   .nameplate { position: absolute; left: 4%; bottom: 30px; width: 44vw; text-align: center; font: 900 22px system-ui; text-shadow: 0 2px 6px #000; }
   .nameplate small { display: block; font-size: 13px; color: #c79bff; letter-spacing: .1em; }
@@ -146,6 +150,7 @@
       <div class="statsg" id="statsg"></div>
       <div class="keys"><b>WASD</b> move · <b>Mouse</b> aim · <b>Click</b> shoot/build · <b>Right click</b> ADS · <b>Space</b> jump<br><b>1</b> pickaxe · <b>2–6</b> items · <b>Q</b> wall · <b>C</b> ramp · <b>X</b> floor · <b>V</b> cone · <b>G</b> edit · <b>E</b> open/pick up · <b>R</b> reload · <b>B</b> emote · <b>M</b> map</div>
     </div>
+    <div class="chal" id="chal"></div>
     <div class="nameplate" id="nameplate"></div>
   </div>
   <div class="tab off" id="t-shop"><div class="shopwrap"><div class="shophead"><h2>Item Shop</h2><span id="shopT"></span></div><h4>Featured</h4><div class="grid feat" id="shopF"></div><h4>Daily</h4><div class="grid" id="shopD"></div></div></div>
@@ -380,6 +385,45 @@ let PROF = ld('si_prof', null);
 if (!PROF) PROF = { coins: 1000, xp: 0, level: 1, owned: CATALOG.filter(c => c.r < 0).map(c => c.id), eq: { outfit: 'o0', backpack: 'b1', pickaxe: 'p0', glider: 'g0', wrap: 'w0', emote: 'e0' } };
 const saveProf = () => sv('si_prof', PROF);
 const xpNeed = lv => 400 + lv * 150;
+// ---- daily challenges ----
+const CHPOOL = [
+  { k: 'elim', n: 'Get {n} eliminations', v: [3, 5, 8], c: 300, x: 700 },
+  { k: 'chest', n: 'Open {n} chests in Battle Royale', v: [3, 5, 7], c: 250, x: 600 },
+  { k: 'build', n: 'Place {n} builds', v: [50, 100, 150], c: 200, x: 500 },
+  { k: 'head', n: 'Land {n} headshots', v: [5, 10, 15], c: 300, x: 650 },
+  { k: 'dmg', n: 'Deal {n} damage to players', v: [800, 1500, 2500], c: 250, x: 600 },
+  { k: 'wood', n: 'Harvest {n} wood with your pickaxe', v: [200, 400, 600], c: 200, x: 450 },
+  { k: 'top10', n: 'Place top 10 in Battle Royale {n} times', v: [1, 2, 3], c: 300, x: 700 },
+  { k: 'round', n: 'Win {n} rounds of 1v1 or Box Fight', v: [3, 5, 8], c: 300, x: 700 },
+  { k: 'emote', n: 'Emote {n} times during matches', v: [2, 3, 5], c: 150, x: 350 },
+  { k: 'play', n: 'Finish {n} matches in any mode', v: [2, 3, 4], c: 200, x: 500 },
+  { k: 'win', n: 'Win a Battle Royale or a 1v1', v: [1], c: 600, x: 1400 }];
+const CH_BONUS = { c: 500, x: 1000 };
+function dayKey() { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); }
+function chRoll(r, avoid) { const opts = CHPOOL.filter(q => !avoid.includes(q.k)); const q = opts[Math.floor(r() * opts.length)]; const n = q.v[Math.floor(r() * q.v.length)], m = n / q.v[0]; return { k: q.k, n, p: 0, done: false, c: Math.round(q.c * Math.sqrt(m) / 10) * 10, x: Math.round(q.x * Math.sqrt(m) / 10) * 10 }; }
+function chEnsure() {
+  const dk = dayKey(); if (PROF.ch && PROF.ch.day === dk) return PROF.ch;
+  let sd = dk * 7 + 13; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647; const list = [];
+  for (let i = 0; i < 3; i++) list.push(chRoll(r, list.map(q => q.k)));
+  PROF.ch = { day: dk, list, rr: 1, bonus: false }; saveProf(); return PROF.ch;
+}
+function addXP(x) { PROF.xp += x; let ups = 0; while (PROF.xp >= xpNeed(PROF.level)) { PROF.xp -= xpNeed(PROF.level); PROF.level++; ups++; PROF.coins += 300; } return ups; }
+let CH_MATCH = []; // challenges finished during this match
+function chal(k, amt) {
+  if (MODE === '1v1' && V1 && V1.kind === 'free' && k !== 'emote') return; // free build doesn't count (except emotes)
+  const C = chEnsure(); let changed = false;
+  for (const q of C.list) { if (q.k !== k || q.done) continue; q.p = Math.min(q.n, q.p + (amt || 1)); changed = true;
+    if (q.p >= q.n) { q.done = true; PROF.coins += q.c; const u = addXP(q.x); CH_MATCH.push(q); setTimeout(() => { msg('✅ Challenge complete! +' + q.c + ' 🪙  +' + q.x + ' XP' + (u ? '  · LEVEL UP!' : ''), 3); sfx('win'); }, 50); } }
+  if (!C.bonus && C.list.every(q => q.done)) { C.bonus = true; PROF.coins += CH_BONUS.c; addXP(CH_BONUS.x); setTimeout(() => { msg('🌟 All daily challenges done! +' + CH_BONUS.c + ' 🪙  +' + CH_BONUS.x + ' XP', 4); }, 3200); }
+  if (changed) saveProf();
+}
+function chText(q) { return CHPOOL.find(p => p.k === q.k).n.replace('{n}', q.n.toLocaleString()); }
+function renderChal() {
+  const C = chEnsure(), el = $('chal'); if (!el) return; const now = new Date(), mid = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1), left = mid - now, h = Math.floor(left / 3600000), m = Math.floor(left / 60000) % 60;
+  el.innerHTML = '<div class="chh"><h3>Daily challenges</h3><small>New in ' + h + 'h ' + m + 'm</small></div>' + C.list.map((q, i) => '<div class="chq' + (q.done ? ' done' : '') + '"><div class="cht"><b>' + (q.done ? '✅ ' : '') + chText(q) + '</b>' + (!q.done && C.rr > 0 ? '<button class="rr" data-i="' + i + '" title="Swap for a different challenge (1 per day)">↻</button>' : '') + '</div><div class="chb"><i style="width:' + (q.p / q.n * 100) + '%"></i><span>' + q.p.toLocaleString() + ' / ' + q.n.toLocaleString() + '</span></div><small>🪙 ' + q.c + ' · ⭐ ' + q.x + ' XP</small></div>').join('') +
+    '<div class="chq bonus' + (C.bonus ? ' done' : '') + '"><b>' + (C.bonus ? '✅ ' : '🌟 ') + 'Finish all 3</b><small>🪙 ' + CH_BONUS.c + ' · ⭐ ' + CH_BONUS.x + ' XP</small></div>';
+  el.querySelectorAll('.rr').forEach(b => b.onclick = () => { const i = +b.dataset.i; if (C.rr <= 0) return; C.rr--; C.list[i] = chRoll(Math.random, C.list.map(q => q.k)); saveProf(); renderChal(); sfx('build'); });
+}
 const eqItem = t => BYID[PROF.eq[t]] || CATALOG.find(c => c.type === t);
 function randomLook() { const pickT = t => { const l = CATALOG.filter(c => c.type === t); return l[Math.floor(Math.random() * l.length)]; }; return { outfit: pickT('outfit'), backpack: pickT('backpack'), pickaxe: pickT('pickaxe'), glider: pickT('glider'), wrap: pickT('wrap') }; }
 function myLook() { return { outfit: eqItem('outfit'), backpack: eqItem('backpack'), pickaxe: eqItem('pickaxe'), glider: eqItem('glider'), wrap: eqItem('wrap') }; }
@@ -626,6 +670,7 @@ function canSee(a, b) { const o = [a.x, a.y + 1.6, a.z], dx = b.x - a.x, dy = (b
 let FIGHTERS = [], ME = null, phase = 'menu', T = 0, storm, busT = 0, busA, busB, paused = false, DIFF = 1, mapBig = false, feedQ = [];
 const keys = {}; let mouseDown = false, aiming = false, buildType = null;
 function startMatch() {
+  CH_MATCH = [];
   MODE = MODE_PICK || 'br';
   DIFF = +$('diff').value; sv('si_diff', DIFF); sv('si_sens', +$('sens').value); GFX = +$('gfx').value; sv('si_gfx', GFX);
   scene.fog.near = [90, 140, 220][GFX]; scene.fog.far = [300, 560, 900][GFX]; renderer.setPixelRatio(Math.min([0.7, 1.15, 1.8][GFX], devicePixelRatio || 1)); renderer.shadowMap.enabled = GFX >= 1; tufts.visible = GFX >= 1; resize();
@@ -674,7 +719,7 @@ function resetRound() {
   ui();
 }
 function roundOver(loser) {
-  if (loser === ME) V1.bot++; else V1.me++;
+  if (loser === ME) V1.bot++; else { V1.me++; chal('round'); }
   const done = V1.me >= V1.to || V1.bot >= V1.to;
   msg(loser === ME ? 'Round lost · ' + V1.me + ' – ' + V1.bot : 'Round won! · ' + V1.me + ' – ' + V1.bot, 2.2); sfx(loser === ME ? 'hurt' : 'elim');
   if (done) { setTimeout(() => end1v1(V1.me > V1.bot), 1500); return; }
@@ -682,10 +727,11 @@ function roundOver(loser) {
 }
 function end1v1(win) {
   if (phase !== 'play') return; phase = 'end'; unlock(); if (win) sfx('win');
-  const coins = V1.me * 60 + (win ? 300 : 0), xp = V1.me * 120 + ME.kills * 40 + (win ? 400 : 0); PROF.coins += coins; PROF.xp += xp; let ups = 0; while (PROF.xp >= xpNeed(PROF.level)) { PROF.xp -= xpNeed(PROF.level); PROF.level++; ups++; PROF.coins += 300; } saveProf();
+  if (V1.kind !== 'free') { chal('play'); if (win) chal('win'); }
+  const coins = V1.me * 60 + (win ? 300 : 0), xp = V1.me * 120 + ME.kills * 40 + (win ? 400 : 0); PROF.coins += coins; const ups = addXP(xp); saveProf();
   REC.v1w = (REC.v1w || 0) + (win ? 1 : 0); REC.v1g = (REC.v1g || 0) + 1; sv('si_rec', REC);
   $('eTitle').innerHTML = win ? '🏆 You won the 1v1!' : 'Build Bot wins'; $('eTitle').style.color = win ? '#ffd23a' : '#fff';
-  $('eInfo').innerHTML = 'Final score ' + V1.me + ' – ' + V1.bot + ' · 1v1 record ' + REC.v1w + ' / ' + REC.v1g + '<div class="rew"><div>🪙 +' + coins + '</div><div>⭐ +' + xp + ' XP</div></div>' + (ups ? '<div style="color:#7affd8;font-weight:900;font-size:20px">LEVEL UP! You are now level ' + PROF.level + ' (+' + ups * 300 + ' bonus coins)</div>' : '');
+  $('eInfo').innerHTML = 'Final score ' + V1.me + ' – ' + V1.bot + ' · 1v1 record ' + REC.v1w + ' / ' + REC.v1g + '<div class="rew"><div>🪙 +' + coins + '</div><div>⭐ +' + xp + ' XP</div></div>' + (ups ? '<div style="color:#7affd8;font-weight:900;font-size:20px">LEVEL UP! You are now level ' + PROF.level + ' (+' + ups * 300 + ' bonus coins)</div>' : '') + chSummary();
   $('sEnd').classList.remove('off'); $('back').style.display = '';
 }
 const PH = [{ w: 45, s: 30, r: 190, d: 1 }, { w: 35, s: 25, r: 110, d: 2 }, { w: 30, s: 22, r: 60, d: 4 }, { w: 25, s: 18, r: 28, d: 6 }, { w: 20, s: 15, r: 10, d: 8 }, { w: 15, s: 15, r: 0, d: 10 }];
@@ -707,19 +753,20 @@ function hurt(f, d, by, head, storm) {
 }
 function kill(f, by) {
   if (MODE === '1v1' && V1 && V1.kind === 'free') { if (!f.alive) return; f.alive = false; f.model.g.visible = false; spark(f.x, f.y + 1, f.z, '#c79bff', 22, 7, 0.8, 0.9); if (by === ME) { ME.kills++; sfx('elim'); } setTimeout(() => { if (phase !== 'play') return; f.alive = true; f.model.g.visible = true; f.hp = 100; f.sh = 100; f.x = ARENA.x + (Math.random() - .5) * 50; f.z = ARENA.z + (Math.random() - .5) * 50; f.y = ARENA.y + 2; f.vy = 0; }, 1500); ui(); return; }
-  if (MODE === '1v1') { if (!f.alive) return; f.alive = false; f.hp = 0; f.model.g.visible = false; spark(f.x, f.y + 1, f.z, '#c79bff', 22, 7, 0.8, 0.9); if (by && by !== f) by.kills++; feed((by === ME ? '<b style="color:#ffd23a">You</b>' : esc(by ? by.name : '?')) + ' eliminated ' + (f === ME ? '<b style="color:#ff6a6a">You</b>' : esc(f.name))); roundOver(f); ui(); return; }
+  if (MODE === '1v1') { if (!f.alive) return; f.alive = false; f.hp = 0; f.model.g.visible = false; spark(f.x, f.y + 1, f.z, '#c79bff', 22, 7, 0.8, 0.9); if (by && by !== f) by.kills++; if (by === ME) chal('elim'); feed((by === ME ? '<b style="color:#ffd23a">You</b>' : esc(by ? by.name : '?')) + ' eliminated ' + (f === ME ? '<b style="color:#ff6a6a">You</b>' : esc(f.name))); roundOver(f); ui(); return; }
   f.alive = false; f.hp = 0; f.model.g.visible = false; spark(f.x, f.y + 1, f.z, '#c79bff', 22, 7, 0.8, 0.9);
   for (const it of f.inv) if (it) dropLoot(it, f.x + (Math.random() - .5) * 2, f.y, f.z + (Math.random() - .5) * 2);
   if (f.wood > 0) dropLoot({ t: 'wood', n: Math.min(200, f.wood) }, f.x, f.y, f.z);
   for (const k in f.ammo) if (f.ammo[k] > 0) dropLoot({ t: 'ammo', k, n: f.ammo[k] }, f.x + (Math.random() - .5) * 2, f.y, f.z + (Math.random() - .5) * 2);
   if (by && by !== f) { by.kills++; if (!by.isPlayer && Math.random() < 0.35 && by.state === 'ground') { by.emoteT = 2.6; by.emoteS = 0; by.emoteK = pick(EMOTES).k; } }
   feed(by ? (by === ME ? '<b style="color:#ffd23a">You</b>' : esc(by.name)) + ' eliminated ' + (f === ME ? '<b style="color:#ff6a6a">You</b>' : esc(f.name)) : esc(f.name) + ' was lost in the storm');
-  if (by === ME) { sfx('elim'); msg('Eliminated ' + f.name + '!  +60 🪙', 2); }
+  if (by === ME) { chal('elim'); sfx('elim'); msg('Eliminated ' + f.name + '!  +60 🪙', 2); }
   const left = FIGHTERS.filter(x => x.alive).length;
   if (f === ME) end(false, left + 1);
   else if (left === 1 && ME.alive) end(true, 1);
   ui();
 }
+function chSummary() { const C = chEnsure(); return '<div style="margin-top:12px;font-size:13px;color:#cfd6ea">' + C.list.map(q => (q.done ? (CH_MATCH.includes(q) ? '🆕✅ ' : '✅ ') : '⬜ ') + chText(q) + ' <b>' + q.p.toLocaleString() + '/' + q.n.toLocaleString() + '</b>').join('<br>') + '</div>'; }
 function grantRewards(win, place) {
   const chests = ME.chests || 0, coins = ME.kills * 60 + Math.max(0, 26 - place) * 12 + (win ? 400 : 0) + chests * 5, xp = ME.kills * 120 + Math.floor(T) * 3 + chests * 30 + Math.max(0, 26 - place) * 15 + (win ? 600 : 0);
   PROF.coins += coins; PROF.xp += xp; let ups = 0; while (PROF.xp >= xpNeed(PROF.level)) { PROF.xp -= xpNeed(PROF.level); PROF.level++; ups++; PROF.coins += 300; }
@@ -727,13 +774,14 @@ function grantRewards(win, place) {
 }
 function end(win, place) {
   if (phase !== 'play') return; phase = 'end'; unlock();
+  chal('play'); if (place <= 10) chal('top10'); if (win) chal('win');
   REC.games++; REC.kills += ME.kills; if (win) REC.wins++; REC.best = Math.min(REC.best, place); sv('si_rec', REC);
   setTimeout(() => {
     $('eTitle').innerHTML = win ? '🏆 #1 VICTORY!' : 'You placed #' + place; $('eTitle').style.color = win ? '#ffd23a' : '#fff';
     const R = grantRewards(win, place);
     $('eInfo').innerHTML = 'Eliminations: ' + ME.kills + ' · Time survived: ' + Math.floor(T / 60) + ':' + String(Math.floor(T % 60)).padStart(2, '0') + ' · Wins: ' + REC.wins + ' / ' + REC.games +
       '<div class="rew"><div>🪙 +' + R.coins + '</div><div>⭐ +' + R.xp + ' XP</div></div>' + (R.ups ? '<div style="color:#7affd8;font-weight:900;font-size:20px">LEVEL UP! You are now level ' + PROF.level + ' (+' + R.ups * 300 + ' bonus coins)</div>' : '') +
-      '<div class="xpbar" style="width:260px;margin:8px auto 0"><i style="width:' + Math.min(100, PROF.xp / xpNeed(PROF.level) * 100) + '%"></i></div><small style="color:#aab3c8">Level ' + PROF.level + ' · ' + PROF.xp + ' / ' + xpNeed(PROF.level) + ' XP</small>';
+      '<div class="xpbar" style="width:260px;margin:8px auto 0"><i style="width:' + Math.min(100, PROF.xp / xpNeed(PROF.level) * 100) + '%"></i></div><small style="color:#aab3c8">Level ' + PROF.level + ' · ' + PROF.xp + ' / ' + xpNeed(PROF.level) + ' XP</small>' + chSummary();
     $('sEnd').classList.remove('off'); $('back').style.display = '';
   }, win ? 1500 : 1200);
   if (win) sfx('win');
@@ -752,7 +800,7 @@ function shoot(f, dirOverride) {
   if (!d0) { camera.getWorldDirection(tmpV); d0 = [tmpV.x, tmpV.y, tmpV.z]; }
   if (it.t === 'pickaxe') {
     f.cd = 0.42; f.swing = 0.25; const oo = [f.x, f.y + 1.4, f.z]; const h = rayWorld(oo, d0, 2.6, f); sfx('swing', f);
-    if (h.kind === 'tree') { const tr = h.ref; tr.hp--; f.wood = Math.min(500, f.wood + 12); sfx('chop', f); chips(tr.x, tr.h + 1.2, tr.z, '#8a5a32', 5); if (tr.hp <= 0) { const m = new THREE.Matrix4().makeScale(0, 0, 0), crown = tr.pine ? pines : canopies; trunks.setMatrixAt(tr.ti, m); crown.setMatrixAt(tr.i, m); trunks.instanceMatrix.needsUpdate = crown.instanceMatrix.needsUpdate = true; COLS.splice(COLS.indexOf(tr.c), 1); chips(tr.x, tr.h + 3, tr.z, tr.pine ? '#2f6a3a' : '#5aa842', 14); } else { const crown = tr.pine ? pines : canopies; crown.setMatrixAt(tr.i, M4(tr.x + (Math.random() - .5) * 0.3, tr.h - 0.2, tr.z, tr.s, tr.s, tr.s, tr.ry)); crown.instanceMatrix.needsUpdate = true; setTimeout(() => { crown.setMatrixAt(tr.i, M4(tr.x, tr.h - 0.2, tr.z, tr.s, tr.s, tr.s, tr.ry)); crown.instanceMatrix.needsUpdate = true; }, 90); } if (f === ME) ui(); }
+    if (h.kind === 'tree') { const tr = h.ref; tr.hp--; f.wood = Math.min(500, f.wood + 12); if (f === ME) chal('wood', 12); sfx('chop', f); chips(tr.x, tr.h + 1.2, tr.z, '#8a5a32', 5); if (tr.hp <= 0) { const m = new THREE.Matrix4().makeScale(0, 0, 0), crown = tr.pine ? pines : canopies; trunks.setMatrixAt(tr.ti, m); crown.setMatrixAt(tr.i, m); trunks.instanceMatrix.needsUpdate = crown.instanceMatrix.needsUpdate = true; COLS.splice(COLS.indexOf(tr.c), 1); chips(tr.x, tr.h + 3, tr.z, tr.pine ? '#2f6a3a' : '#5aa842', 14); } else { const crown = tr.pine ? pines : canopies; crown.setMatrixAt(tr.i, M4(tr.x + (Math.random() - .5) * 0.3, tr.h - 0.2, tr.z, tr.s, tr.s, tr.s, tr.ry)); crown.instanceMatrix.needsUpdate = true; setTimeout(() => { crown.setMatrixAt(tr.i, M4(tr.x, tr.h - 0.2, tr.z, tr.s, tr.s, tr.s, tr.ry)); crown.instanceMatrix.needsUpdate = true; }, 90); } if (f === ME) ui(); }
     else if (h.kind === 'build') { damagePiece(h.ref, 50); if (h.ref.owner !== f) f.wood = Math.min(500, f.wood + 5); }
     else if (h.kind === 'fighter') { hurt(h.ref, 20, f, false); if (f === ME) hitMark(false, 20, h.ref); }
     else if (h.kind === 'house') { f.wood = Math.min(500, f.wood + 4); sfx('chop', f); }
@@ -783,6 +831,7 @@ const tracers = [];
 const trMat = new THREE.LineBasicMaterial({ color: '#fff3b0', transparent: true, opacity: 0.8 });
 function tracer(f, end) { const s = f === ME ? new THREE.Vector3(f.x + Math.cos(f.yaw) * 0.35, f.y + 1.35, f.z - Math.sin(f.yaw) * 0.35) : new THREE.Vector3(f.x, f.y + 1.3, f.z); const g = new THREE.BufferGeometry().setFromPoints([s, new THREE.Vector3(...end)]); const l = new THREE.Line(g, trMat); scene.add(l); tracers.push({ l, t: 0.06 }); }
 function hitMark(head, d, target) {
+  chal('dmg', d); if (head) chal('head');
   const h = $('hitm'); h.className = 'hitm on' + (head ? ' head' : ''); clearTimeout(h._t); h._t = setTimeout(() => h.className = 'hitm', 120); sfx(head ? 'head' : 'hit');
   const v = new THREE.Vector3(target.x, target.y + 2.1, target.z).project(camera); if (v.z > 1) return;
   const e = document.createElement('div'); e.className = 'dmg'; e.textContent = d; e.style.color = head ? '#ffd23a' : target.sh > 0 ? '#7cc8ff' : '#fff'; e.style.left = ((v.x + 1) / 2 * innerWidth + (Math.random() - .5) * 30) + 'px'; e.style.top = ((1 - v.y) / 2 * innerHeight) + 'px'; $('hud').appendChild(e); setTimeout(() => e.remove(), 800);
@@ -804,7 +853,7 @@ function give(f, item) { // returns true if taken
   if (i < 0) { if (f === ME) { const cur = f.sel > 0 ? f.sel - 1 : 0; dropLoot(f.inv[cur], f.x, f.y, f.z); i = cur; } else return false; }
   f.inv[i] = item; if (item.t === 'gun') { const G = GUNS[item.k]; f.ammo[G.ammo] += Math.round(G.mag * 1.5); } return true;
 }
-function openChest(f, c) { if (c.open) return; c.open = true; if (f === ME) ME.chests = (ME.chests || 0) + 1; c.lid.rotation.x = -1.1; c.lid.position.set(0, 0.95, 0.35); c.body.material = chestOpen; scene.remove(c.glow); spark(c.x, c.y + 1, c.z, '#ffd55a', 14, 6, 0.5, 0.8); sfx('chest', f);
+function openChest(f, c) { if (c.open) return; c.open = true; if (f === ME) { ME.chests = (ME.chests || 0) + 1; if (MODE === 'br') chal('chest'); } c.lid.rotation.x = -1.1; c.lid.position.set(0, 0.95, 0.35); c.body.material = chestOpen; scene.remove(c.glow); spark(c.x, c.y + 1, c.z, '#ffd55a', 14, 6, 0.5, 0.8); sfx('chest', f);
   for (let k = 0; k < 2; k++) dropLoot(randomItem(), c.x + (Math.random() - .5) * 2, c.y, c.z + (Math.random() - .5) * 2);
   const G = ['light', 'medium', 'shells', 'heavy'][Math.floor(Math.random() * 4)]; dropLoot({ t: 'ammo', k: G, n: { light: 30, medium: 30, shells: 8, heavy: 4 }[G] }, c.x + 1, c.y, c.z); dropLoot({ t: 'wood', n: 30 }, c.x - 1, c.y, c.z); }
 
@@ -885,11 +934,11 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyR') reload(ME);
   if (e.code === 'KeyE') interact();
   if (e.code === 'KeyM') mapBig = !mapBig;
-  if (e.code === 'KeyB' && ME.alive && ME.state === 'ground' && ME.emoteT <= 0) { ME.emoteT = 3.6; ME.emoteK = eqItem('emote').k; ME.emoteS = 0; buildType = null; ui(); }
+  if (e.code === 'KeyB' && ME.alive && ME.state === 'ground' && ME.emoteT <= 0) { ME.emoteT = 3.6; ME.emoteK = eqItem('emote').k; ME.emoteS = 0; chal('emote'); buildType = null; ui(); }
   if (e.code === 'KeyF') { const it = curItem(ME); if (it && it.t === 'heal') useHeal(ME, ME.sel - 1); }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
-function tryBuild(quiet) { if (!buildType || ME.state !== 'ground') return; if (ME.wood < 10) { if (!quiet) msg('Not enough wood. Hit trees with your pickaxe (1).', 1.6); return; } if (placePiece(ME, piecePlan(ME, buildType))) ui(); }
+function tryBuild(quiet) { if (!buildType || ME.state !== 'ground') return; if (ME.wood < 10) { if (!quiet) msg('Not enough wood. Hit trees with your pickaxe (1).', 1.6); return; } if (placePiece(ME, piecePlan(ME, buildType))) { chal('build'); ui(); } }
 function nearest(list, f, r) { let b = null, bd = r; for (const o of list) { const d = Math.hypot(o.x - f.x, o.z - f.z) + Math.abs(o.y - f.y) * 0.5; if (d < bd) { bd = d; b = o; } } return b; }
 function interact() { const c = nearest(CHESTS.filter(c => !c.open), ME, 3); if (c) { openChest(ME, c); return; } const l = nearest(LOOT, ME, 2.6); if (l) { if (give(ME, l.item)) { removeLoot(l); sfx('pickup'); if (l.item.t === 'gun' && ME.sel === 0) ME.sel = ME.inv.indexOf(l.item) + 1; ui(); } } }
 
@@ -971,6 +1020,7 @@ function profUI() {
   $('coinsN').textContent = PROF.coins.toLocaleString(); $('lvN').textContent = PROF.level; $('xpB').style.width = Math.min(100, PROF.xp / xpNeed(PROF.level) * 100) + '%'; $('xpT').textContent = 'Level ' + PROF.level + ' · ' + PROF.xp + ' / ' + xpNeed(PROF.level) + ' XP';
   const o = eqItem('outfit'); $('nameplate').innerHTML = esc((window.GR && GR.name && GR.name()) || 'Player') + '<small>' + o.n.toUpperCase() + '</small>';
   $('statsg').innerHTML = '<div>Wins<b>' + REC.wins + '</b></div><div>Games<b>' + REC.games + '</b></div><div>Kills<b>' + REC.kills + '</b></div><div>Best<b>' + (REC.best < 99 ? '#' + REC.best : '–') + '</b></div>';
+  renderChal();
 }
 // tabs
 let TAB = 'play';
@@ -1101,7 +1151,7 @@ function step(dt) {
   }
   const minY = Math.max(terrainH(camPos.x, camPos.z), WATER) + 0.4; if (camPos.y < minY) camPos.y = minY;
   camera.position.copy(camPos); camera.lookAt(camPos.clone().add(fwd));
-  const fov = cameraMode === 'scope' ? 22 : cameraMode === 'aim' ? 58 : 75; if (Math.abs(camera.fov - fov) > 0.1) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 14); camera.updateProjectionMatrix(); }
+  const fov = cameraMode === 'scope' ? 22 : cameraMode === 'aim' ? 58 : +$('fovS').value; if (Math.abs(camera.fov - fov) > 0.1) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 14); camera.updateProjectionMatrix(); }
   $('scope').style.display = cameraMode === 'scope' ? 'block' : 'none'; $('xh').style.display = cameraMode === 'scope' || buildType ? 'none' : '';
   // build ghost
   if (buildType && ME.state === 'ground') { const pl = piecePlan(ME, buildType), b = planBox(pl); ghost.visible = true; ghost.material = ME.wood >= 10 && !PIECES.some(p => samePiece(p, pl)) ? ghostMat : ghostBad;
