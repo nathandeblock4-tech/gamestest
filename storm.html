@@ -144,7 +144,7 @@
       <div class="row"><label>Bots</label><select id="diff"><option value="0">Easy</option><option value="1" selected>Normal</option><option value="2">Hard</option></select></div>
       <button class="btn big" id="play">PLAY</button>
       <div class="statsg" id="statsg"></div>
-      <div class="keys"><b>WASD</b> move · <b>Mouse</b> aim · <b>Click</b> shoot/build · <b>Right click</b> ADS · <b>Space</b> jump<br><b>1</b> pickaxe · <b>2–6</b> items · <b>Q</b> wall · <b>C</b> ramp · <b>X</b> floor · <b>E</b> open/pick up · <b>R</b> reload · <b>B</b> emote · <b>M</b> map</div>
+      <div class="keys"><b>WASD</b> move · <b>Mouse</b> aim · <b>Click</b> shoot/build · <b>Right click</b> ADS · <b>Space</b> jump<br><b>1</b> pickaxe · <b>2–6</b> items · <b>Q</b> wall · <b>C</b> ramp · <b>X</b> floor · <b>V</b> cone · <b>G</b> edit · <b>E</b> open/pick up · <b>R</b> reload · <b>B</b> emote · <b>M</b> map</div>
     </div>
     <div class="nameplate" id="nameplate"></div>
   </div>
@@ -516,7 +516,9 @@ function piecePlan(f, type) { // where would this fighter place a piece?
   for (const p of PIECES) if (Math.abs(p.cx - cx) <= 1 && Math.abs(p.cz - cz) <= 1) { if (Math.abs(p.y - base) < 1.6) base = p.y; else if (Math.abs(p.y + CELL - base) < 1.6) base = p.y + CELL; }
   if (type === 'wall') { const ax = Math.abs(fx) > Math.abs(fz); const side = ax ? (fx > 0 ? 'E' : 'W') : (fz > 0 ? 'S' : 'N'); return { type, cx, cz, side, y: base }; }
   const dx = Math.abs(fx) > Math.abs(fz) ? Math.sign(fx) : 0, dz = dx ? 0 : Math.sign(fz);
+  if (type === 'floor' && f.pitch < -0.75) return { type, cx, cz, y: Math.floor(f.y * 2) / 2 };
   if (type === 'floor') return { type, cx: cx + dx, cz: cz + dz, y: base };
+  if (type === 'cone') return f.pitch > 0.6 ? { type, cx, cz, y: base + CELL } : { type, cx: cx + dx, cz: cz + dz, y: base };
   return { type, cx: cx + dx, cz: cz + dz, y: base, dir: dx > 0 ? 'E' : dx < 0 ? 'W' : dz > 0 ? 'S' : 'N' };
 }
 function planBox(p) { // world box + mesh transform for a piece plan
@@ -526,17 +528,39 @@ function planBox(p) { // world box + mesh transform for a piece plan
   return [x0, p.y, z0, x0 + CELL, p.y + CELL, z0 + CELL];
 }
 function samePiece(a, b) { return a.type === b.type && a.cx === b.cx && a.cz === b.cz && Math.abs(a.y - b.y) < 0.3 && (a.side || '') === (b.side || ''); }
+const coneGeo = (() => { const g = new THREE.ConeGeometry(CELL / Math.SQRT2, 2, 4, 1); g.rotateY(Math.PI / 4); return g; })();
 function placePiece(f, plan) {
   if (f.wood < 10 || PIECES.some(p => samePiece(p, plan))) return false;
-  const bx = planBox(plan); let mesh;
-  if (plan.type === 'ramp') { mesh = new THREE.Mesh(rampGeo, woodMat2); mesh.position.set((bx[0] + bx[3]) / 2, plan.y + CELL / 2, (bx[2] + bx[5]) / 2); const r = { N: [Math.PI / 4, 0], S: [-Math.PI / 4, 0], E: [0, Math.PI / 2], W: [0, -Math.PI / 2] }[plan.dir]; if (plan.dir === 'E' || plan.dir === 'W') { mesh.rotation.set(0, r[1], 0); mesh.rotateX(Math.PI / 4); } else mesh.rotation.x = plan.dir === 'N' ? Math.PI / 4 : -Math.PI / 4; }
+  const bx = plan.type === 'cone' ? [plan.cx * CELL, plan.y, plan.cz * CELL, plan.cx * CELL + CELL, plan.y + 2, plan.cz * CELL + CELL] : planBox(plan); let mesh;
+  if (plan.type === 'cone') { mesh = new THREE.Mesh(coneGeo, woodMat2); mesh.position.set(plan.cx * CELL + CELL / 2, plan.y + 1, plan.cz * CELL + CELL / 2); mesh.castShadow = mesh.receiveShadow = true; }
+  else if (plan.type === 'ramp') { mesh = new THREE.Mesh(rampGeo, woodMat2); mesh.position.set((bx[0] + bx[3]) / 2, plan.y + CELL / 2, (bx[2] + bx[5]) / 2); const r = { N: [Math.PI / 4, 0], S: [-Math.PI / 4, 0], E: [0, Math.PI / 2], W: [0, -Math.PI / 2] }[plan.dir]; if (plan.dir === 'E' || plan.dir === 'W') { mesh.rotation.set(0, r[1], 0); mesh.rotateX(Math.PI / 4); } else mesh.rotation.x = plan.dir === 'N' ? Math.PI / 4 : -Math.PI / 4; }
   else mesh = boxMesh(...bx, plan.type === 'wall' ? woodMat : woodMat2);
   scene.add(mesh); mesh.scale.set(0.3, 0.3, 0.3);
   const piece = Object.assign({}, plan, { hp: plan.type === 'wall' ? 150 : 140, mesh, owner: f, grow: 0, box: bx });
-  if (plan.type !== 'ramp') piece.col = addCol(...bx, 'build', piece);
+  if (plan.type !== 'ramp' && plan.type !== 'cone') piece.col = addCol(...bx, 'build', piece);
   PIECES.push(piece); f.wood -= 10; sfx('build', f); return true;
 }
-function damagePiece(p, d) { p.hp -= d; p.mesh.material = p.hp < 50 ? ghostBad : p.mesh.material; if (p.hp <= 0) { scene.remove(p.mesh); PIECES.splice(PIECES.indexOf(p), 1); if (p.col) COLS.splice(COLS.indexOf(p.col), 1); sfx('break'); } }
+function removePieceParts(p) { scene.remove(p.mesh); if (p.col && COLS.includes(p.col)) COLS.splice(COLS.indexOf(p.col), 1); for (const c of p.cols || []) if (COLS.includes(c)) COLS.splice(COLS.indexOf(c), 1); }
+function damagePiece(p, d) { p.hp -= d; if (p.hp < 50) p.mesh.traverse(o => { if (o.isMesh) o.material = ghostBad; }); if (p.hp <= 0) { removePieceParts(p); PIECES.splice(PIECES.indexOf(p), 1); chips((p.box[0] + p.box[3]) / 2, (p.box[1] + p.box[4]) / 2, (p.box[2] + p.box[5]) / 2, '#b5814a', 10); sfx('break'); } }
+function coneHeight(p, x, z) { const lx = x - (p.cx * CELL + CELL / 2), lz = z - (p.cz * CELL + CELL / 2), m = Math.max(Math.abs(lx), Math.abs(lz)); if (m > CELL / 2) return null; return p.y + 2 * (1 - m / (CELL / 2)); }
+function surfHeight(p, x, z) { return p.type === 'ramp' ? rampHeight(p, x, z) : p.type === 'cone' ? coneHeight(p, x, z) : null; }
+// edit: wall <-> doorway, ramp flips direction, floor <-> hole
+function editPiece(p) {
+  if (p.type === 'wall') {
+    removePieceParts(p); const b = p.box, alongX = p.side === 'N' || p.side === 'S', g = new THREE.Group();
+    if (!p.door) { const mid = alongX ? (b[0] + b[3]) / 2 : (b[2] + b[5]) / 2, w = 0.8, top = b[1] + 2.7, parts = alongX ? [[b[0], b[1], b[2], mid - w, b[4], b[5]], [mid + w, b[1], b[2], b[3], b[4], b[5]], [mid - w, top, b[2], mid + w, b[4], b[5]]] : [[b[0], b[1], b[2], b[3], b[4], mid - w], [b[0], b[1], mid + w, b[3], b[4], b[5]], [b[0], top, mid - w, b[3], b[4], mid + w]];
+      p.cols = parts.map(q => { const m = boxMesh(...q, woodMat); scene.remove(m); g.add(m); return addCol(...q, 'build', p); }); p.col = null; p.door = true; }
+    else { g.add((() => { const m = boxMesh(...b, woodMat); scene.remove(m); return m; })()); p.col = addCol(...b, 'build', p); p.cols = []; p.door = false; }
+    scene.add(g); p.mesh = g;
+  } else if (p.type === 'ramp') { const flip = { N: 'S', S: 'N', E: 'W', W: 'E' }; p.dir = flip[p.dir]; p.mesh.rotation.x = -p.mesh.rotation.x; if (p.dir === 'E' || p.dir === 'W') { p.mesh.rotation.set(0, p.dir === 'E' ? Math.PI / 2 : -Math.PI / 2, 0); p.mesh.rotateX(Math.PI / 4); } }
+  else if (p.type === 'floor') { if (!p.hole) { COLS.splice(COLS.indexOf(p.col), 1); p.mesh.visible = false; p.hole = true; } else { COLS.push(p.col); p.mesh.visible = true; p.hole = false; } }
+  sfx('build');
+}
+function tryEdit() { // edit your own piece under the crosshair
+  camera.getWorldDirection(tmpV); const o = [camera.position.x, camera.position.y, camera.position.z], d = [tmpV.x, tmpV.y, tmpV.z]; let best = null, bt = 9;
+  for (const p of PIECES) { if (p.owner !== ME) continue; const t = rayBox(o, d, { a: [p.box[0] - 0.1, p.box[1] - 0.1, p.box[2] - 0.1], b: [p.box[3] + 0.1, p.box[4] + 0.1, p.box[5] + 0.1] }, bt); if (t != null && t < bt) { bt = t; best = p; } }
+  if (best) editPiece(best); else msg('Aim at one of your own builds to edit it', 1.2);
+}
 function rampHeight(p, x, z) { const lx = x - p.cx * CELL, lz = z - p.cz * CELL; if (lx < 0 || lx > CELL || lz < 0 || lz > CELL) return null; const t = p.dir === 'N' ? 1 - lz / CELL : p.dir === 'S' ? lz / CELL : p.dir === 'E' ? lx / CELL : 1 - lx / CELL; return p.y + t * CELL; }
 
 // ================= physics =================
@@ -544,7 +568,7 @@ const R = 0.4, HT = 1.85;
 function groundAt(x, y, z) { // highest walkable surface under feet (within step height)
   let g = terrainH(x, z);
   for (const c of COLS) { if (x + R > c.a[0] && x - R < c.b[0] && z + R > c.a[2] && z - R < c.b[2] && c.b[1] <= y + 0.55 && c.b[1] > g) g = c.b[1]; }
-  for (const p of PIECES) if (p.type === 'ramp') { const h = rampHeight(p, x, z); if (h != null && h <= y + 0.9 && h > g) g = h; }
+  for (const p of PIECES) if (p.type === 'ramp' || p.type === 'cone') { const h = surfHeight(p, x, z); if (h != null && h <= y + 0.9 && h > g) g = h; }
   return g;
 }
 function collide(f) {
@@ -591,7 +615,7 @@ function raySphere(o, d, cx, cy, cz, r, maxT) { const ox = o[0] - cx, oy = o[1] 
 function rayWorld(o, d, maxT, ignore) { // returns {t, kind, ref, head}
   let best = { t: maxT, kind: null };
   for (const c of COLS) { const t = rayBox(o, d, c, best.t); if (t != null && t < best.t) best = { t, kind: c.kind, ref: c.ref }; }
-  for (const p of PIECES) if (p.type === 'ramp') { const t = rayBox(o, d, { a: [p.box[0], p.box[1], p.box[2]], b: [p.box[3], p.box[4], p.box[5]] }, best.t); if (t != null && t < best.t) { const px = o[0] + d[0] * t, pz = o[2] + d[2] * t, py = o[1] + d[1] * t, h = rampHeight(p, px, pz); if (h != null && Math.abs(py - h) < 1.2) best = { t, kind: 'build', ref: p }; } }
+  for (const p of PIECES) if (p.type === 'ramp' || p.type === 'cone') { const t = rayBox(o, d, { a: [p.box[0], p.box[1], p.box[2]], b: [p.box[3], p.box[4], p.box[5]] }, best.t); if (t != null && t < best.t) { const px = o[0] + d[0] * t, pz = o[2] + d[2] * t, py = o[1] + d[1] * t, h = surfHeight(p, px, pz); if (h != null && Math.abs(py - h) < 1.2) best = { t, kind: 'build', ref: p }; } }
   for (const f of FIGHTERS) { if (!f.alive || f === ignore || f.state === 'bus') continue; const th = raySphere(o, d, f.x, f.y + 1.78, f.z, 0.3, best.t); if (th != null && th < best.t) best = { t: th, kind: 'fighter', ref: f, head: true }; const tb = Math.min(raySphere(o, d, f.x, f.y + 1.15, f.z, 0.5, best.t) ?? 1e9, raySphere(o, d, f.x, f.y + 0.5, f.z, 0.42, best.t) ?? 1e9); if (tb < best.t) best = { t: tb, kind: 'fighter', ref: f, head: false }; }
   for (let t = 1; t < best.t; t += 2) { const x = o[0] + d[0] * t, y = o[1] + d[1] * t, z = o[2] + d[2] * t; if (y < terrainH(x, z)) { best = { t, kind: 'ground' }; break; } }
   return best;
@@ -857,7 +881,7 @@ addEventListener('keydown', e => {
   keys[e.code] = true; if (phase !== 'play' || !ME) return;
   if (e.code === 'Space') e.preventDefault();
   if (/^Digit[1-6]$/.test(e.code)) { const n = +e.code.slice(5) - 1; buildType = null; if (n > 0 && ME.inv[n - 1] && ME.inv[n - 1].t === 'heal' && ME.sel === n) { useHeal(ME, n - 1); } ME.sel = n; ME.reloadT = 0; ME.reloading = null; ui(); }
-  if (e.code === 'KeyQ') { buildType = buildType === 'wall' ? null : 'wall'; ui(); } if (e.code === 'KeyC') { buildType = buildType === 'ramp' ? null : 'ramp'; ui(); } if (e.code === 'KeyX') { buildType = buildType === 'floor' ? null : 'floor'; ui(); }
+  if (e.code === 'KeyQ') { buildType = buildType === 'wall' ? null : 'wall'; ui(); } if (e.code === 'KeyC') { buildType = buildType === 'ramp' ? null : 'ramp'; ui(); } if (e.code === 'KeyX') { buildType = buildType === 'floor' ? null : 'floor'; ui(); } if (e.code === 'KeyV') { buildType = buildType === 'cone' ? null : 'cone'; ui(); } if (e.code === 'KeyG') tryEdit();
   if (e.code === 'KeyR') reload(ME);
   if (e.code === 'KeyE') interact();
   if (e.code === 'KeyM') mapBig = !mapBig;
@@ -865,7 +889,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyF') { const it = curItem(ME); if (it && it.t === 'heal') useHeal(ME, ME.sel - 1); }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
-function tryBuild() { if (!buildType || ME.state !== 'ground') return; if (ME.wood < 10) { msg('Not enough wood. Hit trees with your pickaxe (1).', 1.6); return; } placePiece(ME, piecePlan(ME, buildType)); ui(); }
+function tryBuild(quiet) { if (!buildType || ME.state !== 'ground') return; if (ME.wood < 10) { if (!quiet) msg('Not enough wood. Hit trees with your pickaxe (1).', 1.6); return; } if (placePiece(ME, piecePlan(ME, buildType))) ui(); }
 function nearest(list, f, r) { let b = null, bd = r; for (const o of list) { const d = Math.hypot(o.x - f.x, o.z - f.z) + Math.abs(o.y - f.y) * 0.5; if (d < bd) { bd = d; b = o; } } return b; }
 function interact() { const c = nearest(CHESTS.filter(c => !c.open), ME, 3); if (c) { openChest(ME, c); return; } const l = nearest(LOOT, ME, 2.6); if (l) { if (give(ME, l.item)) { removeLoot(l); sfx('pickup'); if (l.item.t === 'gun' && ME.sel === 0) ME.sel = ME.inv.indexOf(l.item) + 1; ui(); } } }
 
@@ -880,7 +904,7 @@ function ui() {
     d.innerHTML = '<span class="k">' + k + '</span><span class="ic">' + ic + '</span><span class="nm">' + nm + '</span><span class="n">' + n + '</span>'; s.appendChild(d); };
   mk(1, null, ME.sel === 0 && !buildType); for (let i = 0; i < 5; i++) mk(i + 2, ME.inv[i], ME.sel === i + 1 && !buildType);
   const it = curItem(ME); $('ammo').innerHTML = it && it.t === 'gun' ? it.clip + ' <small>/ ' + ME.ammo[GUNS[it.k].ammo] + '</small>' : '';
-  $('bhint').style.display = buildType ? '' : 'none'; $('bhint').textContent = buildType ? 'Building: ' + buildType.toUpperCase() + ' · click to place (10 wood) · press ' + { wall: 'Q', ramp: 'C', floor: 'X' }[buildType] + ' or 1–6 to exit' : '';
+  $('bhint').style.display = buildType ? '' : 'none'; $('bhint').textContent = buildType ? 'Building: ' + buildType.toUpperCase() + ' · hold click to turbo build (10 wood each) · G edits · ' + { wall: 'Q', ramp: 'C', floor: 'X', cone: 'V' }[buildType] + ' or 1–6 to exit' : '';
 }
 const mini = $('mini'), mg = mini.getContext('2d');
 const mapImg = (() => { const c = document.createElement('canvas'); c.width = c.height = 180; const g = c.getContext('2d'); const im = g.createImageData(180, 180);
@@ -1037,6 +1061,7 @@ function step(dt) {
     const sy = Math.sin(ME.yaw), cy = Math.cos(ME.yaw); let mx = -sy * fw + cy * st, mz = -cy * fw - sy * st; const L = Math.hypot(mx, mz); if (L > 1) { mx /= L; mz /= L; }
     if (ME.emoteT > 0 && (L > 0.1 || keys.Space || mouseDown)) ME.emoteT = 0;
     moveFighter(ME, mx, mz, dt, keys.Space, keys.ShiftLeft || keys.ShiftRight);
+    ME.buildCd = (ME.buildCd || 0) - dt; if (mouseDown && buildType && ME.buildCd <= 0) { tryBuild(true); ME.buildCd = 0.07; }
     const it = curItem(ME); if (mouseDown && !buildType && ((it && it.t === 'gun' && GUNS[it.k].auto) || (it && it.t === 'pickaxe'))) shoot(ME);
     // prompt
     const c = nearest(CHESTS.filter(c => !c.open), ME, 3), l = !c && nearest(LOOT, ME, 2.6);
@@ -1080,7 +1105,8 @@ function step(dt) {
   $('scope').style.display = cameraMode === 'scope' ? 'block' : 'none'; $('xh').style.display = cameraMode === 'scope' || buildType ? 'none' : '';
   // build ghost
   if (buildType && ME.state === 'ground') { const pl = piecePlan(ME, buildType), b = planBox(pl); ghost.visible = true; ghost.material = ME.wood >= 10 && !PIECES.some(p => samePiece(p, pl)) ? ghostMat : ghostBad;
-    if (pl.type === 'ramp') { ghost.scale.set(CELL, CELL, CELL); ghost.position.set((b[0] + b[3]) / 2, pl.y + CELL / 2, (b[2] + b[5]) / 2); ghost.scale.y = 0.5; ghost.position.y = pl.y + CELL / 2; }
+    if (pl.type === 'cone') { ghost.scale.set(CELL, 2, CELL); ghost.position.set(pl.cx * CELL + CELL / 2, pl.y + 1, pl.cz * CELL + CELL / 2); }
+    else if (pl.type === 'ramp') { ghost.scale.set(CELL, CELL, CELL); ghost.position.set((b[0] + b[3]) / 2, pl.y + CELL / 2, (b[2] + b[5]) / 2); ghost.scale.y = 0.5; ghost.position.y = pl.y + CELL / 2; }
     else { ghost.scale.set(b[3] - b[0], b[4] - b[1], b[5] - b[2]); ghost.position.set((b[0] + b[3]) / 2, (b[1] + b[4]) / 2, (b[2] + b[5]) / 2); } } else ghost.visible = false;
   // HUD bits
   const out = ME.alive && ME.state !== 'bus' && Math.hypot(ME.x - storm.x, ME.z - storm.z) > storm.r; $('stormFx').style.background = out ? 'rgba(120,40,200,.28)' : 'rgba(120,40,200,0)';
