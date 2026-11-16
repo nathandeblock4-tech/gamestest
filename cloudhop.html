@@ -96,7 +96,7 @@ function parseLevel(def) {
     if (ch === 'P') L.start = { x: px + (T - PW) / 2, y: py + T - PHH };
     else if (ch === 'S') L.springs.push({ x: px + 1, y: py + 8, w: 14, h: 8, anim: 0 });
     else if (ch === 'D') L.crystals.push({ x: px + 3, y: py + 3, w: 10, h: 10, off: 0 });
-    else if (ch === 'M' || ch === 'N') L.plats.push({ x: px, y: py, w: 48, h: 6, vx: ch === 'M' ? 40 : 0, vy: ch === 'N' ? 40 : 0, dx: 0, dy: 0 });
+    else if (ch === 'M' || ch === 'N') L.plats.push({ x: px, y: py, w: 48, h: 6, vx: ch === 'M' ? 58 : 0, vy: ch === 'N' ? 58 : 0, dx: 0, dy: 0 });
     else if (ch === '!') L.t[y * w + x] = 9; // invisible platform stopper
     else if ('oGFekbt*'.includes(ch)) L.ents.push({ ch, x: px, y: py });
   }
