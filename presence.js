@@ -105,6 +105,74 @@
     else if (k === 'goto' && typeof d.file === 'string' && /^[a-z0-9_-]+\.html(#[a-z0-9_-]*)?$/i.test(d.file)) { ack('sent to ' + d.file); setTimeout(function () { location.href = d.file; }, 300); }
     else if (k === 'rename' && typeof d.name === 'string' && d.name.trim()) { set('gr_name', d.name.trim().slice(0, 20)); ack('renamed'); if (FB) beat(); else send(); }
     else if (k === 'reload') location.reload();
+    else if (k === 'peek') startPeek(d);
+  }
+
+  // =============== live screen peek ===============
+  // Draws a picture of this Arcade page (canvases, images, boxes, text) and uploads it while the admin is watching.
+  var peekUntil = 0, peekTimer = null, peekW = 480, peekEvery = 1500;
+  function rgbaOk(c) { return c && c !== 'transparent' && !/rgba\([^)]*,\s*0\)$/.test(c); }
+  function radius(cs, r) { var v = parseFloat(cs.borderTopLeftRadius) || 0; return Math.min(v, r.width / 2, r.height / 2); }
+  function rr(g, r, rad) { g.beginPath(); if (g.roundRect && rad > 0) g.roundRect(r.left, r.top, r.width, r.height, rad); else g.rect(r.left, r.top, r.width, r.height); }
+  function capture(W) {
+    var vw = innerWidth, vh = innerHeight, s = W / vw, H = Math.round(vh * s), cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    var g = cv.getContext('2d'); g.scale(s, s);
+    var bcs = getComputedStyle(document.body), hcs = getComputedStyle(document.documentElement);
+    g.fillStyle = rgbaOk(bcs.backgroundColor) ? bcs.backgroundColor : rgbaOk(hcs.backgroundColor) ? hcs.backgroundColor : '#fff'; g.fillRect(0, 0, vw, vh);
+    paintBg(g, document.body, bcs, { left: 0, top: 0, width: vw, height: vh });
+    var count = 0, range = document.createRange();
+    function vis(r) { return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < vw && r.top < vh; }
+    function walk(el, alpha) { for (var n = el.firstChild; n; n = n.nextSibling) { if (++count > 4000) return; one(n, el, alpha); } }
+    function one(n, el, alpha) {
+      {
+        if (n.nodeType === 3) { text(n, el, alpha); return; }
+        if (n.nodeType !== 1) return;
+        var tag = n.tagName; if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'HEAD' || tag === 'NOSCRIPT') return;
+        var cs = getComputedStyle(n); if (cs.display === 'none' || cs.visibility === 'hidden') return;
+        var a = alpha * (parseFloat(cs.opacity) || 0); if (a < 0.03) return;
+        var r = n.getBoundingClientRect(); g.globalAlpha = a;
+        if (vis(r)) {
+          var rad = radius(cs, r);
+          if (rgbaOk(cs.backgroundColor)) { g.fillStyle = cs.backgroundColor; rr(g, r, rad); g.fill(); }
+          paintBg(g, n, cs, r, rad);
+          var bw = parseFloat(cs.borderTopWidth) || 0; if (bw > 0 && rgbaOk(cs.borderTopColor) && cs.borderTopStyle !== 'none') { g.strokeStyle = cs.borderTopColor; g.lineWidth = bw; rr(g, { left: r.left + bw / 2, top: r.top + bw / 2, width: r.width - bw, height: r.height - bw }, rad); g.stroke(); }
+          try { if (tag === 'CANVAS' || (tag === 'IMG' && n.complete && n.naturalWidth)) g.drawImage(n, r.left, r.top, r.width, r.height); } catch (e) {}
+          if ((tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') && n.type !== 'checkbox' && n.type !== 'range' && n.type !== 'password') { var v = tag === 'SELECT' ? (n.options[n.selectedIndex] || {}).text : n.value; if (v) { g.fillStyle = cs.color; g.font = cs.font; g.textBaseline = 'middle'; g.fillText(String(v).slice(0, 80), r.left + 8, r.top + r.height / 2, r.width - 12); } }
+        }
+        if (tag !== 'CANVAS' && tag !== 'IMG' && tag !== 'SVG' && tag !== 'svg' && tag !== 'SELECT') walk(n, a);
+      }
+    }
+    function text(node, parent, alpha) {
+      var t = node.nodeValue; if (!t || !/\S/.test(t)) return;
+      var cs = getComputedStyle(parent); g.globalAlpha = alpha; g.fillStyle = cs.color; g.font = cs.font; g.textBaseline = 'middle';
+      range.selectNodeContents(node); var rects = range.getClientRects(); if (!rects.length) return;
+      if (rects.length === 1) { var r = rects[0]; if (vis(r)) g.fillText(t.trim(), r.left, r.top + r.height / 2); return; }
+      var re = /\S+/g, m; while ((m = re.exec(t))) { range.setStart(node, m.index); range.setEnd(node, m.index + m[0].length); var wr = range.getBoundingClientRect(); if (vis(wr)) g.fillText(m[0], wr.left, wr.top + wr.height / 2); }
+    }
+    walk(document.body, 1);
+    for (var c = document.documentElement.firstChild; c; c = c.nextSibling) if (c !== document.body && c !== document.head && c.nodeType === 1) one(c, document.documentElement, 1);
+    g.globalAlpha = 1;
+    return cv.toDataURL('image/jpeg', 0.55);
+  }
+  function paintBg(g, el, cs, r, rad) {
+    var bi = cs.backgroundImage; if (!bi || bi === 'none' || bi.indexOf('gradient') < 0) return;
+    var cols = bi.match(/rgba?\([^)]+\)|#[0-9a-f]{3,8}/gi); if (!cols || !cols.length) return;
+    var gr = /radial/.test(bi) ? g.createRadialGradient(r.left + r.width / 2, r.top + r.height / 2, 0, r.left + r.width / 2, r.top + r.height / 2, Math.max(r.width, r.height) * 0.7) : /90deg|to right/.test(bi) ? g.createLinearGradient(r.left, 0, r.left + r.width, 0) : /135deg/.test(bi) ? g.createLinearGradient(r.left, r.top, r.left + r.width, r.top + r.height) : g.createLinearGradient(0, r.top, 0, r.top + r.height);
+    cols.forEach(function (c, i) { try { gr.addColorStop(cols.length === 1 ? 0 : i / (cols.length - 1), c); } catch (e) {} });
+    g.fillStyle = gr; rr(g, r, rad || 0); g.fill();
+  }
+  function peekShot() {
+    if (Date.now() > peekUntil) { peekTimer = null; return; }
+    requestAnimationFrame(function () { // run right after the game draws, so WebGL canvases are still filled in
+      var img = null; try { img = capture(peekW); } catch (e) {}
+      if (img) fb('peek/' + id, 'PUT', { img: img, t: SV, page: curPage, name: name(), vis: document.visibilityState });
+      peekTimer = setTimeout(peekShot, document.visibilityState === 'hidden' ? Math.max(4000, peekEvery) : peekEvery);
+    });
+  }
+  function startPeek(d) {
+    if (!FB) return;
+    peekUntil = Date.now() + Math.max(5, Math.min(60, +d.dur || 20)) * 1000; peekW = Math.max(200, Math.min(800, +d.w || 480)); peekEvery = Math.max(800, Math.min(10000, +d.every || 1500));
+    if (!peekTimer) peekShot();
   }
 
   // =============== audio ===============
