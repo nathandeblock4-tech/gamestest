@@ -113,7 +113,7 @@ function load(key) { try { return localStorage.getItem(key); } catch (e) { retur
 function loadJ(key, d) { try { const v = JSON.parse(load(key) || 'null'); return v == null ? d : v; } catch (e) { return d; } }
 
 const GAMES = [
-  { id: 'storm', href: 'storm.html', t: 'Storm Island', d: '3D battle royale: drop from the bus, loot chests, build walls and ramps, and outlast 24 bots as the storm closes in.', i: '🌀', cat: 'arcade', tags: ['NEW'], c: ['#8a3aff', '#2f8fd6'], n: 42 },
+  { id: 'storm', href: 'storm.html', t: 'Storm Island', d: '3D battle royale: drop from the airship, loot chests, build walls and ramps, and outlast 24 bots as the storm closes in.', i: '🌀', cat: 'arcade', tags: ['NEW'], c: ['#8a3aff', '#2f8fd6'], n: 42 },
   { id: 'cloudhop', href: 'cloudhop.html', t: 'Cloudhop', d: 'Pixel platformer with wall jumps, springs, crumbling bridges and hidden gems. Gold medal times and a global leaderboard.', i: '☁️', cat: 'arcade', tags: ['NEW'], c: ['#6ec6ff', '#4f9f55'], n: 41 },
   { id: 'casino', href: 'casino.html', t: 'Gambling Simulator', d: 'A full fake casino, play money only: 12 games including slots, blackjack, roulette, plinko, crash, mines, poker and baccarat. Start with $10,000.', i: '🎰', cat: 'arcade', tags: ['NEW'], c: ['#6b2fd0', '#a3192a'], n: 40 },
   { id: 'pool', href: 'pool.html', t: '8-Ball Pool', d: 'Real ball physics with spin, a shot guide and full 8-ball rules. Play a friend or 4 computer levels that plan their shots.', i: '🎱', cat: 'puzzle', tags: ['NEW', '2P'], c: ['#0f6f45', '#4e2914'], n: 39 },
