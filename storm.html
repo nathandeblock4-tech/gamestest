@@ -467,7 +467,7 @@ function poseEmote(m, k, t) { // emote animations driven by time t
   else if (k === 'heli') { m.armR.rotation.z = 2.9; m.armR.rotation.y = t * 20; m.armL.rotation.z = -0.5; m.g.position.y += 0.15 + Math.sin(t * 3) * 0.1; m.g.rotation.y += t * 2; }
 }
 function newFighter(isPlayer, name) {
-  return { isPlayer, name, x: 0, y: 140, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, hp: 100, sh: 0, wood: isPlayer ? 100 : 160, alive: true, state: 'bus', ground: false,
+  return { emoteS: 0, emoteK: 'wave', isPlayer, name, x: 0, y: 140, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, hp: 100, sh: 0, wood: isPlayer ? 100 : 160, alive: true, state: 'bus', ground: false,
     inv: [null, null, null, null, null], sel: 0, ammo: { light: isPlayer ? 0 : 60, medium: isPlayer ? 0 : 60, shells: isPlayer ? 0 : 15, heavy: isPlayer ? 0 : 6 }, cd: 0, reloadT: 0, useT: 0, useItem: null, kills: 0, glide: false, anim: 0,
     model: makeChar(isPlayer ? myLook() : randomLook()), lastHit: 0, emoteT: 0 };
 }
@@ -639,7 +639,7 @@ function kill(f, by) {
   for (const it of f.inv) if (it) dropLoot(it, f.x + (Math.random() - .5) * 2, f.y, f.z + (Math.random() - .5) * 2);
   if (f.wood > 0) dropLoot({ t: 'wood', n: Math.min(200, f.wood) }, f.x, f.y, f.z);
   for (const k in f.ammo) if (f.ammo[k] > 0) dropLoot({ t: 'ammo', k, n: f.ammo[k] }, f.x + (Math.random() - .5) * 2, f.y, f.z + (Math.random() - .5) * 2);
-  if (by && by !== f) by.kills++;
+  if (by && by !== f) { by.kills++; if (!by.isPlayer && Math.random() < 0.35 && by.state === 'ground') { by.emoteT = 2.6; by.emoteS = 0; by.emoteK = pick(EMOTES).k; } }
   feed(by ? (by === ME ? '<b style="color:#ffd23a">You</b>' : esc(by.name)) + ' eliminated ' + (f === ME ? '<b style="color:#ff6a6a">You</b>' : esc(f.name)) : esc(f.name) + ' was lost in the storm');
   if (by === ME) { sfx('elim'); msg('Eliminated ' + f.name + '!  +60 🪙', 2); }
   const left = FIGHTERS.filter(x => x.alive).length;
@@ -737,6 +737,7 @@ function openChest(f, c) { if (c.open) return; c.open = true; if (f === ME) ME.c
 
 // ================= bots =================
 function botThink(b, dt) {
+  if (b.emoteT > 0 && !b.see) { b.vx *= 0.8; b.vz *= 0.8; return; }
   b.think = (b.think || 0) - dt; let mx = 0, mz = 0, jump = false, wantShoot = false;
   if (b.state === 'bus') return;
   if (b.state === 'fall') { if (!b.goal) { const pick = Math.random() < 0.7 && HOUSES.length ? HOUSES[Math.floor(Math.random() * HOUSES.length)] : { x: (Math.random() - .5) * HALF * 1.4, z: (Math.random() - .5) * HALF * 1.4 }; b.goal = { x: pick.x + (Math.random() - .5) * 8, z: pick.z + (Math.random() - .5) * 8 }; }
@@ -805,6 +806,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyR') reload(ME);
   if (e.code === 'KeyE') interact();
   if (e.code === 'KeyM') mapBig = !mapBig;
+  if (e.code === 'KeyB' && ME.alive && ME.state === 'ground' && ME.emoteT <= 0) { ME.emoteT = 3.6; ME.emoteK = eqItem('emote').k; ME.emoteS = 0; buildType = null; ui(); }
   if (e.code === 'KeyF') { const it = curItem(ME); if (it && it.t === 'heal') useHeal(ME, ME.sel - 1); }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
@@ -976,6 +978,7 @@ function step(dt) {
   if (ME.alive) {
     const fw = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), st = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
     const sy = Math.sin(ME.yaw), cy = Math.cos(ME.yaw); let mx = -sy * fw + cy * st, mz = -cy * fw - sy * st; const L = Math.hypot(mx, mz); if (L > 1) { mx /= L; mz /= L; }
+    if (ME.emoteT > 0 && (L > 0.1 || keys.Space || mouseDown)) ME.emoteT = 0;
     moveFighter(ME, mx, mz, dt, keys.Space, keys.ShiftLeft || keys.ShiftRight);
     const it = curItem(ME); if (mouseDown && !buildType && ((it && it.t === 'gun' && GUNS[it.k].auto) || (it && it.t === 'pickaxe'))) shoot(ME);
     // prompt
@@ -988,10 +991,11 @@ function step(dt) {
     f.cd -= dt; if (f.reloadT > 0) { f.reloadT -= dt; if (f.reloadT <= 0) finishReload(f); }
     if (f.useT > 0) { f.useT -= dt; if (f.isPlayer && (Math.hypot(f.vx, f.vz) > 6)) { } if (f.useT <= 0) finishHeal(f); }
     // model
-    const m = f.model; m.g.position.set(f.x, f.y, f.z); m.g.rotation.y = f.yaw; const sp = Math.hypot(f.vx, f.vz); f.anim += dt * sp * 1.6;
+    const m = f.model; m.g.position.set(f.x, f.y, f.z); m.g.rotation.y = f.yaw; for (const l of [m.legL, m.legR, m.armL, m.armR]) l.rotation.set(0, 0, 0); m.head.rotation.set(0, 0, 0); const sp = Math.hypot(f.vx, f.vz); f.anim += dt * sp * 1.6;
     const sw = f.state === 'ground' ? Math.sin(f.anim) * Math.min(1, sp / 4) * 0.7 : 0.3; m.legL.rotation.x = sw; m.legR.rotation.x = -sw; const held = curItem(f), gunUp = held && held.t === 'gun'; m.armR.rotation.x = f.swing > 0 ? 2.6 * (f.swing / 0.25) - 0.4 : gunUp ? 1.35 : 0.6 - sw * 0.4; m.armL.rotation.x = gunUp ? 1.2 : -sw * 0.6; m.armL.rotation.z = gunUp ? -0.35 : 0; m.gunHolder.position.y = gunUp ? 1.3 : 1.05; m.torso.position.y = 1.22 + (f.state === 'ground' ? Math.abs(Math.sin(f.anim)) * 0.04 * Math.min(1, sp / 4) : 0);
     if (f.swing > 0) f.swing -= dt; m.glider.visible = f.state === 'fall' && f.glide; m.g.rotation.x = f.state === 'fall' && !f.glide ? -1.2 : 0;
     setHeld(f);
+    if (f.emoteT > 0) { f.emoteT -= dt; f.emoteS += dt; m.gunHolder.visible = false; poseEmote(m, f.emoteK, f.emoteS); if (!f.isPlayer && (f.target && f.see)) f.emoteT = 0; } else m.gunHolder.visible = true;
     m.g.visible = f !== ME || cameraMode !== 'scope';
   }
   // pieces grow in
@@ -1004,7 +1008,7 @@ function step(dt) {
   const itC = curItem(ME); cameraMode = aiming && itC && itC.t === 'gun' && GUNS[itC.k].scope ? 'scope' : aiming ? 'aim' : 'normal';
   const yaw = ME.yaw, pitch = ME.pitch + recoil, fwd = new THREE.Vector3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)), right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
   const head = new THREE.Vector3(ME.x, ME.y + 1.7, ME.z);
-  let back = cameraMode === 'normal' ? 3.6 : 1.8, side = 0.75, up = 0.35; if (ME.state === 'fall') { back = 9; side = 0; up = 2; } if (ME.state === 'bus') { back = 26; side = 0; up = 8; }
+  let back = cameraMode === 'normal' ? (ME.emoteT > 0 ? 4.6 : 3.6) : 1.8, side = ME.emoteT > 0 ? 0 : 0.75, up = 0.35; if (ME.state === 'fall') { back = 9; side = 0; up = 2; } if (ME.state === 'bus') { back = 26; side = 0; up = 8; }
   if (cameraMode === 'scope') { back = 0; side = 0; up = 0.05; }
   camPos.copy(head).addScaledVector(fwd, -back).addScaledVector(right, side); camPos.y += up;
   const minY = Math.max(terrainH(camPos.x, camPos.z), WATER) + 0.4; if (camPos.y < minY) camPos.y = minY;
