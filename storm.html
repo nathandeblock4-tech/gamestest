@@ -920,12 +920,23 @@ $('mBuy').onclick = () => {
   if (PROF.coins < price) { $('mBuy').textContent = 'Need ' + (price - PROF.coins).toLocaleString() + ' more coins'; sfx('hurt'); setTimeout(() => openItem(mItem), 1300); return; }
   PROF.coins -= price; PROF.owned.push(mItem.id); saveProf(); sfx('chest'); profUI(); openItem(mItem); renderShop();
 };
-function renderLocker() { $('lockSlots').innerHTML = '<div style="color:#aab3c8;font-weight:700;padding:20px">The Locker (equip what you own) is coming in the next update.</div>'; $('lockGrid').innerHTML = ''; }
+let LSLOT = 'outfit';
+function renderLocker() {
+  const sl = $('lockSlots'); sl.innerHTML = '';
+  for (const t of ['outfit', 'backpack', 'pickaxe', 'glider', 'wrap', 'emote']) { const it = eqItem(t), b = document.createElement('button'); b.className = 'lslot' + (t === LSLOT ? ' on' : ''); b.style.background = CR[it.r] ? CR[it.r].bg : '#2a3048';
+    b.innerHTML = '<img alt=""><span>' + TYPE_N[t] + '</span>'; b.onclick = () => { LSLOT = t; renderLocker(); sfx('pickup'); }; sl.appendChild(b); setTimeout(() => { b.querySelector('img').src = thumb(it); }, 0); }
+  const gr = $('lockGrid'); gr.innerHTML = '';
+  const mine = CATALOG.filter(c => c.type === LSLOT && PROF.owned.includes(c.id)).sort((a, b) => a.r - b.r);
+  for (const it of mine) gr.appendChild(card(it, true, () => { PROF.eq[LSLOT] = it.id; saveProf(); rebuildLobbyChar(); profUI(); renderLocker(); sfx('build'); if (LSLOT === 'emote' && lobbyChar) lobbyEmote = { k: it.k, t: 0 }; }, PROF.eq[LSLOT] === it.id));
+  const more = CATALOG.filter(c => c.type === LSLOT && !PROF.owned.includes(c.id)).length;
+  if (more) { const d = document.createElement('div'); d.style.cssText = 'grid-column:1/-1;color:#8f99b3;font-weight:700;font-size:13px;padding:6px 2px'; d.textContent = more + ' more ' + TYPE_N[LSLOT].toLowerCase() + (more > 1 ? 's' : '') + ' can be unlocked in the Item Shop.'; gr.appendChild(d); }
+}
+let lobbyEmote = null;
 // settings
 $('fovS').value = ld('si_fov', 78); $('fovS').oninput = () => sv('si_fov', +$('fovS').value);
 $('nameIn').value = (window.GR && GR.name && GR.name()) || ''; $('nameIn').onchange = () => { const v = $('nameIn').value.trim().slice(0, 16); if (v && window.GR && GR.setName) GR.setName(v); profUI(); };
 function lobbyLoop(t) { requestAnimationFrame(lobbyLoop); if (phase !== 'menu') return;
-  if (lobbyChar && (TAB === 'play' || TAB === 'locker')) { lobbyChar.g.rotation.y = Math.PI + Math.sin(t / 2500) * 0.5; lobbyChar.g.position.y = Math.sin(t / 600) * 0.02; LP.r.render(LP.sc, LP.cam); }
+  if (lobbyChar && (TAB === 'play' || TAB === 'locker')) { lobbyChar.g.rotation.y = Math.PI + Math.sin(t / 2500) * 0.5; lobbyChar.g.position.y = Math.sin(t / 600) * 0.02; if (lobbyEmote) { lobbyEmote.t += 1 / 60; poseEmote(lobbyChar, lobbyEmote.k, lobbyEmote.t); if (lobbyEmote.t > 3) { lobbyEmote = null; rebuildLobbyChar(); } } LP.r.render(LP.sc, LP.cam); }
   if (mItem && mObj) { mObj.rotation.y = t / 1600; if (mObj.userData.emote) { const c = mObj.userData.emote; c.g.rotation.y = 0; c.g.position.y = 0; poseEmote(c, mItem.k, t / 1000); } MP.r.render(MP.sc, MP.cam); }
 }
 rebuildLobbyChar(); lobbySize(); profUI(); requestAnimationFrame(lobbyLoop);
