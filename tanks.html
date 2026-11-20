@@ -44,8 +44,23 @@
       <p>Take turns firing over the hills. Mind the wind. Last tank standing wins.</p>
       <div class="slots" id="slots"></div>
       <div class="row"><button class="btn sec" id="addBtn">+ Add tank</button><button class="btn" id="goBtn">START</button></div>
+      <div class="row" style="margin-top:12px"><button class="btn sec" id="onlineBtn" style="width:100%">🌐 Play online with friends</button></div>
     </div></div>
     <div class="ov" id="win"><div class="card" id="winCard"></div></div>
+    <div class="ov" id="netOv"><div class="card">
+      <div id="netChoose">
+        <h2>🌐 <span>Online</span></h2><p>Play friends on different computers. One person creates a room and shares the code.</p>
+        <div class="row" style="margin-bottom:14px"><button class="btn" id="createBtn">Create a room</button></div>
+        <div class="row"><input id="codeIn" maxlength="4" placeholder="CODE" autocomplete="off" style="width:140px;text-align:center;font:900 22px system-ui;letter-spacing:.2em;text-transform:uppercase;background:#1d222c;border:2px solid #2a303b;border-radius:12px;color:#f1f3f7;padding:8px"><button class="btn sec" id="joinBtn">Join</button></div>
+        <p id="netMsg" style="margin:14px 0 0;min-height:20px;color:#ffb4a8"></p>
+        <div class="row" style="margin-top:6px"><button class="btn sec" id="netBack">Back</button></div>
+      </div>
+      <div id="netLobby" style="display:none">
+        <p style="margin-bottom:4px">Room code</p><div id="lobCode" style="font:900 52px system-ui;letter-spacing:.18em;color:#ffd23a;margin-bottom:6px">----</div>
+        <div class="slots" id="lobList"></div><p id="lobMsg"></p>
+        <div class="row"><button class="btn" id="lobStart">START</button><button class="btn sec" id="lobLeave">Leave</button></div>
+      </div>
+    </div></div>
   </div>
   <div class="ctrl"><div class="wp" id="wp"></div><button class="fire" id="fireBtn">FIRE</button></div>
   <div class="help"><b>←</b><b>→</b> aim (hold Shift for fine) · <b>↑</b><b>↓</b> power · <b>A</b><b>D</b> drive · <b>Q</b><b>E</b> or <b>1</b>–<b>8</b> weapon · <b>Space</b> fire · or click the sky to aim</div>
@@ -66,6 +81,7 @@ const WEAPONS = [
   { k: 'nuke', n: 'Nuke', ammo: 1, r: 115, dmg: 72 },
 ];
 let ground = new Float32Array(W + 1), tanks = [], cur = 0, wind = 0, shots = [], booms = [], parts = [], state = 'setup', shake = 0, T = 0, flash = 0, turnMsg = 0, cpuPlan = null, settleT = 0, hills = [];
+let shellAcc = 0;
 let setupSlots = ls.get('tank_slots', [{ n: 'You', t: 'human' }, { n: 'CPU', t: 'medium' }]);
 
 // ---------- sound ----------
@@ -77,10 +93,11 @@ const SFX = { fire: () => { noise(.35, .5, 600); tone(120, .25, 'sine', .3, 50);
 $('snd').textContent = muted ? '🔇' : '🔊'; $('snd').onclick = () => { muted = !muted; ls.set('tank_mute', muted); $('snd').textContent = muted ? '🔇' : '🔊'; };
 
 // ---------- terrain ----------
+let RND = Math.random;
 function genTerrain() {
-  const base = H * (0.52 + Math.random() * 0.12), waves = []; for (let i = 0; i < 5; i++) waves.push([Math.random() * 6.28, (1 + i * 1.7 + Math.random()) * Math.PI * 2 / W, (110 / (1 + i * 1.3)) * (0.5 + Math.random())]);
+  const base = H * (0.52 + RND() * 0.12), waves = []; for (let i = 0; i < 5; i++) waves.push([RND() * 6.28, (1 + i * 1.7 + RND()) * Math.PI * 2 / W, (110 / (1 + i * 1.3)) * (0.5 + RND())]);
   for (let x = 0; x <= W; x++) { let y = base; for (const [ph, f, a] of waves) y -= Math.sin(x * f + ph) * a; ground[x] = Math.max(H * 0.25, Math.min(H - 40, y)); }
-  hills = []; for (let L = 0; L < 2; L++) { const pts = [], b = H * (0.38 + L * 0.1), ph = Math.random() * 6, ph2 = Math.random() * 6; for (let x = 0; x <= W; x += 20) pts.push([x, b - Math.sin(x * .006 + ph) * 50 - Math.sin(x * .017 + ph2) * 20]); hills.push(pts); }
+  hills = []; for (let L = 0; L < 2; L++) { const pts = [], b = H * (0.38 + L * 0.1), ph = RND() * 6, ph2 = RND() * 6; for (let x = 0; x <= W; x += 20) pts.push([x, b - Math.sin(x * .006 + ph) * 50 - Math.sin(x * .017 + ph2) * 20]); hills.push(pts); }
 }
 const gAt = x => ground[Math.max(0, Math.min(W, Math.round(x)))];
 function crater(cxp, cyp, r) { for (let x = Math.max(0, Math.floor(cxp - r)); x <= Math.min(W, Math.ceil(cxp + r)); x++) { const dx = x - cxp, dy = Math.sqrt(Math.max(0, r * r - dx * dx)), y1 = cyp - dy, y2 = cyp + dy, g = ground[x]; if (g < y2) { const removed = y2 - Math.max(g, y1); if (removed > 0) ground[x] = Math.min(H + 20, g + removed); } } }
@@ -98,7 +115,7 @@ function renderSlots() {
 }
 $('addBtn').onclick = () => { if (setupSlots.length < 4) { setupSlots.push({ n: 'CPU ' + (setupSlots.length + 1), t: 'medium' }); renderSlots(); } };
 $('goBtn').onclick = () => { ls.set('tank_slots', setupSlots); newMatch(); };
-$('menuBtn').onclick = () => { state = 'setup'; $('win').classList.remove('on'); $('setup').classList.add('on'); renderSlots(); };
+$('menuBtn').onclick = async () => { if (NET.on) await leaveRoom(); $('netOv').classList.remove('on'); state = 'setup'; $('win').classList.remove('on'); $('setup').classList.add('on'); renderSlots(); };
 function newMatch() {
   au(); genTerrain(); shots = []; booms = []; parts = [];
   const n = setupSlots.length, order = setupSlots.map((s, i) => i).sort(() => Math.random() - .5);
@@ -106,11 +123,12 @@ function newMatch() {
   for (const t of tanks) { for (let x = t.x - 22; x <= t.x + 22; x++) if (x >= 0 && x <= W) ground[x] = ground[t.x]; t.y = gAt(t.x); }
   cur = Math.floor(Math.random() * n); $('setup').classList.remove('on'); $('win').classList.remove('on'); startTurn();
 }
-function startTurn() { wind = Math.round((Math.random() * 2 - 1) * 10); const t = tanks[cur]; t.fuel = 100; state = 'aim'; turnMsg = 1.6; cpuPlan = t.t === 'human' ? null : planCPU(t); renderWeapons(); }
+function startTurn(w) { wind = w != null ? w : Math.round((Math.random() * 2 - 1) * 10); const t = tanks[cur]; t.fuel = 100; t.tgt = null; state = 'aim'; turnMsg = 1.6; NET.clock = 0; cpuPlan = t.t === 'human' || t.t === 'remote' ? null : planCPU(t); renderWeapons(); }
 function nextTurn() { const alive = tanks.filter(t => t.alive); if (alive.length <= 1) return endMatch(alive[0]); do { cur = (cur + 1) % tanks.length; } while (!tanks[cur].alive); startTurn(); }
 function endMatch(w) { state = 'over'; const wins = ls.get('tank_wins', {}); if (w) { wins[w.n] = (wins[w.n] || 0) + 1; ls.set('tank_wins', wins); }
   $('winCard').innerHTML = '<h2>' + (w ? '<span style="color:' + w.c + '">' + esc(w.n) + '</span> wins!' : 'Everyone blew up!') + '</h2><p>' + (w ? 'Last tank standing with ' + Math.max(0, Math.round(w.hp)) + ' HP left.' : 'Nobody survived. A draw!') + '</p><div class="row"><button class="btn" id="againBtn">Play again</button><button class="btn sec" id="setBtn">Change players</button></div>';
-  setTimeout(() => $('win').classList.add('on'), 900); $('againBtn').onclick = newMatch; $('setBtn').onclick = () => $('menuBtn').click(); }
+  setTimeout(() => $('win').classList.add('on'), 900); $('againBtn').onclick = newMatch; $('setBtn').onclick = () => $('menuBtn').click();
+  if (NET.on) { const a = $('againBtn'), b = $('setBtn'); b.textContent = 'Leave room'; b.onclick = async () => { await leaveRoom(); $('win').classList.remove('on'); state = 'setup'; $('setup').classList.add('on'); renderSlots(); }; if (NET.host) { a.textContent = 'Play again'; a.onclick = hostStart; } else { a.textContent = 'Waiting for host…'; a.disabled = true; a.style.opacity = .6; } } }
 const esc = s => String(s).replace(/[<>&"]/g, '');
 
 // ---------- weapons UI ----------
@@ -122,7 +140,7 @@ $('fireBtn').onclick = () => fire();
 // ---------- input ----------
 const keys = {};
 addEventListener('keydown', e => { keys[e.code] = true; if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault(); const t = tanks[cur];
-  if (state !== 'aim' || !t || t.t !== 'human') { if (e.code === 'Enter' && $('win').classList.contains('on')) newMatch(); return; }
+  if (state !== 'aim' || !t || t.t !== 'human') { if (e.code === 'Enter' && $('win').classList.contains('on') && !NET.on) newMatch(); return; }
   if (e.code === 'Space') fire();
   if (e.code === 'KeyQ' || e.code === 'KeyE') { let i = t.w; do { i = (i + (e.code === 'KeyE' ? 1 : WEAPONS.length - 1)) % WEAPONS.length; } while (!t.ammo[i]); t.w = i; renderWeapons(); }
   const n = +e.key; if (n >= 1 && n <= WEAPONS.length && t.ammo[n - 1]) { t.w = n - 1; renderWeapons(); } });
@@ -131,7 +149,8 @@ cv.addEventListener('click', e => { const t = tanks[cur]; if (state !== 'aim' ||
 
 // ---------- firing ----------
 function muzzle(t) { const a = t.ang * Math.PI / 180; return [t.x + Math.cos(a) * 26, t.y - 14 + Math.sin(a) * 26]; }
-function fire() { const t = tanks[cur]; if (state !== 'aim' || !t.alive || !t.ammo[t.w]) return;
+function fire() { const t = tanks[cur]; if (state !== 'aim' || !t || !t.alive || !t.ammo[t.w] || t.t === 'remote') return; if (NET.on) { api('shot', 'PUT', { n: NET.turn, slot: t.slot, ang: Math.round(t.ang * 1000) / 1000, pow: Math.round(t.pow * 10000) / 10000, w: t.w, x: Math.round(t.x * 100) / 100 }).catch(() => {}); t.ang = Math.round(t.ang * 1000) / 1000; t.pow = Math.round(t.pow * 10000) / 10000; t.x = Math.round(t.x * 100) / 100; } fireLocal(); }
+function fireLocal() { const t = tanks[cur]; if (state !== 'aim' || !t.alive || !t.ammo[t.w]) return;
   const W0 = WEAPONS[t.w], a = t.ang * Math.PI / 180, sp = 60 + t.pow * (MAXP - 60), [mx, my] = muzzle(t); if (t.ammo[t.w] !== Infinity) t.ammo[t.w]--;
   const mk = da => ({ x: mx, y: my, vx: Math.cos(a + da) * sp, vy: Math.sin(a + da) * sp, w: W0, owner: t, trail: [], b: 0, dig: 0, t: 0 });
   if (W0.k === 'triple') shots.push(mk(-0.07), mk(0), mk(0.07)); else shots.push(mk(0));
@@ -173,9 +192,9 @@ function update(dt) {
       const mv = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0); if (mv && t.fuel > 0) drive(t, mv, dt); }
     else if (cpuPlan) { cpuPlan.think -= dt; if (cpuPlan.think < 0) { t.w = cpuPlan.w; const da = cpuPlan.ang - t.ang, dp = cpuPlan.pow - t.pow; t.ang += Math.sign(da) * Math.min(Math.abs(da), 90 * dt); t.pow += Math.sign(dp) * Math.min(Math.abs(dp), .6 * dt); if (Math.abs(da) < .1 && Math.abs(dp) < .005) { cpuPlan = null; setTimeout(() => { if (state === 'aim' && tanks[cur] === t) fire(); }, 300); } } }
   }
-  // shells
-  for (let i = shots.length - 1; i >= 0; i--) { const s = shots[i]; s.t += dt;
-    const steps = 4, h = dt / steps; let done = false;
+  // shells (fixed 1/240 s steps)
+  shellAcc = Math.min(.1, shellAcc + dt); const steps = Math.floor(shellAcc * 240); shellAcc -= steps / 240; const h = 1 / 240;
+  for (let i = shots.length - 1; i >= 0; i--) { const s = shots[i]; s.t += steps * h; let done = false;
     for (let k = 0; k < steps && !done; k++) {
       if (s.dig > 0) { s.x += s.vx * h * .15; s.y += 140 * h; s.dig -= h; if (s.dig <= 0) { explode(s.x, s.y, s.w, s.owner); done = true; } continue; }
       const pvy = s.vy; s.vx += wind * WIND_K * h; s.vy += GRAV * h; s.x += s.vx * h; s.y += s.vy * h;
@@ -197,7 +216,8 @@ function update(dt) {
     if (o.y > H + 10) o.hp = 0;
     if (o.hp <= 0 && o.alive) { o.alive = false; explode(o.x, o.y - 6, { k: 'die', r: 40, dmg: 20 }, null); pop(o.x, o.y - 60, esc(o.n) + ' destroyed!', '#fff'); busy = true; }
     o.hit = Math.max(0, o.hit - dt * 3); o.recoil = Math.max(0, (o.recoil || 0) - dt * 4); }
-  if (state === 'settle') { settleT += dt; if (!busy && settleT > 1.1 && !booms.length) nextTurn(); }
+  if (state === 'settle') { settleT += dt; if (!busy && settleT > 1.1 && !booms.length) { if (!NET.on) nextTurn(); else if (tanks[cur].t === 'human') writeSync(); else { state = 'wait'; NET.waitT = 0; applySync(); } } }
+  netTick(dt);
   for (let i = booms.length - 1; i >= 0; i--) { booms[i].t += dt; if (booms[i].t > .6) booms.splice(i, 1); }
   for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; p.l -= dt; if (p.l <= 0) { parts.splice(i, 1); continue; } p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.smoke) { p.s += dt * 10; p.vx *= 1 - dt; } else if (p.x > 0 && p.x < W && p.y > gAt(p.x) && p.g > 0) { p.y = gAt(p.x); p.vx *= .5; p.vy *= -.3; } }
   for (let i = pops.length - 1; i >= 0; i--) { pops[i].l -= dt; pops[i].y -= 30 * dt; if (pops[i].l <= 0) pops.splice(i, 1); }
@@ -242,15 +262,97 @@ function draw() {
   // HUD
   if (t && state !== 'setup') {
     cx.fillStyle = 'rgba(10,14,22,.55)'; cx.beginPath(); cx.roundRect(12, 12, 330, 56, 12); cx.fill();
-    cx.fillStyle = t.c; cx.beginPath(); cx.arc(34, 40, 10, 0, 7); cx.fill(); cx.font = '800 16px system-ui'; cx.textAlign = 'left'; cx.fillStyle = '#fff'; cx.fillText(t.n + (t.t !== 'human' ? ' (CPU)' : ''), 52, 34);
+    cx.fillStyle = t.c; cx.beginPath(); cx.arc(34, 40, 10, 0, 7); cx.fill(); cx.font = '800 16px system-ui'; cx.textAlign = 'left'; cx.fillStyle = '#fff'; cx.fillText(t.n + (t.t === 'human' || t.t === 'remote' ? '' : ' (CPU)') + (NET.on && t.t === 'human' ? ' (you)' : ''), 52, 34);
     cx.font = '600 13px system-ui'; cx.fillStyle = '#cfd6e2'; const ang = Math.round(t.ang < -90 ? 180 + t.ang : -t.ang); cx.fillText('Angle ' + ang + '°   Power ' + Math.round(t.pow * 100) + '   ' + WEAPONS[t.w].n, 52, 54);
     cx.fillStyle = 'rgba(10,14,22,.55)'; cx.beginPath(); cx.roundRect(W - 192, 12, 180, 56, 12); cx.fill(); cx.fillStyle = '#cfd6e2'; cx.font = '700 13px system-ui'; cx.textAlign = 'center'; cx.fillText(wind === 0 ? 'No wind' : 'Wind ' + Math.abs(wind), W - 102, 32);
     const wl = Math.abs(wind) * 6; cx.strokeStyle = '#fff'; cx.lineWidth = 4; cx.lineCap = 'round'; cx.beginPath(); cx.moveTo(W - 102 - Math.sign(wind) * wl / 2, 50); cx.lineTo(W - 102 + Math.sign(wind) * wl / 2, 50); cx.stroke(); if (wind) { cx.fillStyle = '#fff'; cx.beginPath(); const tip = W - 102 + Math.sign(wind) * (wl / 2 + 8); cx.moveTo(tip, 50); cx.lineTo(tip - Math.sign(wind) * 9, 44); cx.lineTo(tip - Math.sign(wind) * 9, 56); cx.fill(); }
     if (t.t === 'human' && state === 'aim') { cx.fillStyle = 'rgba(10,14,22,.55)'; cx.beginPath(); cx.roundRect(354, 12, 110, 26, 9); cx.fill(); cx.fillStyle = '#8af'; cx.fillRect(362, 22, 94 * t.fuel / 100, 6); cx.font = '700 10px system-ui'; cx.fillStyle = '#cfd6e2'; cx.textAlign = 'left'; cx.fillText('FUEL', 362, 20); }
+    if (NET.on) { cx.fillStyle = 'rgba(10,14,22,.55)'; cx.beginPath(); cx.roundRect(W / 2 - 80, H - 40, 160, 28, 10); cx.fill(); cx.fillStyle = '#7affb0'; cx.font = '700 12px system-ui'; cx.textAlign = 'center'; cx.fillText('● ONLINE · ROOM ' + NET.code, W / 2, H - 21);
+      if (t.t === 'remote' && (state === 'aim' || state === 'wait')) { cx.font = '800 16px system-ui'; cx.fillStyle = '#fff'; cx.fillText(state === 'wait' ? 'Waiting for ' + t.n + '…' : t.n + ' is aiming…', W / 2, 90); } }
     if (turnMsg > 0 && state === 'aim') { cx.globalAlpha = Math.min(1, turnMsg * 2); cx.font = '900 36px system-ui'; cx.textAlign = 'center'; cx.fillStyle = 'rgba(0,0,0,.4)'; const tm = /^you$/i.test(t.n) ? 'Your turn' : t.n + "'s turn"; cx.fillText(tm, W / 2 + 2, 132); cx.fillStyle = t.c; cx.fillText(tm, W / 2, 130); cx.globalAlpha = 1; }
   }
   if (flash) { cx.fillStyle = 'rgba(255,255,240,' + flash + ')'; cx.fillRect(-30, -30, W + 60, H + 60); }
 }
+// ================= online play (rooms in the site's online database) =================
+const NET = { on: false, code: '', me: (window.GR && GR.id) || ('g' + Math.random().toString(36).slice(2, 9)), host: false, room: {}, es: null, startN: 0, turn: 0, pending: null, liveT: 0, lastLive: '', clock: 0, waitT: 0 };
+const FBU = () => (window.GR && GR.FB) || '';
+const myName = () => (window.GR && GR.name && GR.name()) || 'Player';
+function api(path, method, body) { return fetch(FBU() + '/rooms/tank/' + NET.code + (path ? '/' + path : '') + '.json', { method: method || 'GET', body: body === undefined ? undefined : JSON.stringify(body), keepalive: method === 'DELETE' }).then(r => r.ok ? r.json() : null); }
+function mirrorApply(path, data, patch) { const ks = path.split('/').filter(Boolean); if (!ks.length) { if (patch) Object.assign(NET.room, data || {}); else NET.room = data || {}; return; } let o = NET.room; for (let i = 0; i < ks.length - 1; i++) { if (typeof o[ks[i]] !== 'object' || !o[ks[i]]) o[ks[i]] = {}; o = o[ks[i]]; } const k = ks[ks.length - 1]; if (patch) { o[k] = Object.assign(o[k] && typeof o[k] === 'object' ? o[k] : {}, data); } else if (data === null) delete o[k]; else o[k] = data; }
+function listen() { if (NET.es) NET.es.close(); NET.es = new EventSource(FBU() + '/rooms/tank/' + NET.code + '.json');
+  const on = patch => e => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } if (!m) return; if (patch) for (const k in m.data) mirrorApply(m.path.replace(/\/$/, '') + '/' + k, m.data[k], false); else mirrorApply(m.path, m.data, false); onRoom(); };
+  NET.es.addEventListener('put', on(false)); NET.es.addEventListener('patch', on(true)); NET.es.onerror = () => { $('lobMsg') && ($('lobMsg').textContent = 'Reconnecting…'); }; }
+const players = () => Object.entries(NET.room.players || {}).map(([uid, p]) => Object.assign({ uid }, p)).filter(p => p && p.slot != null).sort((a, b) => a.slot - b.slot);
+function code4() { const A = 'ABCDEFGHJKMNPQRSTUVWXYZ'; let s = ''; for (let i = 0; i < 4; i++) s += A[Math.floor(Math.random() * A.length)]; return s; }
+async function createRoom() { if (!FBU()) return netMsg('Online play needs the site’s online database, which isn’t reachable right now.'); netMsg('Creating room…');
+  for (let k = 0; k < 5; k++) { NET.code = code4(); const ex = await api('meta').catch(() => null); if (!ex) break; }
+  NET.host = true; await api('', 'PUT', { meta: { host: NET.me, state: 'lobby', t: { '.sv': 'timestamp' } }, players: { [NET.me]: { n: myName().slice(0, 12), slot: 0 } } }).catch(() => null); enterLobby(); }
+async function joinRoom(code) { code = String(code || '').toUpperCase().replace(/[^A-Z]/g, ''); if (code.length !== 4) return netMsg('Room codes are 4 letters.'); if (!FBU()) return netMsg('Online play needs the online database.'); netMsg('Joining…'); NET.code = code;
+  const room = await api('').catch(() => null); if (!room || !room.meta) return netMsg('No room called ' + code + '.'); if (room.meta.state !== 'lobby' && !(room.players || {})[NET.me]) return netMsg('That game already started. Ask for a new room.');
+  const ps = Object.entries(room.players || {}); const mine = (room.players || {})[NET.me]; if (!mine && ps.length >= 4) return netMsg('That room is full (4 players).');
+  const used = ps.map(([, p]) => p.slot); let slot = mine ? mine.slot : [0, 1, 2, 3].find(s => !used.includes(s)); await api('players/' + NET.me, 'PUT', { n: myName().slice(0, 12), slot }); NET.host = room.meta.host === NET.me; enterLobby(); }
+function enterLobby() { NET.on = true; NET.startN = 0; listen(); showNet('lobby'); history.replaceState(null, '', '#room=' + NET.code); }
+async function leaveRoom() { if (!NET.on) return; const others = players().filter(p => p.uid !== NET.me); NET.on = false; if (NET.es) NET.es.close();
+  try { if (!others.length) await api('', 'DELETE'); else { if (NET.host) await api('meta/host', 'PUT', others[0].uid); await api('players/' + NET.me, 'DELETE'); } } catch (e) {}
+  NET.code = ''; NET.room = {}; history.replaceState(null, '', location.pathname); }
+addEventListener('pagehide', () => { if (NET.on) { const others = players().filter(p => p.uid !== NET.me); if (NET.host && others.length) api('meta/host', 'PUT', others[0].uid); api(others.length ? 'players/' + NET.me : '', 'DELETE'); } });
+function hostStart() { const ps = players(); if (ps.length < 2) return; const st = { n: ((NET.room.start && NET.room.start.n) || 0) + 1, seed: Math.floor(Math.random() * 2e9), cur: Math.floor(Math.random() * ps.length), wind: Math.round((Math.random() * 2 - 1) * 10), players: ps.map(p => ({ uid: p.uid, n: p.n, slot: p.slot })) };
+  api('', 'PATCH', { start: st, shot: null, sync: null, live: null, 'meta/state': 'play' }); }
+function onRoom() {
+  if (!NET.on) return; const R = NET.room;
+  if (!R.meta) { NET.on = false; if (NET.es) NET.es.close(); showNet('choose'); netMsg('The room was closed.'); return; }
+  NET.host = R.meta.host === NET.me;
+  if ($('netLobby') && $('netLobby').style.display !== 'none') renderLobby();
+  if (R.start && R.start.n > NET.startN) { NET.startN = R.start.n; startOnline(R.start); return; }
+  if (state === 'setup' || state === 'over') return;
+  const t = tanks[cur];
+  if (R.live && R.live.n === NET.turn && t && t.t === 'remote' && R.live.slot === t.slot && state === 'aim') { t.tgt = R.live; t.w = R.live.w; }
+  if (R.shot && R.shot.n === NET.turn && t && t.t === 'remote' && state === 'aim') { const s = R.shot; t.ang = s.ang; t.pow = s.pow; t.w = s.w; t.x = s.x; t.tgt = null; fireLocal(); }
+  if (R.sync && R.sync.n === NET.turn && R.sync.by !== NET.me) { NET.pending = R.sync; if (state === 'wait' || state === 'aim') applySync(); }
+  for (const tk of tanks) if (tk.alive && tk.uid && !(R.players || {})[tk.uid] && !tk.gone) { tk.gone = true; pop(tk.x, tk.y - 60, esc(tk.n) + ' left', '#fff'); }
+}
+const arr = v => Array.isArray(v) ? v : Object.keys(v || {}).sort((a, b) => a - b).map(k => v[k]);
+function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function startOnline(st) {
+  au(); RND = rng(st.seed); genTerrain(); shots = []; booms = []; parts = [];
+  const ps = arr(st.players), n = ps.length, order = ps.map((p, i) => i).sort((a, b) => RND() - .5); RND = Math.random;
+  tanks = ps.map((p, i) => { const x = Math.round(W * (0.1 + 0.8 * order.indexOf(i) / (n - 1))); return { i: p.slot, slot: p.slot, uid: p.uid, n: p.n, t: p.uid === NET.me ? 'human' : 'remote', c: COLORS[p.slot], x, y: gAt(x), vy: 0, ang: x < W / 2 ? -50 : -130, pow: 0.6, hp: 100, alive: true, fuel: 100, ammo: WEAPONS.map(w => w.ammo), w: 0, fall: 0, hit: 0 }; });
+  for (const t of tanks) { for (let x = t.x - 22; x <= t.x + 22; x++) if (x >= 0 && x <= W) ground[x] = ground[t.x]; t.y = gAt(t.x); }
+  cur = st.cur; NET.turn = 1; NET.pending = null; NET.beat = 0; $('setup').classList.remove('on'); $('win').classList.remove('on'); $('netOv').classList.remove('on'); startTurn(st.wind);
+}
+function sendLive(dt) { const t = tanks[cur]; if (!NET.on || !t || t.t !== 'human' || state !== 'aim') return; NET.liveT -= dt; if (NET.liveT > 0) return; NET.liveT = .15;
+  const L = { n: NET.turn, slot: t.slot, ang: Math.round(t.ang * 10) / 10, pow: Math.round(t.pow * 1000) / 1000, w: t.w, x: Math.round(t.x * 10) / 10 }, k = JSON.stringify(L); if (k !== NET.lastLive) { NET.lastLive = k; api('live', 'PUT', L).catch(() => {}); } }
+const packAmmo = a => a.map(v => v === Infinity ? -1 : v), unpackAmmo = a => arr(a).map(v => v === -1 ? Infinity : v);
+function writeSync(skip) { // the shooter (or the host, for a skipped turn) tells everyone exactly how the turn ended
+  for (const tk of tanks) if (tk.gone && tk.alive) { tk.alive = false; tk.hp = 0; }
+  const alive = tanks.filter(t => t.alive); let next = cur; if (alive.length > 1) { do { next = (next + 1) % tanks.length; } while (!tanks[next].alive); }
+  const s = { n: NET.turn, by: NET.me, ground: Array.from(ground, v => Math.round(v * 10) / 10), tanks: tanks.map(t => ({ x: Math.round(t.x * 10) / 10, y: Math.round(t.y * 10) / 10, hp: Math.round(t.hp), alive: t.alive, ammo: packAmmo(t.ammo) })), cur: next, wind: Math.round((Math.random() * 2 - 1) * 10), over: alive.length <= 1 ? (alive[0] ? alive[0].slot : -1) : null, skip: !!skip };
+  api('sync', 'PUT', s).catch(() => {}); NET.pending = s; applySync(); }
+function applySync() { const s = NET.pending; if (!s || s.n !== NET.turn) return; NET.pending = null;
+  const sg = arr(s.ground); if (sg.length) for (let x = 0; x <= W; x++) ground[x] = sg[x];
+  arr(s.tanks).forEach((v, i) => { const t = tanks[i]; if (!t) return; t.x = v.x; t.y = v.y; t.vy = 0; t.fall = 0; t.hp = v.hp; if (t.alive && !v.alive) { t.alive = false; } t.alive = v.alive; t.ammo = unpackAmmo(v.ammo); if (t.w && !t.ammo[t.w]) t.w = 0; });
+  shots = []; NET.turn = s.n + 1; NET.clock = 0; NET.waitT = 0;
+  if (s.skip) pop(W / 2, 160, 'Turn skipped', '#fff');
+  if (s.over != null) return endMatch(s.over >= 0 ? tanks.find(t => t.slot === s.over) : null);
+  cur = s.cur; startTurn(s.wind); }
+function stale(uid) { const P = NET.room.players || {}, me = P[NET.me], th = P[uid]; return !th || !!(me && me.seen && th.seen && me.seen - th.seen > 15000); }
+function netTick(dt) { if (!NET.on) return; NET.beat = (NET.beat || 0) - dt; if (NET.beat <= 0) { NET.beat = 5; api('players/' + NET.me + '/seen', 'PUT', { '.sv': 'timestamp' }).catch(() => {}); }
+  if (state === 'setup' || state === 'over') return; sendLive(dt); NET.clock += dt; const t = tanks[cur];
+  if (t && t.t === 'remote' && t.tgt && state === 'aim') { const g = t.tgt; t.ang += (g.ang - t.ang) * Math.min(1, dt * 10); t.pow += (g.pow - t.pow) * Math.min(1, dt * 10); t.x += (g.x - t.x) * Math.min(1, dt * 8); }
+  if (state === 'wait') { NET.waitT += dt; if (NET.pending) applySync(); }
+  if (NET.host && t && t.t === 'remote') { const left = stale(t.uid); if (left && !t.gone) { t.gone = true; pop(t.x, t.y - 60, esc(t.n) + ' left', '#fff'); } if ((state === 'aim' && (NET.clock > 60 || left)) || (state === 'wait' && NET.waitT > 8)) { NET.clock = 0; NET.waitT = 0; shots = []; writeSync(state === 'aim'); } } }
+// ---------- online screens ----------
+function netMsg(t) { const m = $('netMsg'); if (m) m.textContent = t || ''; }
+function showNet(view) { $('setup').classList.remove('on'); $('netOv').classList.add('on'); $('netChoose').style.display = view === 'choose' ? '' : 'none'; $('netLobby').style.display = view === 'lobby' ? '' : 'none'; if (view === 'lobby') renderLobby(); }
+function renderLobby() { const ps = players(); $('lobCode').textContent = NET.code;
+  $('lobList').innerHTML = [0, 1, 2, 3].map(s => { const p = ps.find(q => q.slot === s); return '<div class="slot"><div class="sw" style="background:' + COLORS[s] + (p ? '' : ';opacity:.25') + '"></div><b style="flex:1;text-align:left">' + (p ? esc(p.n) + (p.uid === NET.me ? ' (you)' : '') + (NET.room.meta && NET.room.meta.host === p.uid ? ' 👑' : '') : '<span style="color:#8e96a6;font-weight:500">Waiting for a player…</span>') + '</b></div>'; }).join('');
+  $('lobStart').style.display = NET.host ? '' : 'none'; $('lobStart').disabled = ps.length < 2; $('lobMsg').textContent = NET.host ? (ps.length < 2 ? 'Send the code to your friends. You need at least 2 players.' : ps.length + ' players ready. Start when everyone is in!') : 'Waiting for the host to start…'; }
+
+$('onlineBtn').onclick = () => { netMsg(''); showNet('choose'); setTimeout(() => $('codeIn').focus(), 50); };
+$('createBtn').onclick = createRoom; $('joinBtn').onclick = () => joinRoom($('codeIn').value); $('codeIn').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') joinRoom($('codeIn').value); });
+$('netBack').onclick = () => { $('netOv').classList.remove('on'); $('setup').classList.add('on'); };
+$('lobStart').onclick = hostStart; $('lobLeave').onclick = async () => { await leaveRoom(); showNet('choose'); };
+if (/#room=([A-Z]{4})/.test(location.hash)) setTimeout(() => { showNet('choose'); joinRoom(location.hash.match(/#room=([A-Z]{4})/)[1]); }, 500);
 // ---------- loop ----------
 genTerrain(); renderSlots(); let last = performance.now();
 function frame(now) { const dt = Math.min(.033, (now - last) / 1000); last = now; if (state !== 'setup') update(dt); else T += dt; draw(); requestAnimationFrame(frame); }
