@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banned</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: radial-gradient(ellipse at 50% 30%, #3a0d12, #0b0607 70%); color: #f4e9ea; font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .box { max-width: 520px; width: 100%; text-align: center; }
+  .icon { width: 96px; height: 96px; margin: 0 auto 18px; border-radius: 50%; border: 8px solid #ff3b4a; position: relative; animation: pop .5s cubic-bezier(.3,1.6,.5,1); }
+  .icon::after { content: ''; position: absolute; left: 50%; top: 50%; width: 92px; height: 8px; background: #ff3b4a; transform: translate(-50%, -50%) rotate(-45deg); border-radius: 4px; }
+  @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+  h1 { font-size: clamp(30px, 7vw, 46px); margin: 0 0 8px; letter-spacing: -.01em; }
+  p { margin: 0 0 6px; color: #d7c4c6; }
+  .reason { margin: 22px 0 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,59,74,.1); border: 1px solid rgba(255,59,74,.35); text-align: left; }
+  .reason b { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #ff8a93; margin-bottom: 4px; }
+  .meta { margin-top: 18px; font-size: 12px; color: #8f7d80; }
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="icon" aria-hidden="true"></div>
+  <h1>You've been banned</h1>
+  <p>You can't use Arcade anymore.</p>
+  <div class="reason" id="reasonBox" hidden><b>Reason</b><span id="reason"></span></div>
+  <div class="meta" id="meta"></div>
+</div>
+<script>
+(function () {
+  var FB = 'https://game-site-2a81e-default-rtdb.firebaseio.com', K = 'gr_cfg';
+  function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function ck(k) { try { var m = document.cookie.match(new RegExp('(?:^|; )' + k + '=([^;]*)')); return m ? decodeURIComponent(m[1]) : null; } catch (e) { return null; } }
+  function idb(cb) { try { var r = indexedDB.open('arcade', 1); r.onupgradeneeded = function () { r.result.createObjectStore('kv'); }; r.onsuccess = function () { cb(r.result); }; r.onerror = function () { cb(null); }; } catch (e) { cb(null); } }
+  function idbGet(k, cb) { idb(function (db) { if (!db) return cb(null); try { var q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = function () { cb(q.result || null); }; q.onerror = function () { cb(null); }; } catch (e) { cb(null); } }); }
+  function j(p) { return fetch(FB + '/' + p + '.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); }
+  function clearAll(done) { // only runs after the admin unbans you
+    try { localStorage.removeItem(K); } catch (e) {}
+    try { document.cookie = K + '=;max-age=0;path=/;SameSite=Lax'; } catch (e) {}
+    idb(function (db) { if (!db) return done(); try { var t = db.transaction('kv', 'readwrite'); t.objectStore('kv').delete('cfg'); t.oncomplete = done; t.onerror = done; } catch (e) { done(); } });
+  }
+  function start(key) {
+    if (!/^[uf]_[A-Za-z0-9]{4,24}$/.test(key || '')) { location.replace('index.html'); return; }
+    var path = (key.charAt(0) === 'u' ? 'bans/' : 'fpbans/') + key.slice(2);
+    j(path).then(function (b) {
+      if (b && b.reason) { document.getElementById('reason').textContent = String(b.reason).slice(0, 300); document.getElementById('reasonBox').hidden = false; }
+      if (b && typeof b.t === 'number') document.getElementById('meta').textContent = 'Banned ' + new Date(b.t).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + ' · ID ' + key;
+      else document.getElementById('meta').textContent = 'ID ' + key;
+    });
+    function check() { j('unban/' + key).then(function (u) { if (u) clearAll(function () { location.replace('index.html'); }); }); }
+    check(); setInterval(check, 20000);
+  }
+  var key = get(K) || ck(K); if (key) start(key); else idbGet('cfg', start);
+})();
+</script>
+</body>
+</html>

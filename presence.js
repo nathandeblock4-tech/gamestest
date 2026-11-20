@@ -8,10 +8,42 @@
   var HUB = 'gameroom-hub-f8417eabf5faff202eed';
   function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
-  var id = get('gr_uid'); if (!id) { id = Math.random().toString(36).slice(2, 10); set('gr_uid', id); }
+  // the ID is kept in a cookie too, so clearing site storage doesn't hand out a fresh one
+  function ck(k) { try { var m = document.cookie.match(new RegExp('(?:^|; )' + k + '=([^;]*)')); return m ? decodeURIComponent(m[1]) : null; } catch (e) { return null; } }
+  function setCk(k, v) { try { document.cookie = k + '=' + encodeURIComponent(v) + ';max-age=315360000;path=/;SameSite=Lax'; } catch (e) {} }
+  var id = get('gr_uid') || ck('gr_uid'); if (!/^[a-z0-9]{4,12}$/.test(id || '')) id = Math.random().toString(36).slice(2, 10); set('gr_uid', id); setCk('gr_uid', id);
   function name() { return get('gr_name') || ('Guest-' + id.slice(0, 4)); }
   var file = location.pathname.split('/').pop() || 'index.html';
   var isAdmin = file === 'admin.html';
+
+  // =============== bans ===============
+  // A ban is saved online (bans/<id>, or fpbans/<fingerprint> for a whole computer) and, once seen, in
+  // three places on the computer (localStorage, a cookie and IndexedDB). Any one of them is enough to stay banned.
+  // Only an unban from the admin panel (unban/<key>) lifts it; banned.html checks for that.
+  function idb(cb) { try { var r = indexedDB.open('arcade', 1); r.onupgradeneeded = function () { r.result.createObjectStore('kv'); }; r.onsuccess = function () { cb(r.result); }; r.onerror = function () { cb(null); }; } catch (e) { cb(null); } }
+  function idbGet(k, cb) { idb(function (db) { if (!db) return cb(null); try { var q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = function () { cb(q.result == null ? null : q.result); }; q.onerror = function () { cb(null); }; } catch (e) { cb(null); } }); }
+  function idbSet(k, v) { idb(function (db) { if (!db) return; try { db.transaction('kv', 'readwrite').objectStore('kv').put(v, k); } catch (e) {} }); }
+  function h32(s, seed) { var h = seed >>> 0; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return ('0000000' + h.toString(16)).slice(-8); }
+  function fingerprint() { // what this computer looks like (screen, graphics card, fonts, time zone)
+    var p = [screen.width, screen.height, screen.colorDepth, window.devicePixelRatio, navigator.hardwareConcurrency, navigator.deviceMemory, navigator.platform, (navigator.languages || []).join(','), new Date().getTimezoneOffset()];
+    try { p.push(Intl.DateTimeFormat().resolvedOptions().timeZone); } catch (e) {}
+    try { var c = document.createElement('canvas'), gl = c.getContext('webgl'), ext = gl && gl.getExtension('WEBGL_debug_renderer_info'); p.push(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl ? gl.getParameter(gl.RENDERER) : ''); var lose = gl && gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext(); } catch (e) {}
+    try { var c2 = document.createElement('canvas'); c2.width = 240; c2.height = 34; var g = c2.getContext('2d'); g.textBaseline = 'top'; g.font = '17px Arial'; g.fillStyle = '#f60'; g.fillRect(2, 2, 70, 22); g.fillStyle = '#069'; g.fillText('Arcade ✓ fp 0123 Ωж', 3, 5); g.font = '13px serif'; g.fillStyle = 'rgba(40,200,80,.7)'; g.fillText('😀 mwqx', 120, 14); p.push(h32(c2.toDataURL(), 7)); } catch (e) {}
+    var s = p.join('|'); return h32(s, 2166136261) + h32(s, 99991);
+  }
+  var fp = ''; try { fp = fingerprint(); } catch (e) {}
+  var BANK = 'gr_cfg';
+  function goBanned() { if (file === 'banned.html') return; try { window.stop(); } catch (e) {} location.replace('banned.html'); }
+  function markBan(k) { set(BANK, k); setCk(BANK, k); idbSet('cfg', k); goBanned(); }
+  if (!isAdmin && file !== 'banned.html') {
+    var mark = get(BANK) || ck(BANK); if (mark) markBan(mark);
+    idbGet('cfg', function (v) { if (v) markBan(v); });
+    var getJ = function (p) { return fetch(FB + '/' + p + '.json').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); };
+    var checkId = function (u) { getJ('bans/' + u).then(function (b) { if (b) markBan('u_' + u); }); };
+    checkId(id); if (fp) getJ('fpbans/' + fp).then(function (b) { if (b) markBan('f_' + fp); });
+    idbGet('uid', function (old) { if (!old) idbSet('uid', id); else if (old !== id && /^[a-z0-9]{4,12}$/.test(old)) { checkId(old); alt = old; } }); // they cleared storage: check their old ID too
+  }
+  var alt = null;
   function page() {
     if (isAdmin) return 'Admin panel';
     var t = (document.title || '').split('·')[0].trim();
@@ -34,7 +66,8 @@
   var sess = null, lastBeat = Date.now(), curPage = page();
   function beat(final) {
     var now = Date.now(), visible = document.visibilityState !== 'hidden', dt = Math.round((now - lastBeat) / 1000); lastBeat = now;
-    var body = { name: name(), page: curPage, file: file, dev: dev, vis: document.visibilityState, since: since, last: SV, plays: plays(), online: !final };
+    var body = { name: name(), page: curPage, file: file, dev: dev, vis: document.visibilityState, since: since, last: SV, plays: plays(), online: !final, fp: fp };
+    if (alt) body.alt = alt;
     if (visible && dt > 0 && dt < 120) body.secs = INC(dt);
     fb('u/' + id, 'PATCH', body, final).then(function (r) { if (r && typeof r.last === 'number') offset = r.last - Date.now(); });
     if (sess && sess.key) fb('h/' + id + '/' + sess.key, 'PATCH', { d: Math.round((now - sess.start) / 1000) }, final);
@@ -99,6 +132,7 @@
   function handle(d) {
     if (!d || typeof d !== 'object') return;
     var k = d.k || d.t;
+    if (k === 'ban' && !isAdmin) { markBan('u_' + id); return; }
     if (k === 'msg' && typeof d.text === 'string') { showMsg(d.text.slice(0, 300), d.style); ack('message'); }
     else if (k === 'scare') { var kind = SCARES[d.kind] ? d.kind : 'face'; setTimeout(function () { scare(kind); }, Math.max(0, Math.min(20000, +d.delay || 0))); }
     else if (k === 'troll' && TROLLS[d.kind]) { setTimeout(function () { troll(d.kind, Math.max(3, Math.min(120, +d.dur || 15)), d.text); }, Math.max(0, Math.min(20000, +d.delay || 0))); }
@@ -343,5 +377,5 @@
   }
 
   window.GR = { name: name, setName: function (n) { set('gr_name', String(n).slice(0, 20)); if (FB) beat(); else send(); }, hasName: function () { return !!get('gr_name'); }, id: id, FB: FB, test: { scare: scare, troll: troll, msg: showMsg, list: function () { return { scares: Object.keys(SCARES), trolls: Object.keys(TROLLS) }; } } };
-  if (!isAdmin) setTimeout(function () { if (FB) startFB(); else startPeer(); }, 800);
+  if (!isAdmin && file !== 'banned.html') setTimeout(function () { if (FB) startFB(); else startPeer(); }, 800);
 })();
