@@ -116,6 +116,7 @@ function load(key) { try { return localStorage.getItem(key); } catch (e) { retur
 function loadJ(key, d) { try { const v = JSON.parse(load(key) || 'null'); return v == null ? d : v; } catch (e) { return d; } }
 
 const GAMES = [
+  { id: 'grin', href: 'grin.html', t: 'Grin Climb', d: 'Bounce the grinning monkey up the jungle. Springs, breaking branches, leaf copters, banana rockets and bees to stomp. Global leaderboard.', i: '🐒', cat: 'arcade', tags: ['NEW'], c: ['#2f8a4a', '#ffd23a'], n: 44 },
   { id: 'golf', href: 'golf.html', t: 'Putt Park', d: 'Mini golf: 9 holes with a spinning windmill, an island green, sand traps, hills, bumpers, a wormhole and moving blocks. Beat par and chase holes in one.', i: '⛳', cat: 'puzzle', tags: ['NEW'], c: ['#2f9e4f', '#ffd23a'], n: 43 },
   { id: 'storm', href: 'storm.html', t: 'Storm Island', d: '3D battle royale: drop from the airship, loot chests, build walls and ramps, and outlast 24 bots as the storm closes in.', i: '🌀', cat: 'arcade', tags: ['NEW'], c: ['#8a3aff', '#2f8fd6'], n: 42 },
   { id: 'cloudhop', href: 'cloudhop.html', t: 'Cloudhop', d: 'Pixel platformer with wall jumps, springs, crumbling bridges and hidden gems. Gold medal times and a global leaderboard.', i: '☁️', cat: 'arcade', tags: ['NEW'], c: ['#6ec6ff', '#4f9f55'], n: 41 },
