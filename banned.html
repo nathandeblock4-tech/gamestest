@@ -17,6 +17,22 @@
   .reason { margin: 22px 0 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,59,74,.1); border: 1px solid rgba(255,59,74,.35); text-align: left; }
   .reason b { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #ff8a93; margin-bottom: 4px; }
   .meta { margin-top: 18px; font-size: 12px; color: #8f7d80; }
+  .box.wide { max-width: 760px; }
+  .appeal { margin-top: 26px; text-align: left; }
+  .btn { display: inline-block; border: 0; border-radius: 12px; padding: 13px 20px; font: 700 16px system-ui, sans-serif; cursor: pointer; background: #f4e9ea; color: #2a0b0e; transition: transform .1s, filter .1s; }
+  .btn:hover { transform: translateY(-1px); filter: brightness(1.05); } .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+  .btn.ghost { background: transparent; color: #d7c4c6; border: 1px solid rgba(255,255,255,.2); }
+  .start { text-align: center; } .start p { font-size: 14px; }
+  .paper { background: #fbf8f1; color: #24201c; border-radius: 6px; padding: 26px 30px 20px; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .paper h2 { margin: 0 0 12px; font: 600 15px Georgia, serif; color: #6b5f55; }
+  textarea { width: 100%; min-height: 420px; max-height: 62vh; border: 0; outline: 0; resize: vertical; background: transparent repeating-linear-gradient(transparent 0 31px, #d9e3f0 31px 32px) local; color: inherit; font: 17px/32px Georgia, 'Times New Roman', serif; padding: 0; }
+  .pages { display: flex; gap: 6px; margin: 16px 0 8px; } .pages i { flex: 1; height: 34px; border-radius: 4px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); position: relative; overflow: hidden; }
+  .pages i b { position: absolute; left: 0; bottom: 0; right: 0; background: linear-gradient(#ffd0d4, #ff8a93); transition: height .3s; } .pages i.full { border-color: #ff8a93; }
+  .count { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; color: #d7c4c6; } .count b { color: #fff; }
+  .warn { min-height: 20px; margin-top: 6px; font-size: 13px; color: #ffb36b; }
+  .row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; align-items: center; }
+  .note { margin-top: 22px; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15); font-size: 15px; text-align: left; }
+  .note.bad { background: rgba(255,59,74,.1); border-color: rgba(255,59,74,.35); }
 </style>
 </head>
 <body>
@@ -26,6 +42,7 @@
   <p>You can't use Arcade anymore.</p>
   <div class="reason" id="reasonBox" hidden><b>Reason</b><span id="reason"></span></div>
   <div class="meta" id="meta"></div>
+  <div class="appeal" id="appeal"></div>
 </div>
 <script>
 (function () {
@@ -48,8 +65,75 @@
       if (b && typeof b.t === 'number') document.getElementById('meta').textContent = 'Banned ' + new Date(b.t).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + ' · ID ' + key;
       else document.getElementById('meta').textContent = 'ID ' + key;
     });
+    appeal(key);
     function check() { j('unban/' + key).then(function (u) { if (u) clearAll(function () { location.replace('index.html'); }); }); }
     check(); setInterval(check, 20000);
+  }
+  // ---------- the 10-page apology letter ----------
+  var WORDS_PER_PAGE = 250, PAGES = 10, NEED = WORDS_PER_PAGE * PAGES, box = document.getElementById('appeal'), timer = null;
+  function store(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
+  function esc(t) { return String(t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function score(text) { // only real, non-repeated writing counts toward the 10 pages
+    var sentences = text.split(/[.!?\n]+/), seen = {}, counted = 0, junk = 0, freq = {}, total = 0;
+    sentences.forEach(function (s) {
+      var words = s.toLowerCase().match(/[a-z']+/g) || []; if (!words.length) return;
+      var norm = words.join(' '); total += words.length;
+      if (words.length >= 3 && seen[norm]) { junk += words.length; return; } seen[norm] = 1;
+      words.forEach(function (w) {
+        var gib = w.length > 18 || (w.length > 3 && !/[aeiouy]/.test(w)) || /(.)\1\1/.test(w);
+        if (gib) { junk++; return; }
+        freq[w] = (freq[w] || 0) + 1;
+        if (w.length > 3 && freq[w] > 40 && freq[w] > counted * 0.05) { junk++; return; } // spamming one word
+        counted++;
+      });
+    });
+    return { counted: counted, junk: junk, total: total };
+  }
+  function appeal(key) {
+    var AK = 'gr_apology_' + key;
+    function intro(msg, bad) {
+      box.innerHTML = (msg ? '<div class="note' + (bad ? ' bad' : '') + '">' + msg + '</div>' : '') +
+        '<div class="start" style="margin-top:22px"><p>Want back in? Write a <b>10-page apology letter</b> (' + NEED.toLocaleString() + ' words). The admin will read it and decide.</p><button class="btn" id="startBtn">✍️ Write an apology letter</button></div>';
+      document.getElementById('startBtn').onclick = editor;
+    }
+    function editor() {
+      document.querySelector('.box').classList.add('wide');
+      var pages = ''; for (var i = 0; i < PAGES; i++) pages += '<i title="Page ' + (i + 1) + '"><b style="height:0"></b></i>';
+      box.innerHTML = '<div class="paper"><h2>Dear Admin,</h2><textarea id="txt" spellcheck="true" placeholder="Start writing your apology here. Explain what you did, why it was wrong, and why you should be let back in…"></textarea></div>' +
+        '<div class="pages" id="pages">' + pages + '</div><div class="count"><span id="pg"></span><span id="wc"></span></div><div class="warn" id="warn"></div>' +
+        '<div class="row"><span style="font-size:13px;color:#8f7d80;margin-right:auto">Saved on this computer as you type · copy-paste is turned off</span><button class="btn ghost" id="backBtn">Back</button><button class="btn" id="sendBtn" disabled>Send letter</button></div>';
+      var ta = document.getElementById('txt'), send = document.getElementById('sendBtn');
+      ta.value = (function () { try { return localStorage.getItem(AK) || ''; } catch (e) { return ''; } })();
+      ['paste', 'drop'].forEach(function (ev) { ta.addEventListener(ev, function (e) { e.preventDefault(); warn('No copy-paste. You have to actually write it. ✍️'); }); });
+      var warnT = null; function warn(t) { var w = document.getElementById('warn'); w.textContent = t; clearTimeout(warnT); warnT = setTimeout(function () { update(); }, 2600); }
+      function update() {
+        var r = score(ta.value), n = Math.min(r.counted, NEED), cells = document.getElementById('pages').children;
+        for (var i = 0; i < PAGES; i++) { var f = Math.max(0, Math.min(1, (n - i * WORDS_PER_PAGE) / WORDS_PER_PAGE)); cells[i].firstChild.style.height = (f * 100) + '%'; cells[i].classList.toggle('full', f >= 1); }
+        var page = Math.min(PAGES, Math.floor(n / WORDS_PER_PAGE) + 1);
+        document.getElementById('pg').innerHTML = n >= NEED ? '<b>All 10 pages done!</b> 🎉' : 'Page <b>' + page + '</b> of ' + PAGES;
+        document.getElementById('wc').innerHTML = '<b>' + n.toLocaleString() + '</b> / ' + NEED.toLocaleString() + ' words';
+        document.getElementById('warn').textContent = r.junk > 25 ? r.junk.toLocaleString() + ' words don’t count (copied sentences, the same word over and over, or keyboard mashing).' : '';
+        send.disabled = n < NEED;
+        store(AK, ta.value);
+      }
+      ta.addEventListener('input', update); update(); ta.focus();
+      document.getElementById('backBtn').onclick = function () { document.querySelector('.box').classList.remove('wide'); intro(); };
+      send.onclick = function () {
+        if (!confirm('Send your letter to the admin? You can’t change it after sending.')) return;
+        send.disabled = true; send.textContent = 'Sending…';
+        var name = (function () { try { return localStorage.getItem('gr_name') || ''; } catch (e) { return ''; } })();
+        fetch(FB + '/appeals/' + key + '.json', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: ta.value.slice(0, 60000), words: score(ta.value).counted, name: name.slice(0, 20), status: 'pending', t: { '.sv': 'timestamp' } }) })
+          .then(function (r) { if (!r.ok) throw 0; store(AK, null); document.querySelector('.box').classList.remove('wide'); show({ status: 'pending' }); })
+          .catch(function () { send.disabled = false; send.textContent = 'Send letter'; warn('Couldn’t send. Check your internet and try again.'); });
+      };
+    }
+    function show(a) {
+      if (!a) return intro();
+      if (a.status === 'pending') { box.innerHTML = '<div class="note">📨 <b>Your apology letter was sent.</b><br>The admin will read it. If they accept it, this page will let you back in on its own.</div>'; return; }
+      if (a.status === 'rejected') intro('❌ <b>Your letter was rejected.</b>' + (a.note ? '<br>Admin says: “' + esc(String(a.note).slice(0, 300)) + '”' : '') + '<br>You can write a new one.', true);
+    }
+    j('appeals/' + key).then(show);
+    setInterval(function () { j('appeals/' + key).then(function (a) { if (a && a.status === 'rejected' && !document.getElementById('txt') && !document.querySelector('.note.bad')) show(a); }); }, 20000);
   }
   var key = get(K) || ck(K); if (key) start(key); else idbGet('cfg', start);
 })();

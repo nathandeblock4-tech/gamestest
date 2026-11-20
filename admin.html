@@ -192,7 +192,7 @@
   const SCARES = [['face', '😱 Instant face'], ['static', '📺 TV static'], ['creep', '🫀 Creepy build-up'], ['glitch', '👁️ "I SEE YOU" glitch'], ['crash', '💥 Fake crash'], ['hallway', '🔴 Red eyes'], ['whisper', '🗣️ Whisper their name'], ['knock', '🚪 Knocking'], ['blackout', '🌑 Blackout']];
   const TROLLS = [['flip', '🙃 Flip screen'], ['mirror', '🪞 Mirror'], ['spin', '🌀 Spin'], ['shake', '🫨 Earthquake'], ['drunk', '🥴 Dizzy'], ['invert', '🌗 Invert colors'], ['blur', '👓 Blur'], ['rainbow', '🌈 Rainbow'], ['tiny', '🐜 Tiny'], ['giant', '🔍 Giant'], ['zoom', '📈 Slow zoom'], ['comic', '🔤 Comic Sans'], ['blink', '💡 Flicker'], ['upside', '🙂 Upside-down text'], ['gravity', '🍎 Gravity'], ['runaway', '🏃 Buttons run away'], ['spiders', '🕷️ Spiders'], ['crack', '💔 Cracked screen'], ['fart', '💨 Fart clicks'], ['freeze', '🧊 Fake freeze'], ['lag', '🐢 Lag'], ['loading', '🗑️ Deleting files…'], ['typeit', '⌨️ Type it to play'], ['ban', '⛔ Fake ban'], ['popups', '🪟 Popup storm'], ['cursors', '🖱️ Ghost cursors'], ['monkeys', '🐒 Monkey rain'], ['party', '🎉 Party'], ['knock', '🚪 Knocking sound'], ['whisper', '🗣️ Creepy whisper']];
   let scareKind = ls.get('adm_scare') || 'face', trollKind = ls.get('adm_troll') || 'flip', target = null;
-  const T = { users: {}, feed: [], offset: 0, mode: FB ? 'fb' : 'peer', bans: {}, fpbans: {} };
+  const T = { users: {}, feed: [], offset: 0, mode: FB ? 'fb' : 'peer', bans: {}, fpbans: {}, appeals: {} };
   const isBanned = id => { const u = T.users[id]; return !!(T.bans[id] || (u && u.fp && T.fpbans[u.fp]) || (u && u.alt && T.bans[u.alt])); };
 
   // ---------- unlock ----------
@@ -237,6 +237,8 @@
     stream('u.json', null, (p, d, patch) => { apply(T.users, p, d, patch); soon(); });
     stream('bans.json', null, (p, d, patch) => { apply(T.bans, p, d, patch); soon(); });
     stream('fpbans.json', null, (p, d, patch) => { apply(T.fpbans, p, d, patch); soon(); });
+    let appealsReady = false; setTimeout(() => appealsReady = true, 4000);
+    stream('appeals.json', null, (p, d, patch) => { const before = Object.keys(T.appeals).filter(k => T.appeals[k] && T.appeals[k].status === 'pending').length; apply(T.appeals, p, d, patch); const after = Object.keys(T.appeals).filter(k => T.appeals[k] && T.appeals[k].status === 'pending').length; if (appealsReady && after > before) toast('📝 New apology letter! Check the Banned tab'); soon(); });
     const seen = {};
     stream('ev.json?orderBy="$key"&limitToLast=120', null, (p, d) => {
       const add = (k, e) => { if (!e || seen[k]) return; seen[k] = 1; T.feed.unshift(e); if (T.feed.length > 200) T.feed.pop(); if (e.k === 'got' && Date.now() - (e.t - T.offset) < 20000) toast((e.name || '?') + ' got hit: ' + e.what); };
@@ -394,12 +396,26 @@
   }
   async function unban(key) { const uid = key.slice(2); await Promise.all([fb((key[0] === 'u' ? 'bans/' : 'fpbans/') + uid, 'DELETE'), fb('unban/' + key, 'PUT', SV)]); flash('Unbanned ✓'); render(); }
   async function unbanUser(id) { const u = T.users[id] || {}, keys = new Set(); if (T.bans[id]) keys.add('u_' + id); if (u.alt && T.bans[u.alt]) keys.add('u_' + u.alt); if (u.fp && T.fpbans[u.fp]) keys.add('f_' + u.fp); for (const [k, b] of Object.entries(T.bans)) if (b && (b.via === id || (T.bans[id] && b.via && b.via === T.bans[id].via))) keys.add('u_' + k); for (const [k, v] of Object.entries(T.users)) if (v && v.alt === id && T.bans[k]) keys.add('u_' + k); await Promise.all([...keys].map(unban)); }
+  function readLetter(key) {
+    const a = T.appeals[key]; if (!a) return; const root = $('modalRoot');
+    root.innerHTML = '<div class="modal"><div class="card" style="max-width:760px"><h2>📝 Apology from ' + esc(a.name || key) + ' <button class="gbtn" id="lClose">Close</button></h2>' +
+      '<div class="muted" style="margin-bottom:12px">' + (a.words || 0).toLocaleString() + ' words · ' + (a.t ? ago(a.t) : '') + ' · ' + esc(key) + '</div>' +
+      '<div style="background:#fbf8f1;color:#24201c;border-radius:8px;padding:22px 26px;max-height:60vh;overflow:auto;font:16px/1.7 Georgia,serif;white-space:pre-wrap">Dear Admin,\n\n' + esc(a.text || '') + '</div>' +
+      '<input type="text" id="lNote" maxlength="200" placeholder="Note if you reject it (they\'ll see this), e.g. Not sorry enough" style="margin-top:14px">' +
+      '<div class="rowf" style="margin-top:12px"><button class="btn grn" id="lYes">✅ Accept & unban</button><button class="btn red" id="lNo">❌ Reject</button></div></div></div>';
+    const close = () => root.innerHTML = ''; $('lClose').onclick = close; root.querySelector('.modal').onclick = e => { if (e.target.classList.contains('modal')) close(); };
+    $('lYes').onclick = async () => { $('lYes').disabled = true; const ban = key[0] === 'u' ? T.bans[key.slice(2)] : T.fpbans[key.slice(2)]; const who = key[0] === 'u' ? (ban && ban.via) || key.slice(2) : ban && ban.uid;
+      await unban(key).catch(() => {}); if (who) await unbanUser(who).catch(() => {}); await fb('appeals/' + key, 'DELETE').catch(() => {}); flash('Letter accepted, ' + (a.name || 'they') + ' is unbanned'); close(); };
+    $('lNo').onclick = async () => { $('lNo').disabled = true; await fb('appeals/' + key, 'PATCH', { status: 'rejected', note: $('lNote').value.trim() }).catch(() => {}); flash('Letter rejected'); close(); render(); };
+  }
   function renderBans() {
+    const pend = Object.keys(T.appeals).filter(k => T.appeals[k] && T.appeals[k].status === 'pending' && (T.bans[k.slice(2)] || T.fpbans[k.slice(2)])).length, tb = document.querySelector('#tabs button[data-t=bans]'); if (tb) tb.textContent = pend ? 'Banned (' + pend + ' 📝)' : 'Banned';
     const list = [...Object.entries(T.bans).filter(([, b]) => b).map(([k, b]) => ({ key: 'u_' + k, id: k, b, fp: false })), ...Object.entries(T.fpbans).filter(([, b]) => b).map(([k, b]) => ({ key: 'f_' + k, id: b.uid, b, fp: true }))].sort((a, c) => (c.b.t || 0) - (a.b.t || 0));
     $('banNote').textContent = list.length ? list.length + (list.length === 1 ? ' ban' : ' bans') : '';
     const box = $('banList'); if (!list.length) { box.innerHTML = '<div class="empty">Nobody is banned.</div>'; return; }
     box.innerHTML = ''; for (const r of list) { const d = document.createElement('div'); d.className = 'brow';
       d.innerHTML = '<div class="av" style="background:' + colFor(r.id || r.key) + '">' + esc((r.b.name || '?').charAt(0).toUpperCase()) + '</div><div class="who"><b>' + esc(r.b.name || '?') + '</b>' + (r.fp ? '<span class="bt" style="background:#7c4dff">COMPUTER</span>' : r.b.via ? '<span class="bt" style="background:#555">OLD ID</span>' : '') + '<div>' + (r.b.reason ? '“' + esc(r.b.reason) + '” · ' : '') + (r.b.t ? ago(r.b.t) : '') + ' · ' + esc(r.key) + '</div></div>';
+      const ap = T.appeals[r.key]; if (ap && ap.status !== 'accepted') { const l = document.createElement('button'); l.className = 'btn ' + (ap.status === 'pending' ? '' : 'sec'); l.textContent = ap.status === 'pending' ? '📝 Read apology' : '📝 Rejected letter'; l.onclick = () => readLetter(r.key); d.appendChild(l); }
       const b = document.createElement('button'); b.className = 'btn grn'; b.textContent = 'Unban'; b.onclick = () => { b.disabled = true; unban(r.key).catch(e => { b.disabled = false; flash('Failed: ' + e); }); }; d.appendChild(b); box.appendChild(d); }
   }
 
