@@ -39,7 +39,7 @@
 <div class="box">
   <div class="icon" aria-hidden="true"></div>
   <h1>You've been banned</h1>
-  <p>You can't use Arcade anymore.</p>
+  <p>You can't use the Games Site anymore.</p>
   <div class="reason" id="reasonBox" hidden><b>Reason</b><span id="reason"></span></div>
   <div class="meta" id="meta"></div>
   <div class="appeal" id="appeal"></div>
@@ -138,7 +138,7 @@
     function show(a) {
       if (!a) return intro();
       if (a.status === 'pending') { box.innerHTML = '<div class="note">📨 <b>Your apology letter was sent.</b><br>The admin will read it. If they accept it, this page will let you back in on its own.</div>'; return; }
-      if (a.status === 'accepted') { box.innerHTML = '<div class="note" style="border-color:rgba(47,191,113,.5);background:rgba(47,191,113,.12)">✅ <b>Your letter was accepted!</b><br>' + (TEST ? 'In a real ban, this page would now send them back to the Arcade. <button class="btn ghost" id="again" style="margin-top:10px;padding:8px 14px;font-size:14px">Test again</button>' : 'Taking you back to the Arcade…') + '</div>'; var ag = document.getElementById('again'); if (ag) ag.onclick = function () { fetch(FB + '/appeals/' + key + '.json', { method: 'DELETE' }).then(function () { intro(); }); }; return; }
+      if (a.status === 'accepted') { box.innerHTML = '<div class="note" style="border-color:rgba(47,191,113,.5);background:rgba(47,191,113,.12)">✅ <b>Your letter was accepted!</b><br>' + (TEST ? 'In a real ban, this page would now send them back to the Games Site. <button class="btn ghost" id="again" style="margin-top:10px;padding:8px 14px;font-size:14px">Test again</button>' : 'Taking you back to the Games Site…') + '</div>'; var ag = document.getElementById('again'); if (ag) ag.onclick = function () { fetch(FB + '/appeals/' + key + '.json', { method: 'DELETE' }).then(function () { intro(); }); }; return; }
       if (a.status === 'rejected') intro('❌ <b>Your letter was rejected.</b>' + (a.note ? '<br>Admin says: “' + esc(String(a.note).slice(0, 300)) + '”' : '') + '<br>You can write a new one.', true);
     }
     j('appeals/' + key).then(show);

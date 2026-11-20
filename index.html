@@ -3,33 +3,35 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Arcade</title>
+<title>Games Site</title>
 <style>
-  :root { --bg: #101114; --panel: #1a1c21; --panel-2: #24272e; --line: #2a2d35; --text: #eef0f4; --muted: #8b909c; --accent: #f5f6f8; color-scheme: dark; }
+  :root { --bg: #0f1115; --panel: #181b21; --panel-2: #232731; --line: #262a33; --text: #eef0f4; --muted: #8b909c; --accent: #f5f6f8; color-scheme: dark; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; min-height: 100vh; }
-  .wrap { max-width: 1040px; margin: 0 auto; padding: 36px 20px 60px; }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 26px; }
-  h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; cursor: pointer; user-select: none; -webkit-user-select: none; }
-  h1 span { color: var(--muted); font-weight: 500; font-size: 15px; margin-left: 8px; letter-spacing: 0; }
-  .me { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 7px 12px; font: 600 13px system-ui, sans-serif; cursor: pointer; }
-  .me:hover { color: var(--text); border-color: #444955; }
-  .controls { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 22px; }
-  .search { flex: 0 1 300px; min-width: 200px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: 500 14px system-ui, sans-serif; padding: 9px 12px; }
-  .search:focus { outline: none; border-color: #555b68; }
-  .chips { display: flex; gap: 4px; flex-wrap: wrap; }
-  .chip { background: none; border: none; color: var(--muted); border-radius: 6px; padding: 7px 11px; font: 600 14px system-ui, sans-serif; cursor: pointer; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 60px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
+  h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; cursor: pointer; user-select: none; -webkit-user-select: none; }
+  h1 span { color: var(--muted); font-weight: 500; font-size: 14px; margin-left: 10px; letter-spacing: 0; }
+  .me { background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 8px 14px; font: 600 13px system-ui, sans-serif; cursor: pointer; }
+  .me:hover { background: var(--panel-2); }
+  .controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+  .search { flex: 0 1 320px; min-width: 200px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; color: var(--text); font: 500 14px system-ui, sans-serif; padding: 10px 16px; }
+  .search:focus { outline: none; border-color: #4a505e; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { background: none; border: 1px solid transparent; color: var(--muted); border-radius: 999px; padding: 7px 14px; font: 600 14px system-ui, sans-serif; cursor: pointer; }
   .chip:hover { color: var(--text); }
-  .chip.on { background: var(--panel-2); color: var(--text); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
-  .card { position: relative; display: flex; flex-direction: column; gap: 10px; text-decoration: none; color: var(--text); border-radius: 12px; padding: 0 0 6px; cursor: pointer; }
-  .ic { aspect-ratio: 16 / 10; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 44px; background: var(--c); transition: transform .15s, filter .15s; }
-  .card:hover .ic, .card:focus-visible .ic { transform: translateY(-2px); filter: brightness(1.12); }
-  .card:focus-visible { outline: none; }
-  .card h4 { font-size: 15px; font-weight: 650; line-height: 1.25; padding: 0 2px; }
-  .card small { color: var(--muted); font-size: 12.5px; font-weight: 500; padding: 0 2px; margin-top: -6px; min-height: 15px; }
-  .fav { position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,.35); border: none; border-radius: 6px; color: #fff; font-size: 14px; cursor: pointer; opacity: 0; padding: 3px 6px; }
-  .fav.on, .card:hover .fav { opacity: 1; }
+  .chip.on { background: var(--text); color: var(--bg); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 22px 18px; }
+  .card { position: relative; display: block; text-decoration: none; color: var(--text); cursor: pointer; }
+  .cover { aspect-ratio: 16 / 10; border-radius: 12px; overflow: hidden; background: var(--panel); transition: transform .15s, box-shadow .15s; box-shadow: 0 1px 0 rgba(255,255,255,.04) inset; }
+  .cover svg { width: 100%; height: 100%; display: block; }
+  .card:hover .cover, .card:focus-visible .cover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0,0,0,.45); }
+  .card:focus-visible { outline: none; } .card:focus-visible .cover { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .meta { display: flex; gap: 8px; align-items: center; margin-top: 8px; padding: 0 2px; color: var(--muted); font-size: 13px; font-weight: 500; min-height: 18px; }
+  .meta .tag { color: var(--text); background: var(--panel-2); border-radius: 6px; padding: 1px 7px; font-size: 11.5px; font-weight: 700; }
+  .meta .tag.new { background: #2f6df6; color: #fff; }
+  .fav { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.45); border: none; border-radius: 999px; color: #fff; font-size: 14px; width: 30px; height: 30px; cursor: pointer; opacity: 0; transition: opacity .15s; }
+  .fav.on { color: #ffd23a; } .fav.on, .card:hover .fav { opacity: 1; }
   .empty { color: var(--muted); text-align: center; padding: 40px; font-weight: 500; display: none; }
   footer { text-align: center; color: #5d626e; font-size: 13px; margin-top: 50px; }
   /* name popup */
@@ -64,7 +66,7 @@
 <body>
 <div class="wrap">
   <header>
-    <h1 id="logo" onclick="show('home')">Arcade<span id="count"></span></h1>
+    <h1 id="logo" onclick="show('home')">Games Site<span id="count"></span></h1>
     <button class="me" id="meBtn"><span id="meName">Guest</span></button>
   </header>
 
@@ -107,6 +109,7 @@
 </div></div>
 
 <script src="presence.js"></script>
+<script src="covers.js"></script>
 <script>
 function save(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
 function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
@@ -152,6 +155,7 @@ const GAMES = [
   { id: 'pig', href: 'pig.html', t: 'Pig Run', d: 'Race through the farm as a muddy pig. Jump hay bales and fences, grab apples.', i: '🐷', cat: 'arcade', tags: [], c: ['#fda4af', '#65a30d'], n: 7 },
   { id: 'ttt', href: '#ttt', t: 'Tic-Tac-Toe', d: 'Play against the computer or a friend. Three in a row wins.', i: '❌', cat: 'puzzle', tags: ['2P'], c: ['#60a5fa', '#f472b6'], n: 2 }
 ];
+const COVERS = {}, CATN = { arcade: 'Action', puzzle: 'Puzzle', demetrius: 'Characters' };
 const CHIPS = [['all', 'All'], ['fav', 'Favorites'], ['arcade', 'Action'], ['puzzle', 'Puzzle'], ['demetrius', 'Characters'], ['multi', 'With friends']];
 let filter = 'all', query = '', favs = loadJ('gr_favs', []);
 const plays = id => parseInt(load('gr_open_' + id) || '0', 10);
@@ -167,14 +171,16 @@ function render() {
   const grid = document.getElementById('grid'); grid.innerHTML = '';
   const list = GAMES.filter(matches).sort((a, b) => (favs.indexOf(b.id) >= 0) - (favs.indexOf(a.id) >= 0) || b.n - a.n);
   for (const g of list) {
-    const a = document.createElement('a'); a.className = 'card'; a.href = g.href; a.title = g.d; a.style.setProperty('--c', g.c[0]);
-    const ic = document.createElement('div'); ic.className = 'ic'; ic.textContent = g.i; ic.style.background = 'linear-gradient(135deg,' + g.c[0] + ',' + g.c[1] + ')';
-    const h = document.createElement('h4'); h.textContent = g.t;
-    const sm = document.createElement('small'); const n = plays(g.id);
-    sm.textContent = g.tags.indexOf('NEW') >= 0 && !n ? 'New' : g.tags.indexOf('ONLINE') >= 0 ? 'Online' : g.tags.indexOf('2P') >= 0 ? '2 players' : (n ? 'Played ' + n + '×' : '');
+    const a = document.createElement('a'); a.className = 'card'; a.href = g.href; a.title = g.d; a.setAttribute('aria-label', g.t);
+    const ic = document.createElement('div'); ic.className = 'cover'; ic.innerHTML = COVERS[g.id] || (COVERS[g.id] = window.coverSVG ? coverSVG(g) : '');
+    const sm = document.createElement('div'); sm.className = 'meta'; const n = plays(g.id), bits = [];
+    if (g.tags.indexOf('NEW') >= 0 && !n) bits.push('<span class="tag new">NEW</span>');
+    if (g.tags.indexOf('ONLINE') >= 0) bits.push('<span class="tag">Online</span>'); else if (g.tags.indexOf('2P') >= 0) bits.push('<span class="tag">2 players</span>');
+    if (g.tags.indexOf('SCARY') >= 0) bits.push('<span class="tag">Scary</span>'); if (g.tags.indexOf('3D') >= 0) bits.push('<span class="tag">3D</span>');
+    bits.push('<span>' + (CATN[g.cat] || '') + (n ? ' · played ' + n + '×' : '') + '</span>'); sm.innerHTML = bits.join('');
     const f = document.createElement('button'); const isFav = favs.indexOf(g.id) >= 0; f.className = 'fav' + (isFav ? ' on' : ''); f.textContent = isFav ? '★' : '☆'; f.setAttribute('aria-label', 'Favorite ' + g.t);
     f.onclick = e => { e.preventDefault(); e.stopPropagation(); const k = favs.indexOf(g.id); if (k >= 0) favs.splice(k, 1); else favs.push(g.id); save('gr_favs', JSON.stringify(favs)); render(); };
-    a.append(f, ic, h, sm);
+    a.append(ic, f, sm);
     a.addEventListener('click', e => { opened(g.id); if (g.href[0] === '#') { e.preventDefault(); show(g.id); } });
     grid.appendChild(a);
   }

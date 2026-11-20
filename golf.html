@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Putt Park · Arcade</title>
+<title>Putt Park · Games Site</title>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800;900&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -42,7 +42,7 @@
 <body>
 <div class="wrap">
   <div class="bar">
-    <a class="back" href="index.html">← Arcade</a>
+    <a class="back" href="index.html">← Games</a>
     <h1>⛳ Putt <span>Park</span></h1>
     <div class="sp"></div>
     <button class="btn" id="cardBtn">Scorecard</button>
@@ -161,7 +161,7 @@ function holeDone(picked) {
 }
 function finish() {
   const tot = sum(scores), d = tot - totalPar(9), nb = best == null || tot < best; if (nb) { best = tot; ls.set('golf_best', best); }
-  showOv('<h2>' + (d < 0 ? '🏆 ' : d === 0 ? '⛳ ' : '') + tot + ' strokes</h2><p class="big">' + (d === 0 ? 'Even par' : rel(d) + (d < 0 ? ' under par!' : ' over par')) + (nb ? ' · <b style="color:#ffd23a">New best!</b>' : ' · Best ' + best) + '</p>' + cardHTML() + '<div class="row"><button class="btn go" id="againBtn">Play again</button><a class="btn" href="index.html">Back to Arcade</a></div>');
+  showOv('<h2>' + (d < 0 ? '🏆 ' : d === 0 ? '⛳ ' : '') + tot + ' strokes</h2><p class="big">' + (d === 0 ? 'Even par' : rel(d) + (d < 0 ? ' under par!' : ' over par')) + (nb ? ' · <b style="color:#ffd23a">New best!</b>' : ' · Best ' + best) + '</p>' + cardHTML() + '<div class="row"><button class="btn go" id="againBtn">Play again</button><a class="btn" href="index.html">Back to games</a></div>');
   $('againBtn').onclick = newRound; hud();
 }
 function cardHTML() {
