@@ -164,7 +164,7 @@
     </section>
     <!-- BANS -->
     <section id="t-bans" class="hidden">
-      <div class="card"><h2>🚫 Banned <span class="muted" id="banNote"></span></h2>
+      <div class="card"><h2>🚫 Banned <span class="muted" id="banNote" style="margin-left:auto;margin-right:10px"></span><a class="btn" href="banned.html?test" target="_blank" style="text-decoration:none">🧪 Test ban screen</a></h2>
         <div class="muted" style="margin-bottom:10px">Banned people get sent to a "You've been banned" page on every visit. Unban takes them off within about 20 seconds.</div>
         <div id="banList"><div class="empty">Nobody is banned.</div></div></div>
     </section>
@@ -404,18 +404,21 @@
       '<input type="text" id="lNote" maxlength="200" placeholder="Note if you reject it (they\'ll see this), e.g. Not sorry enough" style="margin-top:14px">' +
       '<div class="rowf" style="margin-top:12px"><button class="btn grn" id="lYes">✅ Accept & unban</button><button class="btn red" id="lNo">❌ Reject</button></div></div></div>';
     const close = () => root.innerHTML = ''; $('lClose').onclick = close; root.querySelector('.modal').onclick = e => { if (e.target.classList.contains('modal')) close(); };
-    $('lYes').onclick = async () => { $('lYes').disabled = true; const ban = key[0] === 'u' ? T.bans[key.slice(2)] : T.fpbans[key.slice(2)]; const who = key[0] === 'u' ? (ban && ban.via) || key.slice(2) : ban && ban.uid;
+    if (key[0] === 't') { $('lYes').textContent = '✅ Accept (test)'; $('lYes').onclick = async () => { await fb('appeals/' + key, 'PATCH', { status: 'accepted' }).catch(() => {}); flash('Test letter accepted. Look at the test tab'); close(); render(); }; }
+    else $('lYes').onclick = async () => { $('lYes').disabled = true; const ban = key[0] === 'u' ? T.bans[key.slice(2)] : T.fpbans[key.slice(2)]; const who = key[0] === 'u' ? (ban && ban.via) || key.slice(2) : ban && ban.uid;
       await unban(key).catch(() => {}); if (who) await unbanUser(who).catch(() => {}); await fb('appeals/' + key, 'DELETE').catch(() => {}); flash('Letter accepted, ' + (a.name || 'they') + ' is unbanned'); close(); };
     $('lNo').onclick = async () => { $('lNo').disabled = true; await fb('appeals/' + key, 'PATCH', { status: 'rejected', note: $('lNote').value.trim() }).catch(() => {}); flash('Letter rejected'); close(); render(); };
   }
   function renderBans() {
-    const pend = Object.keys(T.appeals).filter(k => T.appeals[k] && T.appeals[k].status === 'pending' && (T.bans[k.slice(2)] || T.fpbans[k.slice(2)])).length, tb = document.querySelector('#tabs button[data-t=bans]'); if (tb) tb.textContent = pend ? 'Banned (' + pend + ' 📝)' : 'Banned';
+    const pend = Object.keys(T.appeals).filter(k => T.appeals[k] && T.appeals[k].status === 'pending' && (k[0] === 't' || T.bans[k.slice(2)] || T.fpbans[k.slice(2)])).length, tb = document.querySelector('#tabs button[data-t=bans]'); if (tb) tb.textContent = pend ? 'Banned (' + pend + ' 📝)' : 'Banned';
     const list = [...Object.entries(T.bans).filter(([, b]) => b).map(([k, b]) => ({ key: 'u_' + k, id: k, b, fp: false })), ...Object.entries(T.fpbans).filter(([, b]) => b).map(([k, b]) => ({ key: 'f_' + k, id: b.uid, b, fp: true }))].sort((a, c) => (c.b.t || 0) - (a.b.t || 0));
     $('banNote').textContent = list.length ? list.length + (list.length === 1 ? ' ban' : ' bans') : '';
+    const ta = T.appeals.t_preview; if (ta) list.unshift({ key: 't_preview', id: 'test', test: true, b: { name: '🧪 Test letter', reason: ta.status === 'pending' ? 'Waiting for you to read it' : ta.status === 'accepted' ? 'You accepted it' : 'You rejected it', t: ta.t } });
     const box = $('banList'); if (!list.length) { box.innerHTML = '<div class="empty">Nobody is banned.</div>'; return; }
     box.innerHTML = ''; for (const r of list) { const d = document.createElement('div'); d.className = 'brow';
-      d.innerHTML = '<div class="av" style="background:' + colFor(r.id || r.key) + '">' + esc((r.b.name || '?').charAt(0).toUpperCase()) + '</div><div class="who"><b>' + esc(r.b.name || '?') + '</b>' + (r.fp ? '<span class="bt" style="background:#7c4dff">COMPUTER</span>' : r.b.via ? '<span class="bt" style="background:#555">OLD ID</span>' : '') + '<div>' + (r.b.reason ? '“' + esc(r.b.reason) + '” · ' : '') + (r.b.t ? ago(r.b.t) : '') + ' · ' + esc(r.key) + '</div></div>';
-      const ap = T.appeals[r.key]; if (ap && ap.status !== 'accepted') { const l = document.createElement('button'); l.className = 'btn ' + (ap.status === 'pending' ? '' : 'sec'); l.textContent = ap.status === 'pending' ? '📝 Read apology' : '📝 Rejected letter'; l.onclick = () => readLetter(r.key); d.appendChild(l); }
+      d.innerHTML = '<div class="av" style="background:' + colFor(r.id || r.key) + '">' + esc([...(r.b.name || '?')][0].toUpperCase()) + '</div><div class="who"><b>' + esc(r.b.name || '?') + '</b>' + (r.fp ? '<span class="bt" style="background:#7c4dff">COMPUTER</span>' : r.b.via ? '<span class="bt" style="background:#555">OLD ID</span>' : '') + '<div>' + (r.b.reason ? '“' + esc(r.b.reason) + '” · ' : '') + (r.b.t ? ago(r.b.t) : '') + ' · ' + esc(r.key) + '</div></div>';
+      const ap = T.appeals[r.key]; if (ap && (ap.status !== 'accepted' || r.test)) { const l = document.createElement('button'); l.className = 'btn ' + (ap.status === 'pending' ? '' : 'sec'); l.textContent = ap.status === 'pending' ? '📝 Read apology' : ap.status === 'accepted' ? '📝 Accepted letter' : '📝 Rejected letter'; l.onclick = () => readLetter(r.key); d.appendChild(l); }
+      if (r.test) { const x = document.createElement('button'); x.className = 'btn sec'; x.textContent = 'Clear test'; x.onclick = () => fb('appeals/t_preview', 'DELETE').then(render); d.appendChild(x); box.appendChild(d); continue; }
       const b = document.createElement('button'); b.className = 'btn grn'; b.textContent = 'Unban'; b.onclick = () => { b.disabled = true; unban(r.key).catch(e => { b.disabled = false; flash('Failed: ' + e); }); }; d.appendChild(b); box.appendChild(d); }
   }
 

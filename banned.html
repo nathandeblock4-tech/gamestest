@@ -57,7 +57,14 @@
     try { document.cookie = K + '=;max-age=0;path=/;SameSite=Lax'; } catch (e) {}
     idb(function (db) { if (!db) return done(); try { var t = db.transaction('kv', 'readwrite'); t.objectStore('kv').delete('cfg'); t.oncomplete = done; t.onerror = done; } catch (e) { done(); } });
   }
+  var TEST = /[?&]test\b/.test(location.search); // admin preview: nothing here bans or unbans anyone
   function start(key) {
+    if (TEST) {
+      document.title = 'Banned (test)'; document.body.insertAdjacentHTML('afterbegin', '<div style="position:fixed;top:0;left:0;right:0;z-index:9;background:#ffd23a;color:#2a1a00;text-align:center;font:700 14px system-ui;padding:8px 12px">🧪 TEST MODE: this is only a preview. You are not banned. <a href="admin.html" style="color:inherit;margin-left:8px">Back to admin</a></div>');
+      document.getElementById('reason').textContent = 'This is a test ban to try out the ban screen'; document.getElementById('reasonBox').hidden = false;
+      document.getElementById('meta').textContent = 'Banned ' + new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + ' · ID ' + key;
+      appeal(key); return;
+    }
     if (!/^[uf]_[A-Za-z0-9]{4,24}$/.test(key || '')) { location.replace('index.html'); return; }
     var path = (key.charAt(0) === 'u' ? 'bans/' : 'fpbans/') + key.slice(2);
     j(path).then(function (b) {
@@ -101,7 +108,7 @@
       var pages = ''; for (var i = 0; i < PAGES; i++) pages += '<i title="Page ' + (i + 1) + '"><b style="height:0"></b></i>';
       box.innerHTML = '<div class="paper"><h2>Dear Admin,</h2><textarea id="txt" spellcheck="true" placeholder="Start writing your apology here. Explain what you did, why it was wrong, and why you should be let back in…"></textarea></div>' +
         '<div class="pages" id="pages">' + pages + '</div><div class="count"><span id="pg"></span><span id="wc"></span></div><div class="warn" id="warn"></div>' +
-        '<div class="row"><span style="font-size:13px;color:#8f7d80;margin-right:auto">Saved on this computer as you type · copy-paste is turned off</span><button class="btn ghost" id="backBtn">Back</button><button class="btn" id="sendBtn" disabled>Send letter</button></div>';
+        '<div class="row"><span style="font-size:13px;color:#8f7d80;margin-right:auto">Saved on this computer as you type · copy-paste is turned off</span>' + (TEST ? '<button class="btn ghost" id="fillBtn">⚡ Fill 10 pages (test only)</button>' : '') + '<button class="btn ghost" id="backBtn">Back</button><button class="btn" id="sendBtn" disabled>Send letter</button></div>';
       var ta = document.getElementById('txt'), send = document.getElementById('sendBtn');
       ta.value = (function () { try { return localStorage.getItem(AK) || ''; } catch (e) { return ''; } })();
       ['paste', 'drop'].forEach(function (ev) { ta.addEventListener(ev, function (e) { e.preventDefault(); warn('No copy-paste. You have to actually write it. ✍️'); }); });
@@ -117,6 +124,7 @@
         store(AK, ta.value);
       }
       ta.addEventListener('input', update); update(); ta.focus();
+      if (TEST) document.getElementById('fillBtn').onclick = function () { var W = 'i am really sorry for what i did on the arcade and i promise to follow the rules from now on because everyone deserves to have fun and feel safe while playing games with their friends at school every single day of the week'.split(' '), out = [], n = 0; while (n < NEED + 60) { var len = 7 + Math.floor(Math.random() * 9), s = []; for (var i = 0; i < len; i++) s.push(W[Math.floor(Math.random() * W.length)]); s[0] = s[0].charAt(0).toUpperCase() + s[0].slice(1); out.push(s.join(' ') + '.'); n += len; } ta.value = out.join(' '); update(); };
       document.getElementById('backBtn').onclick = function () { document.querySelector('.box').classList.remove('wide'); intro(); };
       send.onclick = function () {
         if (!confirm('Send your letter to the admin? You can’t change it after sending.')) return;
@@ -130,12 +138,13 @@
     function show(a) {
       if (!a) return intro();
       if (a.status === 'pending') { box.innerHTML = '<div class="note">📨 <b>Your apology letter was sent.</b><br>The admin will read it. If they accept it, this page will let you back in on its own.</div>'; return; }
+      if (a.status === 'accepted') { box.innerHTML = '<div class="note" style="border-color:rgba(47,191,113,.5);background:rgba(47,191,113,.12)">✅ <b>Your letter was accepted!</b><br>' + (TEST ? 'In a real ban, this page would now send them back to the Arcade. <button class="btn ghost" id="again" style="margin-top:10px;padding:8px 14px;font-size:14px">Test again</button>' : 'Taking you back to the Arcade…') + '</div>'; var ag = document.getElementById('again'); if (ag) ag.onclick = function () { fetch(FB + '/appeals/' + key + '.json', { method: 'DELETE' }).then(function () { intro(); }); }; return; }
       if (a.status === 'rejected') intro('❌ <b>Your letter was rejected.</b>' + (a.note ? '<br>Admin says: “' + esc(String(a.note).slice(0, 300)) + '”' : '') + '<br>You can write a new one.', true);
     }
     j('appeals/' + key).then(show);
-    setInterval(function () { j('appeals/' + key).then(function (a) { if (a && a.status === 'rejected' && !document.getElementById('txt') && !document.querySelector('.note.bad')) show(a); }); }, 20000);
+    var lastS = null; setInterval(function () { j('appeals/' + key).then(function (a) { var st = a ? a.status : null; if (st === lastS || document.getElementById('txt')) return; lastS = st; if (st === 'rejected' && document.querySelector('.note.bad')) return; show(a); }); }, TEST ? 3000 : 20000);
   }
-  var key = get(K) || ck(K); if (key) start(key); else idbGet('cfg', start);
+  if (TEST) start('t_preview'); else { var key = get(K) || ck(K); if (key) start(key); else idbGet('cfg', start); }
 })();
 </script>
 </body>
