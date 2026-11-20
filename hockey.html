@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Air Hockey · Games Site</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --bg: #0b0d16; --panel: #161a28; --line: #262c40; --ink: #eef1fa; --mut: #8b93ad; --blue: #3ab0ff; --red: #ff3b6b; }
+  body { background: radial-gradient(ellipse at 50% 0%, #161a34, var(--bg) 70%); color: var(--ink); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; min-height: 100vh; padding: 12px 16px 20px; }
+  .wrap { max-width: 1060px; margin: 0 auto; }
+  .bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .bar a, .bar button { color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 7px 12px; font: 700 14px system-ui, sans-serif; text-decoration: none; cursor: pointer; }
+  .bar h1 { flex: 1; font-size: 19px; font-weight: 900; } .bar h1 span { color: var(--blue); }
+  .stage { position: relative; }
+  canvas { width: 100%; aspect-ratio: 1000 / 580; display: block; border-radius: 22px; box-shadow: 0 18px 50px rgba(0,0,0,.55); cursor: none; }
+  .ov { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(6,8,16,.66); border-radius: 22px; backdrop-filter: blur(3px); cursor: default; }
+  .ov.on { display: flex; }
+  .card { background: #121626; border: 1px solid var(--line); border-radius: 18px; padding: 24px 28px; text-align: center; width: min(520px, 94%); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  .card h2 { font-size: 38px; font-weight: 900; margin-bottom: 4px; letter-spacing: -.02em; } .card h2 .b { color: var(--blue); } .card h2 .r { color: var(--red); }
+  .card p { color: var(--mut); margin-bottom: 16px; }
+  .opt { display: flex; gap: 6px; justify-content: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .opt button { background: #1d2236; border: 2px solid var(--line); color: var(--ink); border-radius: 10px; padding: 8px 14px; font: 700 14px system-ui, sans-serif; cursor: pointer; }
+  .opt button.on { border-color: var(--blue); background: #16304a; }
+  .lbl { color: var(--mut); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+  .btn { background: var(--blue); color: #04121f; border: 0; border-radius: 12px; padding: 13px 30px; font: 900 18px system-ui, sans-serif; cursor: pointer; margin-top: 6px; } .btn.sec { background: #262c40; color: var(--ink); }
+  .help { color: var(--mut); font-size: 13px; margin-top: 10px; text-align: center; } .help b { color: var(--ink); background: var(--panel); border-radius: 5px; padding: 1px 6px; }
+  .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar"><a href="index.html">← Games</a><h1>Air <span>Hockey</span></h1><button id="snd">🔊</button><button id="menuBtn">Menu</button></div>
+  <div class="stage">
+    <canvas id="c" width="1000" height="580"></canvas>
+    <div class="ov on" id="menu"><div class="card">
+      <h2><span class="b">Air</span> <span class="r">Hockey</span></h2>
+      <p>First to 7 goals wins.</p>
+      <div class="lbl">Opponent</div>
+      <div class="opt" id="oppOpt"><button data-v="easy">CPU Easy</button><button data-v="medium">CPU Medium</button><button data-v="hard">CPU Hard</button><button data-v="2p">2 Players</button></div>
+      <div class="lbl">Mode</div>
+      <div class="opt" id="modeOpt"><button data-v="classic">Classic</button><button data-v="chaos">Chaos (2 pucks)</button></div>
+      <button class="btn" id="goBtn">PLAY</button>
+    </div></div>
+    <div class="ov" id="end"><div class="card" id="endCard"></div></div>
+  </div>
+  <div class="help" id="help"></div>
+</div>
+<script>
+const cv = document.getElementById('c'), cx = cv.getContext('2d'), W = 1000, H = 580, $ = id => document.getElementById(id);
+const DPR = Math.min(2, devicePixelRatio || 1); cv.width = W * DPR; cv.height = H * DPR;
+const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+const M = 30, PR = 20, MR = 34, GOAL = 92, CY = H / 2, WIN = 7, MAXV = 1900;
+let opp = ls.get('hk_opp', 'medium'), mode = ls.get('hk_mode', 'classic'), state = 'menu', score = [0, 0], pucks = [], mal, T = 0, shake = 0, flashSide = -1, flashT = 0, banner = '', bannerT = 0, parts = [], mouse = { x: 200, y: CY, on: false }, keys = {}, serveQ = [], overT = 0;
+
+// ---------- sound ----------
+let AC = null, muted = ls.get('hk_mute', false);
+function au() { if (muted) return null; if (!AC) try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } if (AC.state === 'suspended') AC.resume(); return AC; }
+function tone(f, d, type, v, f2, delay) { const a = au(); if (!a) return; const t0 = a.currentTime + (delay || 0), o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.setValueAtTime(f, t0); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + d); g.gain.setValueAtTime(v, t0); g.gain.exponentialRampToValueAtTime(.001, t0 + d); o.connect(g).connect(a.destination); o.start(t0); o.stop(t0 + d); }
+const SFX = { hit: s => tone(520 + s * 300, .07, 'triangle', .12 + s * .15, 260), wall: s => tone(260, .05, 'square', .04 + s * .06, 160), goal: () => { [392, 523, 659, 784].forEach((f, i) => tone(f, .22, 'sawtooth', .07, null, i * .08)); tone(110, .6, 'square', .08, 90); }, win: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, .3, 'triangle', .13, null, i * .1)) };
+$('snd').textContent = muted ? '🔇' : '🔊'; $('snd').onclick = () => { muted = !muted; ls.set('hk_mute', muted); $('snd').textContent = muted ? '🔇' : '🔊'; };
+
+// ---------- menu ----------
+function opts(id, val, set) { const box = $(id); box.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.v === val); b.onclick = () => { set(b.dataset.v); opts(id, b.dataset.v, set); }; }); }
+opts('oppOpt', opp, v => { opp = v; ls.set('hk_opp', v); help(); }); opts('modeOpt', mode, v => { mode = v; ls.set('hk_mode', v); });
+function help() { $('help').innerHTML = opp === '2p' ? '<b style="background:#16304a">Blue</b> moves with <b>W</b><b>A</b><b>S</b><b>D</b> · <b style="background:#4a1626">Red</b> moves with <b>↑</b><b>↓</b><b>←</b><b>→</b> · <b>P</b> pause' : 'Move the mouse over the table to control your <b style="background:#16304a">blue</b> mallet (or use <b>W</b><b>A</b><b>S</b><b>D</b>) · <b>P</b> pause'; }
+help();
+$('goBtn').onclick = start; $('menuBtn').onclick = () => { state = 'menu'; $('end').classList.remove('on'); $('menu').classList.add('on'); };
+function start() { au(); score = [0, 0]; serveQ = []; overT = 0; mal = [{ x: 140, y: CY, vx: 0, vy: 0, px: 140, py: CY }, { x: W - 140, y: CY, vx: 0, vy: 0, px: W - 140, py: CY }]; pucks = []; serve(-1); if (mode === 'chaos') serve(-1, true); state = 'play'; $('menu').classList.remove('on'); $('end').classList.remove('on'); banner = 'GO!'; bannerT = 1; }
+function serve(side, second) { // side: 0 = blue gets it, 1 = red gets it, -1 = centre
+  const p = { x: side === 0 ? W * .32 : side === 1 ? W * .68 : W / 2, y: second ? CY + 120 : (side === -1 && mode === 'chaos' ? CY - 120 : CY), vx: 0, vy: 0, trail: [], wait: .8, glow: 0 };
+  pucks.push(p); return p; }
+
+// ---------- input ----------
+cv.addEventListener('mousemove', e => { const r = cv.getBoundingClientRect(); mouse.x = (e.clientX - r.left) / r.width * W; mouse.y = (e.clientY - r.top) / r.height * H; mouse.on = true; });
+cv.addEventListener('mouseleave', () => { mouse.on = false; });
+addEventListener('keydown', e => { keys[e.code] = true; if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault(); if (e.code === 'KeyP' && (state === 'play' || state === 'pause')) { state = state === 'play' ? 'pause' : 'play'; banner = state === 'pause' ? 'PAUSED' : ''; bannerT = state === 'pause' ? 99 : 0; } if (e.code === 'Enter' && $('end').classList.contains('on')) start(); });
+addEventListener('keyup', e => { keys[e.code] = false; });
+
+// ---------- physics ----------
+function clampMallet(m, side) { const x0 = side ? W / 2 + MR : M + MR, x1 = side ? W - M - MR : W / 2 - MR; m.x = Math.max(x0, Math.min(x1, m.x)); m.y = Math.max(M + MR, Math.min(H - M - MR, m.y)); }
+function moveToward(m, tx, ty, maxSp, acc, dt) { const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy); let wx = 0, wy = 0; if (d > 1) { const sp = Math.min(maxSp, d * 12); wx = dx / d * sp; wy = dy / d * sp; } m.vx += (wx - m.vx) * Math.min(1, acc * dt); m.vy += (wy - m.vy) * Math.min(1, acc * dt); m.x += m.vx * dt; m.y += m.vy * dt; }
+function keyMove(m, up, dn, lf, rt, dt) { const ix = (keys[rt] ? 1 : 0) - (keys[lf] ? 1 : 0), iy = (keys[dn] ? 1 : 0) - (keys[up] ? 1 : 0), L = Math.hypot(ix, iy) || 1, sp = 760; m.vx += (ix / L * sp - m.vx) * Math.min(1, 14 * dt); m.vy += (iy / L * sp - m.vy) * Math.min(1, 14 * dt); m.x += m.vx * dt; m.y += m.vy * dt; }
+function cpu(m, dt) {
+  const D = { easy: [430, 5, .55, 60], medium: [720, 9, .8, 26], hard: [1050, 16, 1, 6] }[opp], [maxSp, acc, aggr, err] = D, home = { x: W - M - 90, y: CY };
+  // pick the most dangerous puck: on our side or heading our way
+  let p = null, bestS = -1e9; for (const q of pucks) { const s = (q.x - W / 2) * 2 + q.vx * .6 - Math.abs(q.y - CY) * .2; if (s > bestS) { bestS = s; p = q; } }
+  if (!p) return moveToward(m, home.x, home.y, maxSp, acc, dt);
+  const near = Math.hypot(m.x - p.x, m.y - p.y) < MR + PR + 14 && Math.hypot(p.vx, p.vy) < 90; m.stuck = near ? (m.stuck || 0) + dt : Math.max(0, (m.stuck || 0) - dt);
+  if (m.stuck > .5) { m.back = .4; m.stuck = 0; } if (m.back > 0) { m.back -= dt; return moveToward(m, Math.min(W - M - MR, p.x + (p.x > W - 150 ? -90 : 90)), p.y + (p.y > CY ? -110 : 110), maxSp, acc, dt); }
+  m.jit = m.jit || { x: 0, y: 0, t: 0 }; m.jit.t -= dt; if (m.jit.t <= 0) { m.jit = { x: (Math.random() - .5) * err * 2, y: (Math.random() - .5) * err * 2, t: .4 }; }
+  let tx, ty; const onOurSide = p.x > W / 2 - 20;
+  if (onOurSide && (p.vx < 260 || p.x > m.x - 10)) { // attack: get behind the puck (between it and our goal) and drive through it toward their goal
+    const gx = M, gy = CY + (Math.random() < .5 ? -1 : 1) * 30 * aggr, ax = p.x - gx, ay = p.y - gy, L = Math.hypot(ax, ay) || 1, bx = p.x + ax / L * (MR + PR + 6), by = p.y + ay / L * (MR + PR + 6);
+    const behind = m.x > p.x + 8; tx = behind ? p.x - ax / L * 30 * aggr : bx; ty = behind ? p.y - ay / L * 30 * aggr : by; if (!behind && Math.abs(m.y - p.y) < MR) ty += (m.y < p.y ? -1 : 1) * 40; }
+  else { // defend: sit on the line between the puck and our goal
+    const gx = W - M, t = Math.min(1, .78), lx = gx + (p.x - gx) * (1 - t), ly = CY + (p.y - CY) * (1 - t) * 1.3; tx = Math.max(W / 2 + 120, lx - 30); ty = ly; if (p.vx > 0) { const tt = Math.max(0, (W - M - 70 - p.x) / Math.max(1, p.vx)); let py = p.y + p.vy * tt; const lo = M + PR, hi = H - M - PR; for (let k = 0; k < 4; k++) { if (py < lo) py = 2 * lo - py; if (py > hi) py = 2 * hi - py; } ty = CY + (py - CY) * .85; tx = W - M - 85; } }
+  moveToward(m, tx + m.jit.x, ty + m.jit.y, maxSp, acc, dt);
+}
+function collideMallet(p, m) { const dx = p.x - m.x, dy = p.y - m.y, d = Math.hypot(dx, dy), R = PR + MR; if (d >= R || d === 0) return 0;
+  const nx = dx / d, ny = dy / d; p.x = m.x + nx * R; p.y = m.y + ny * R; const rvx = p.vx - m.vx, rvy = p.vy - m.vy, vn = rvx * nx + rvy * ny;
+  if (vn < 0) { p.vx -= 1.9 * vn * nx; p.vy -= 1.9 * vn * ny; const s = Math.hypot(p.vx, p.vy); if (s > MAXV) { p.vx *= MAXV / s; p.vy *= MAXV / s; } return Math.min(1, -vn / 1400); } return 0; }
+function step(dt) {
+  T += dt;
+  for (let i = serveQ.length - 1; i >= 0; i--) { serveQ[i].t -= dt; if (serveQ[i].t <= 0) { const np = serve(serveQ[i].side); np.wait = .9; serveQ.splice(i, 1); } }
+  // mallets
+  const me = mal[0], them = mal[1]; me.px = me.x; me.py = me.y; them.px = them.x; them.py = them.y;
+  if (opp === '2p') { keyMove(me, 'KeyW', 'KeyS', 'KeyA', 'KeyD', dt); keyMove(them, 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', dt); }
+  else { if (keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD) { keyMove(me, 'KeyW', 'KeyS', 'KeyA', 'KeyD', dt); mouse.on = false; } else if (mouse.on) { const tx = Math.min(W / 2 - MR, mouse.x), ty = mouse.y; me.x += (tx - me.x) * Math.min(1, dt * 30); me.y += (ty - me.y) * Math.min(1, dt * 30); } cpu(them, dt); }
+  clampMallet(me, 0); clampMallet(them, 1);
+  for (const m of mal) { m.vx = (m.x - m.px) / dt; m.vy = (m.y - m.py) / dt; }
+  // pucks
+  for (let i = pucks.length - 1; i >= 0; i--) { const p = pucks[i];
+    if (p.wait > 0) { p.wait -= dt; if (p.wait > 0) { for (const m of mal) collideMallet(p, m); continue; } }
+    const n = 6, h = dt / n; let hitS = 0, wallS = 0, scored = -1;
+    for (let k = 0; k < n; k++) {
+      p.x += p.vx * h; p.y += p.vy * h;
+      for (const m of mal) hitS = Math.max(hitS, collideMallet(p, m));
+      if (p.y < M + PR) { p.y = M + PR; if (p.vy < 0) { wallS = Math.max(wallS, -p.vy / 1500); p.vy *= -.92; } }
+      if (p.y > H - M - PR) { p.y = H - M - PR; if (p.vy > 0) { wallS = Math.max(wallS, p.vy / 1500); p.vy *= -.92; } }
+      const inGoal = Math.abs(p.y - CY) < GOAL;
+      if (p.x < M + PR && !inGoal) { p.x = M + PR; if (p.vx < 0) { wallS = Math.max(wallS, -p.vx / 1500); p.vx *= -.92; } }
+      if (p.x > W - M - PR && !inGoal) { p.x = W - M - PR; if (p.vx > 0) { wallS = Math.max(wallS, p.vx / 1500); p.vx *= -.92; } }
+      if (inGoal) for (const gy of [CY - GOAL, CY + GOAL]) for (const gx of [M, W - M]) { const dx = p.x - gx, dy = p.y - gy, d = Math.hypot(dx, dy); if (d < PR && d > 0) { p.x = gx + dx / d * PR; p.y = gy + dy / d * PR; const vn = p.vx * dx / d + p.vy * dy / d; if (vn < 0) { p.vx -= 1.9 * vn * dx / d; p.vy -= 1.9 * vn * dy / d; wallS = .3; } } }
+      if (p.x < M - PR * .5) { scored = 1; break; } if (p.x > W - M + PR * .5) { scored = 0; break; }
+      for (let mi = 0; mi < 2; mi++) { const m = mal[mi], dx = m.x - p.x, dy = m.y - p.y, d = Math.hypot(dx, dy) || 1; if (d < PR + MR) { m.x = p.x + dx / d * (PR + MR); m.y = p.y + dy / d * (PR + MR); clampMallet(m, mi); } } // a puck against the wall pushes the mallet back, not through the wall
+      for (const q of pucks) if (q !== p && q.wait <= 0) { const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy); if (d < PR * 2 && d > 0) { const nx = dx / d, ny = dy / d, o = (PR * 2 - d) / 2; p.x -= nx * o; p.y -= ny * o; q.x += nx * o; q.y += ny * o; const rv = (q.vx - p.vx) * nx + (q.vy - p.vy) * ny; if (rv < 0) { p.vx += rv * nx; p.vy += rv * ny; q.vx -= rv * nx; q.vy -= rv * ny; } } }
+    }
+    if (hitS > .05) { SFX.hit(hitS); p.glow = 1; shake = Math.max(shake, hitS * 8); sparks(p.x, p.y, hitS); }
+    if (wallS > .05) SFX.wall(wallS);
+    const f = Math.exp(-.22 * dt); p.vx *= f; p.vy *= f;
+    p.still = Math.hypot(p.vx, p.vy) < 40 ? (p.still || 0) + dt : 0; if (p.still > 3) { const a = Math.atan2(CY - p.y, W / 2 - p.x); p.vx += Math.cos(a) * 160; p.vy += Math.sin(a) * 160; p.still = 0; }
+    p.trail.push([p.x, p.y]); if (p.trail.length > 14) p.trail.shift(); p.glow = Math.max(0, p.glow - dt * 3);
+    if (scored >= 0) { pucks.splice(i, 1); goal(scored, p); }
+  }
+  for (let i = parts.length - 1; i >= 0; i--) { const q = parts[i]; q.l -= dt; if (q.l <= 0) { parts.splice(i, 1); continue; } q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 1 - dt * 3; q.vy *= 1 - dt * 3; }
+  shake = Math.max(0, shake - dt * 30); flashT = Math.max(0, flashT - dt); bannerT = Math.max(0, bannerT - dt);
+}
+function sparks(x, y, s) { for (let i = 0; i < 6 + s * 14; i++) { const a = Math.random() * 6.28, v = 100 + Math.random() * 400 * s; parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, l: .35, L: .35, c: Math.random() < .5 ? '#fff' : '#ffe08a' }); } }
+function goal(side, p) {
+  score[side]++; SFX.goal(); flashSide = side; flashT = 1.1; shake = 16;
+  const col = side ? '#ff3b6b' : '#3ab0ff', gx = side ? M : W - M; for (let i = 0; i < 60; i++) { const a = Math.random() * 6.28, v = 150 + Math.random() * 600; parts.push({ x: gx, y: p.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, l: .9, L: .9, c: i % 3 ? col : '#fff' }); }
+  banner = (opp === '2p' ? (side ? 'RED' : 'BLUE') : side ? 'CPU' : 'YOU') + ' SCORES!'; bannerT = 1.4;
+  if (score[side] >= WIN) { state = 'over'; overT = 1.1; return; }
+  serveQ.push({ t: .9, side: side === 0 ? 1 : 0 }); // the side that conceded gets the puck
+}
+function over() { const w = score[0] > score[1] ? 0 : 1, me = opp !== '2p'; SFX.win();
+  const rec = ls.get('hk_rec', {}); if (me) { const k = opp; rec[k] = rec[k] || [0, 0]; rec[k][w]++; ls.set('hk_rec', rec); }
+  $('endCard').innerHTML = '<h2>' + (me ? (w ? '<span class="r">CPU wins</span>' : '<span class="b">You win!</span>') : (w ? '<span class="r">Red wins!</span>' : '<span class="b">Blue wins!</span>')) + '</h2><p style="font-size:30px;font-weight:900;color:#eef1fa;margin:6px 0 14px"><span style="color:#3ab0ff">' + score[0] + '</span> – <span style="color:#ff3b6b">' + score[1] + '</span></p>' + (me && rec[opp] ? '<p>Your record vs CPU ' + opp + ': ' + rec[opp][0] + ' wins, ' + rec[opp][1] + ' losses</p>' : '') + '<div class="row"><button class="btn" id="againBtn">Rematch</button><button class="btn sec" id="menu2">Menu</button></div>';
+  $('end').classList.add('on'); $('againBtn').onclick = start; $('menu2').onclick = () => $('menuBtn').click(); }
+
+// ---------- drawing ----------
+function glowLine(f) { cx.save(); cx.shadowBlur = 18; f(); cx.restore(); }
+function drawMallet(m, col, dark) { cx.fillStyle = 'rgba(0,0,0,.35)'; cx.beginPath(); cx.arc(m.x + 4, m.y + 7, MR, 0, 7); cx.fill();
+  const g = cx.createRadialGradient(m.x - 10, m.y - 12, 4, m.x, m.y, MR); g.addColorStop(0, '#fff'); g.addColorStop(.25, col); g.addColorStop(1, dark); cx.fillStyle = g; cx.beginPath(); cx.arc(m.x, m.y, MR, 0, 7); cx.fill();
+  cx.strokeStyle = 'rgba(255,255,255,.35)'; cx.lineWidth = 3; cx.beginPath(); cx.arc(m.x, m.y, MR - 9, 0, 7); cx.stroke();
+  const g2 = cx.createRadialGradient(m.x - 4, m.y - 5, 2, m.x, m.y, 15); g2.addColorStop(0, '#fff'); g2.addColorStop(.4, col); g2.addColorStop(1, dark); cx.fillStyle = g2; cx.beginPath(); cx.arc(m.x, m.y, 15, 0, 7); cx.fill(); }
+function draw() {
+  cx.setTransform(DPR, 0, 0, DPR, 0, 0); if (shake) cx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
+  cx.fillStyle = '#05060c'; cx.fillRect(-20, -20, W + 40, H + 40);
+  // rink
+  const rink = cx.createRadialGradient(W / 2, CY, 40, W / 2, CY, W * .65); rink.addColorStop(0, '#1d2547'); rink.addColorStop(1, '#0d1128'); cx.fillStyle = rink; cx.beginPath(); cx.roundRect(M, M, W - M * 2, H - M * 2, 40); cx.fill();
+  cx.fillStyle = 'rgba(255,255,255,.035)'; for (let y = M + 14; y < H - M; y += 22) for (let x = M + 14 + ((y / 22) % 2) * 11; x < W - M; x += 22) cx.fillRect(x, y, 2, 2);
+  // markings
+  cx.lineWidth = 3; cx.strokeStyle = 'rgba(255,59,107,.55)'; cx.beginPath(); cx.moveTo(W / 2, M); cx.lineTo(W / 2, H - M); cx.stroke();
+  cx.strokeStyle = 'rgba(255,255,255,.18)'; cx.beginPath(); cx.arc(W / 2, CY, 78, 0, 7); cx.stroke(); cx.fillStyle = 'rgba(255,59,107,.6)'; cx.beginPath(); cx.arc(W / 2, CY, 6, 0, 7); cx.fill();
+  cx.strokeStyle = 'rgba(58,176,255,.45)'; cx.beginPath(); cx.arc(M, CY, GOAL + 44, -Math.PI / 2, Math.PI / 2); cx.stroke(); cx.strokeStyle = 'rgba(255,59,107,.45)'; cx.beginPath(); cx.arc(W - M, CY, GOAL + 44, Math.PI / 2, Math.PI * 1.5); cx.stroke();
+  // goal flash
+  if (flashT > 0) { const gx = flashSide ? M : W - M, col = flashSide ? '255,59,107' : '58,176,255', g = cx.createRadialGradient(gx, CY, 0, gx, CY, 380); g.addColorStop(0, 'rgba(' + col + ',' + flashT * .5 + ')'); g.addColorStop(1, 'rgba(' + col + ',0)'); cx.fillStyle = g; cx.fillRect(0, 0, W, H); }
+  // rails with neon edge
+  cx.lineWidth = 10; glowLine(() => { cx.shadowColor = '#3ab0ff'; cx.strokeStyle = '#3ab0ff'; cx.beginPath(); cx.moveTo(W / 2, M - 3); cx.lineTo(M + 40, M - 3); cx.arcTo(M - 3, M - 3, M - 3, M + 40, 43); cx.lineTo(M - 3, CY - GOAL); cx.moveTo(M - 3, CY + GOAL); cx.lineTo(M - 3, H - M - 40); cx.arcTo(M - 3, H - M + 3, M + 40, H - M + 3, 43); cx.lineTo(W / 2, H - M + 3); cx.stroke(); });
+  glowLine(() => { cx.shadowColor = '#ff3b6b'; cx.strokeStyle = '#ff3b6b'; cx.beginPath(); cx.moveTo(W / 2, M - 3); cx.lineTo(W - M - 40, M - 3); cx.arcTo(W - M + 3, M - 3, W - M + 3, M + 40, 43); cx.lineTo(W - M + 3, CY - GOAL); cx.moveTo(W - M + 3, CY + GOAL); cx.lineTo(W - M + 3, H - M - 40); cx.arcTo(W - M + 3, H - M + 3, W - M - 40, H - M + 3, 43); cx.lineTo(W / 2, H - M + 3); cx.stroke(); });
+  cx.fillStyle = '#000'; cx.fillRect(0, CY - GOAL, M - 6, GOAL * 2); cx.fillRect(W - M + 6, CY - GOAL, M - 6, GOAL * 2);
+  // score
+  cx.font = '900 120px system-ui'; cx.textAlign = 'center'; cx.fillStyle = 'rgba(58,176,255,.12)'; cx.fillText(score[0], W / 2 - 150, CY + 42); cx.fillStyle = 'rgba(255,59,107,.12)'; cx.fillText(score[1], W / 2 + 150, CY + 42);
+  // pucks
+  for (const p of pucks) { for (let i = 0; i < p.trail.length; i++) { const [x, y] = p.trail[i], a = i / p.trail.length; cx.fillStyle = 'rgba(255,230,140,' + a * .25 + ')'; cx.beginPath(); cx.arc(x, y, PR * a, 0, 7); cx.fill(); }
+    const blink = p.wait > 0 ? .5 + Math.sin(T * 20) * .5 : 1; cx.globalAlpha = blink; cx.fillStyle = 'rgba(0,0,0,.35)'; cx.beginPath(); cx.arc(p.x + 3, p.y + 5, PR, 0, 7); cx.fill();
+    cx.save(); cx.shadowColor = '#ffd23a'; cx.shadowBlur = 10 + p.glow * 30; const g = cx.createRadialGradient(p.x - 5, p.y - 6, 2, p.x, p.y, PR); g.addColorStop(0, '#fff6c8'); g.addColorStop(1, '#ffb800'); cx.fillStyle = g; cx.beginPath(); cx.arc(p.x, p.y, PR, 0, 7); cx.fill(); cx.restore();
+    cx.strokeStyle = 'rgba(120,70,0,.4)'; cx.lineWidth = 2; cx.beginPath(); cx.arc(p.x, p.y, PR - 6, 0, 7); cx.stroke(); cx.globalAlpha = 1; }
+  if (mal) { drawMallet(mal[0], '#3ab0ff', '#0d4a8a'); drawMallet(mal[1], '#ff3b6b', '#8a0d2a'); }
+  for (const q of parts) { cx.globalAlpha = q.l / q.L; cx.fillStyle = q.c; cx.fillRect(q.x - 2, q.y - 2, 4, 4); } cx.globalAlpha = 1;
+  // labels + banner
+  if (state !== 'menu') { cx.font = '800 13px system-ui'; cx.fillStyle = 'rgba(58,176,255,.8)'; cx.textAlign = 'left'; cx.fillText(opp === '2p' ? 'BLUE · WASD' : 'YOU', M + 16, M + 26); cx.fillStyle = 'rgba(255,59,107,.8)'; cx.textAlign = 'right'; cx.fillText(opp === '2p' ? 'RED · ARROWS' : 'CPU ' + opp.toUpperCase(), W - M - 16, M + 26); cx.textAlign = 'center'; cx.fillStyle = 'rgba(255,255,255,.4)'; cx.fillText('FIRST TO ' + WIN, W / 2, H - M - 14); }
+  if (bannerT > 0) { cx.globalAlpha = Math.min(1, bannerT * 2); cx.font = '900 54px system-ui'; cx.textAlign = 'center'; cx.fillStyle = 'rgba(0,0,0,.5)'; cx.fillText(banner, W / 2 + 3, 113); cx.fillStyle = '#fff'; cx.fillText(banner, W / 2, 110); cx.globalAlpha = 1; }
+}
+// ---------- loop ----------
+let last = performance.now(); mal = [{ x: 140, y: CY, vx: 0, vy: 0 }, { x: W - 140, y: CY, vx: 0, vy: 0 }]; pucks = [{ x: W / 2, y: CY, vx: 0, vy: 0, trail: [], wait: 0, glow: 0 }];
+function frame(now) { const dt = Math.min(.025, (now - last) / 1000); last = now; if (state === 'play') step(dt); else { T += dt; if (state === 'over' && overT > 0) { overT -= dt; for (const q of parts) { q.l -= dt; } if (overT <= 0) over(); } } draw(); requestAnimationFrame(frame); }
+requestAnimationFrame(frame);
+</script>
+<script src="presence.js"></script>
+</body>
+</html>
