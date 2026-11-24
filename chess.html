@@ -582,7 +582,7 @@ function ENGINE() {
   // ---------- game state ----------
   let mode = 'local', P = E.fromFEN(E.START), legal = [], hist = [], fens = [E.START], reps = {}, myColor = 'w', level = 3;
   let flipped = false, autoFlip = true, sel = -1, over = null, thinking = false, promoPending = null, clockSet = CLOCKS[0], clk = { w: 0, b: 0 }, lastTick = 0;
-  let net = { peer: null, conn: null, host: false, code: '', connected: false };
+  let net = { peer: null, conn: null, host: false, code: '', connected: false, es: null, seen: {} };
 
   function show(id) { ['menu', 'lobby', 'play'].forEach(s => $(s).classList.toggle('on', s === id)); window.scrollTo(0, 0); }
   function toast(t, ms) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), ms || 2200); }
@@ -767,7 +767,7 @@ function ENGINE() {
     if (clockSet.m > 0 && hist.length > 1) clk[mover] += clockSet.i * 1000;
     lastTick = performance.now();
     legal = E.legal(P);
-    if (mode === 'online' && !remote && net.conn) send({ t: 'move', uci: hist[hist.length - 1].uci, n: hist.length, clk: clk[mover] });
+    if (mode === 'online' && !remote && net.connected) send({ t: 'move', uci: hist[hist.length - 1].uci, n: hist.length, clk: clk[mover] });
     if (sanStr.indexOf('#') >= 0) {} else if (sanStr.indexOf('+') >= 0) SND.check(); else if (m.fl === 3) SND.castle(); else if (m.c !== '.') SND.cap(); else SND.move();
     if (mode === 'local' && autoFlip && !over) flipped = P.t === 'b';
     checkEnd();
@@ -987,88 +987,49 @@ function ENGINE() {
   $('cpuBtn').onclick = () => { clearPersist(); newGame('cpu', { level: cfg.lvl, color: cfg.col === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : cfg.col }); };
   $('contBtn').onclick = resume;
 
-  // ---------- online (PeerJS, browser to browser) ----------
-  const PREFIX = 'gameroom-chess-';
+  // ---------- online (through the site's online database: works on school networks) ----------
   const ALPH = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  let ICE = { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } };
-  function grIce() {
-    var exp = Math.floor(Date.now() / 1000) + 86400, user = exp + ':gameroom';
-    var fallback = [{ urls: 'stun:stun.l.google.com:19302' }];
-    try {
-      return crypto.subtle.importKey('raw', new TextEncoder().encode('openrelayprojectsecret'), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign'])
-        .then(function (k) { return crypto.subtle.sign('HMAC', k, new TextEncoder().encode(user)); })
-        .then(function (sig) {
-          var cred = btoa(String.fromCharCode.apply(null, new Uint8Array(sig)));
-          return { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:staticauth.openrelay.metered.ca:80' },
-            { urls: ['turn:staticauth.openrelay.metered.ca:80', 'turn:staticauth.openrelay.metered.ca:443', 'turn:staticauth.openrelay.metered.ca:80?transport=tcp', 'turn:staticauth.openrelay.metered.ca:443?transport=tcp', 'turns:staticauth.openrelay.metered.ca:443?transport=tcp'], username: user, credential: cred }] } };
-        })
-        .catch(function () { return { config: { iceServers: fallback } }; });
-    } catch (e) { return Promise.resolve({ config: { iceServers: fallback } }); }
-  }
-  grIce().then(o => { ICE = o; });
-  function loadPeer(cb) {
-    if (window.Peer) return cb();
-    const s = document.createElement('script'); s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
-    s.onload = () => cb(); s.onerror = () => netFail('Could not load the online module. Your network might be blocking it.');
-    document.head.appendChild(s);
-  }
+  const FBU = () => (window.GR && GR.FB) || 'https://game-site-2a81e-default-rtdb.firebaseio.com';
+  const ME = 'p' + Math.random().toString(36).slice(2, 10);
+  const roomUrl = p => FBU() + '/rooms/chess/' + net.code + (p ? '/' + p : '') + '.json';
+  const api = (p, method, body) => fetch(roomUrl(p), { method: method || 'GET', body: body === undefined ? undefined : JSON.stringify(body), keepalive: method === 'DELETE' || (body && body.d && body.d.t === 'bye') }).then(r => r.ok ? r.json() : null);
   function netFail(msg) { $('netErr').textContent = msg; $('lobbyErr').textContent = msg; }
-  function send(d) { try { if (net.conn && net.conn.open) net.conn.send(d); } catch (e) {} }
-  function leaveOnline() { try { if (net.conn) net.conn.close(); } catch (e) {} try { if (net.peer) net.peer.destroy(); } catch (e) {} net = { peer: null, conn: null, host: false, code: '', connected: false }; }
-  function hostRoom() {
+  function send(d) { if (!net.code || !net.connected) return; api('msgs', 'POST', { from: ME, d, t: { '.sv': 'timestamp' } }).catch(() => {}); }
+  function leaveOnline() { const was = net; if (was.code && was.connected) { try { fetch(FBU() + '/rooms/chess/' + was.code + '/msgs.json', { method: 'POST', keepalive: true, body: JSON.stringify({ from: ME, d: { t: 'bye' } }) }); } catch (e) {} }
+    if (was.es) was.es.close(); if (was.code && was.host) { try { fetch(FBU() + '/rooms/chess/' + was.code + '.json', { method: 'DELETE', keepalive: true }); } catch (e) {} }
+    net = { peer: null, conn: null, host: false, code: '', connected: false, es: null, seen: {} }; }
+  function listen() {
+    const es = new EventSource(roomUrl('')); net.es = es; const mine = net;
+    const take = (key, m) => { if (!m || m.from === ME || mine.seen[key]) return; mine.seen[key] = 1; if (net !== mine) return; if (m.d && m.d.t === 'bye') { net.connected = false; if (mode === 'online') { toast('Your opponent left the game', 4000); render(); } return; } onData(m.d); };
+    const onGuest = g => { if (!mine.host || !g || mine.connected || net !== mine) return; net.connected = true;
+      const hostCol = cfg.hostCol === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : cfg.hostCol;
+      send({ t: 'hello', color: hostCol === 'w' ? 'b' : 'w', clock: cfg.clockO }); SND.note(); newGame('online', { color: hostCol, clock: cfg.clockO }); toast('Your friend joined! Good luck.'); };
+    const handle = (path, data) => {
+      if (path === '/') { if (!data) { if (!mine.host && mine.connected && net === mine) { net.connected = false; toast('The room was closed', 4000); render(); } return; } if (data.guest) onGuest(data.guest); const ms = data.msgs || {}; Object.keys(ms).sort().forEach(k => take(k, ms[k])); return; }
+      if (path === '/guest') return onGuest(data);
+      if (path === '/msgs') { const ms = data || {}; Object.keys(ms).sort().forEach(k => take(k, ms[k])); return; }
+      const m = path.match(/^\/msgs\/([^/]+)$/); if (m) take(m[1], data); };
+    es.addEventListener('put', e => { try { const m = JSON.parse(e.data); handle(m.path, m.data); } catch (x) {} });
+    es.addEventListener('patch', e => { try { const m = JSON.parse(e.data); for (const k in m.data) handle((m.path === '/' ? '' : m.path) + '/' + k, m.data[k]); } catch (x) {} });
+  }
+  async function hostRoom() {
     $('netErr').textContent = ''; $('lobbyErr').textContent = ''; leaveOnline();
     show('lobby'); $('roomCode').textContent = '.....'; $('lobbyMsg').textContent = 'Creating your room...';
-    loadPeer(() => {
-      let code = ''; for (let i = 0; i < 5; i++) code += ALPH[Math.floor(Math.random() * ALPH.length)];
-      net.code = code; net.host = true;
-      let peer;
-      try { peer = new Peer(PREFIX + code.toLowerCase(), ICE); } catch (e) { netFail('Online play is not supported in this browser.'); return; }
-      net.peer = peer;
-      peer.on('open', () => { $('roomCode').textContent = code; $('lobbyMsg').textContent = 'Waiting for your friend to join...'; });
-      peer.on('connection', c => {
-        if (net.conn && net.conn.open) { c.on('open', () => { c.send({ t: 'full' }); setTimeout(() => c.close(), 400); }); return; }
-        wireConn(c);
-        c.on('open', () => {
-          net.connected = true;
-          const hostCol = cfg.hostCol === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : cfg.hostCol;
-          send({ t: 'hello', color: hostCol === 'w' ? 'b' : 'w', clock: cfg.clockO });
-          SND.note(); newGame('online', { color: hostCol, clock: cfg.clockO }); toast('Your friend joined! Good luck.');
-        });
-      });
-      peer.on('error', e => {
-        if (e && e.type === 'unavailable-id') { hostRoom(); return; }
-        if (net.connected) return;
-        netFail('Online connection problem (' + (e && e.type ? e.type : 'error') + '). Try again.');
-      });
-      peer.on('disconnected', () => { try { if (!net.connected) peer.reconnect(); } catch (e) {} });
-    });
+    let code = ''; for (let k = 0; k < 5; k++) { code = ''; for (let i = 0; i < 5; i++) code += ALPH[Math.floor(Math.random() * ALPH.length)]; net.code = code; const ex = await api('host').catch(() => 'err'); if (ex === 'err') { netFail("Couldn't reach the online server. Check your internet and try again."); return; } if (!ex) break; }
+    net.host = true; const ok = await api('', 'PUT', { host: { id: ME, t: { '.sv': 'timestamp' } } }).catch(() => null);
+    if (!ok) { netFail("Couldn't create a room. Try again."); return; }
+    $('roomCode').textContent = code; $('lobbyMsg').textContent = 'Waiting for your friend to join...'; listen();
   }
-  function joinRoom(code) {
+  async function joinRoom(code) {
     code = (code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (code.length !== 5) { netFail('Room codes have 5 letters/numbers.'); return; }
-    $('netErr').textContent = 'Connecting...'; leaveOnline();
-    loadPeer(() => {
-      let peer;
-      try { peer = new Peer(ICE); } catch (e) { netFail('Online play is not supported in this browser.'); return; }
-      net.peer = peer; net.code = code; net.host = false;
-      const fail = setTimeout(() => { if (!net.connected) { netFail("Couldn't connect. Check the code and try again."); leaveOnline(); } }, 15000);
-      peer.on('open', () => {
-        const c = peer.connect(PREFIX + code.toLowerCase(), { reliable: true });
-        wireConn(c);
-        c.on('open', () => { net.connected = true; clearTimeout(fail); $('netErr').textContent = ''; });
-      });
-      peer.on('error', e => {
-        if (net.connected) return; clearTimeout(fail);
-        netFail(e && e.type === 'peer-unavailable' ? 'Room not found. Check the code, or ask your friend to create a new room.' : 'Online connection problem (' + (e && e.type ? e.type : 'error') + ').');
-        leaveOnline();
-      });
-    });
-  }
-  function wireConn(c) {
-    net.conn = c;
-    c.on('data', onData);
-    c.on('close', () => { if (net.conn !== c) return; net.connected = false; if ($('play').classList.contains('on') && mode === 'online') { toast('Your opponent disconnected', 4000); render(); } });
-    c.on('error', () => {});
+    $('netErr').textContent = 'Connecting...'; leaveOnline(); net.code = code;
+    const room = await api('').catch(() => 'err');
+    if (room === 'err') { netFail("Couldn't reach the online server. Check your internet."); leaveOnline(); return; }
+    if (!room || !room.host) { netFail('Room not found. Check the code, or ask your friend to create a new room.'); leaveOnline(); return; }
+    if (room.guest && room.guest.id !== ME) { netFail('That room already has two players.'); leaveOnline(); return; }
+    net.connected = true; net.host = false; await api('guest', 'PUT', { id: ME, t: { '.sv': 'timestamp' } }).catch(() => {});
+    $('netErr').textContent = 'Joined! Waiting for the game to start...'; listen();
   }
   function onData(d) {
     if (!d || typeof d !== 'object') return;
@@ -1105,7 +1066,7 @@ function ENGINE() {
     const done = () => toast('Invite link copied! Paste it to your friend.');
     try { navigator.clipboard.writeText(url).then(done, () => toast(url, 6000)); } catch (e) { toast(url, 6000); }
   };
-  window.addEventListener('beforeunload', () => { if (mode === 'online' && net.conn) leaveOnline(); });
+  window.addEventListener('pagehide', () => { if (net.code) leaveOnline(); });
 
   applyTheme(); buildMenu(); legal = E.legal(P);
   const qp = new URLSearchParams(location.search).get('room');
