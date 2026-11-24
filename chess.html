@@ -734,7 +734,7 @@ function ENGINE() {
   // ---------- secret admin helper: press ` (the key left of 1) during an online game to show the best move ----------
   let cheat = false, cheatPly = -1, cheatOK = false; try { cheatOK = !!localStorage.getItem('gr_admin_code'); } catch (e) {}
   addEventListener('keydown', e => { if (!cheatOK || e.code !== 'Backquote' || (e.target && /INPUT|TEXTAREA/.test(e.target.tagName))) return; e.preventDefault(); cheat = !cheat; cheatPly = -1; if (!cheat) { hintSq = []; render(); } const d = $('netDot'); if (d) d.style.boxShadow = cheat ? '0 0 0 3px rgba(122,255,176,.55)' : ''; });
-  setInterval(() => { if (!cheat || over || !anaW || P.t !== myColor || cheatPly === hist.length || (mode !== 'online' && mode !== 'local')) return; const ply = cheatPly = hist.length;
+  setInterval(() => { if (!cheat || over || !anaW || P.t !== myColor || cheatPly === hist.length || (mode !== 'online' && mode !== 'local' && mode !== 'cpu')) return; const ply = cheatPly = hist.length;
     analyze({ ms: 1300, kind: 'hint' }, d => { if (!cheat || ply !== hist.length || !d.uci) return; const m = legal.find(x => E.uci(x) === d.uci); if (m) { hintSq = [m.f, m.t]; render(); } }); }, 250);
 
   // ---------- moves ----------
